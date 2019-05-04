@@ -63,15 +63,20 @@ def symbol_table_lookup(filename, input):
                     return tokens[1]
         return None
 
-class FSTFileCache(object):
+class FileCache(object):
 
-    def __init__(self, filename):
+    def __init__(self, filename, dependencies_dict=dict()):
         self.filename = filename
         try:
             self.load()
         except Exception as e:
-            _log.warning("%s: failed to load cache; initializing empty", self)
+            _log.warning("%s: failed to load cache from %r; initializing empty", self, filename)
             self.cache = dict()
+        if (sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
+                or any(not self.contains(key, open(path, 'rb').read()) for key, path in dependencies_dict.items() if path and os.path.isfile(path))):
+            _log.warning("%s: dependencies did not match cache from %r; initializing empty", self, filename)
+            self.cache = dict(dependencies_dict=dependencies_dict)
+            [self.add(key, open(path, 'rb').read()) for key, path in dependencies_dict.items() if path and os.path.isfile(path)]
 
     def load(self):
         with open(self.filename, 'r') as f:
@@ -97,7 +102,6 @@ class FSTFileCache(object):
         elif filename in self.cache:
             _log.info("%s: invalidating cache entry for %r", self, filename)
             del self.cache[filename]
-        # self.save()
 
 def find_file(directory, filename):
     matches = []

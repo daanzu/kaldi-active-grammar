@@ -7,7 +7,7 @@
 import base64, collections, logging, os.path, subprocess
 
 from . import _log, KaldiError
-from .utils import debug_timer, find_file, get_exec_dir, symbol_table_lookup, FSTFileCache
+from .utils import debug_timer, find_file, get_exec_dir, symbol_table_lookup, FileCache
 from .wfst import WFST
 
 _log = _log.getChild('compiler')
@@ -42,12 +42,13 @@ class KaldiRule(object):
 
         fst_text = self.fst.fst_text
         if self.compiler.fst_cache.contains(self.filename, fst_text) and os.path.exists(self.filepath) and True or False:
-            # _log.debug("%s: Skipped full compilation thanks to FSTFileCache" % self)
+            # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             return
         else:
-            _log.info("%s: FSTFileCache useless; has %s not %s" % (self,
-                self.compiler.fst_cache.hash(self.compiler.fst_cache.cache[self.filename]) if self.filename in self.compiler.fst_cache.cache else None,
-                self.compiler.fst_cache.hash(fst_text)))
+            # _log.info("%s: FileCache useless; has %s not %s" % (self,
+            #     self.compiler.fst_cache.hash(self.compiler.fst_cache.cache[self.filename]) if self.filename in self.compiler.fst_cache.cache else None,
+            #     self.compiler.fst_cache.hash(fst_text)))
+            pass
         with open(self.filepath + '.txt', 'w') as f:
             f.write(fst_text)
 
@@ -90,7 +91,7 @@ class Compiler(object):
             'g.irelabel': find_file(self.data_dir, 'g.irelabel'),  # otf
         }
         self.files_dict.update({ k.replace('.', '_'): v for k, v in self.files_dict.items() })  # for named placeholder access in str.format()
-        self.fst_cache = FSTFileCache(os.path.join(self.tmp_dir, 'fst_cache.json'))  # FIXME: dependencies=self.files_dict
+        self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
 
         self._num_kaldi_rules = 0
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
