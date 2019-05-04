@@ -174,7 +174,7 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
 class KaldiAgfNNet3Decoder(KaldiDecoderBase):
     """docstring for KaldiAgfNNet3Decoder"""
 
-    def __init__(self, data_dir, tmp_dir, words_file=None, mfcc_conf_file=None, ie_conf_file=None, model_file=None, top_fst_file=None, dictation_fst_file=None,
+    def __init__(self, model_dir, tmp_dir, words_file=None, mfcc_conf_file=None, ie_conf_file=None, model_file=None, top_fst_file=None, dictation_fst_file=None,
             save_adaptation_state=True):
         super(KaldiAgfNNet3Decoder, self).__init__()
         self._ffi = FFI()
@@ -190,13 +190,13 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         """)
         self._lib = self._ffi.dlopen(self._library_binary)
 
-        if words_file is None: words_file = find_file(data_dir, 'words.txt')
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(data_dir, 'mfcc_hires.conf')
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(data_dir, 'mfcc.conf')  # warning?
-        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(data_dir,
-            find_file(data_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
-        if model_file is None: model_file = find_file(data_dir, 'final.mdl')
-        nonterm_phones_offset = symbol_table_lookup(find_file(data_dir, 'phones.txt'), '#nonterm_bos')
+        if words_file is None: words_file = find_file(model_dir, 'words.txt')
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # warning?
+        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
+            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
+        if model_file is None: model_file = find_file(model_dir, 'final.mdl')
+        nonterm_phones_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm_bos')
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
         self.words_file = os.path.normpath(words_file)
@@ -214,7 +214,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
     @saving_adaptation_state.setter
     def saving_adaptation_state(self, value): self._saving_adaptation_state = value
 
-    def _convert_ie_conf_file(self, data_dir, old_filename, new_filename, search=True):
+    def _convert_ie_conf_file(self, model_dir, old_filename, new_filename, search=True):
         """ Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration. """
         options_with_path = {
             '--splice-config':      'conf/splice.conf',
@@ -229,9 +229,9 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
                 key, value = line.strip().split('=', 1)
                 if key in options_with_path:
                     if not search:
-                        value = os.path.join(data_dir, options_with_path[key])
+                        value = os.path.join(model_dir, options_with_path[key])
                     else:
-                        value = find_file(data_dir, os.path.basename(options_with_path[key]))
+                        value = find_file(model_dir, os.path.basename(options_with_path[key]))
                 new_file.write("%s=%s\n" % (key, value))
         return new_filename
 

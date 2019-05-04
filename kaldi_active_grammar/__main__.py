@@ -12,11 +12,11 @@ from .utils import debug_timer, find_file
 from .compiler import Compiler
 from .kaldi import augment_phones_txt, augment_words_txt
 
-def compile_dictation_graph(data_dir, tmp_dir, g_filename=None):
+def compile_dictation_graph(data_dir, tmp_dir, g_filepath=None):
     compiler = Compiler(data_dir, tmp_dir)
-    if g_filename is None: g_filename = compiler.default_dictation_g_filepath
+    if g_filepath is None: g_filepath = compiler.default_dictation_g_filepath
     with debug_timer(six.print_, "graph compilation", independent=True):
-        compiler.compile_dictation_fst(g_filename)
+        compiler.compile_dictation_fst(g_filepath)
 
 def convert_generic_model_to_agf(src_dir, data_dir):
     filenames = [

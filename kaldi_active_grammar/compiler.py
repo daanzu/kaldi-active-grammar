@@ -110,7 +110,7 @@ class Compiler(object):
         with open(words_file, 'r') as file:
             word_id_pairs = [line.strip().split() for line in file]
         self._lexicon_words = set([word for word, id in word_id_pairs
-            if word not in "<eps> !SIL <UNK> #0 <s> </s>".split() and not word.startswith('#nonterm')])
+            if word.lower() not in "<eps> !SIL <UNK> #0 <s> </s>".lower().split() and not word.startswith('#nonterm')])
 
         if unigram_probs_file:
             with open(unigram_probs_file, 'r') as file:
@@ -157,7 +157,7 @@ class Compiler(object):
             if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {in_filename} {filename}")
             if nonterm: run("{exec_dir}fstconcat {in_filename} {tmp_dir}nonterm_end.fst {filename}")
             if fstcompile: run("{exec_dir}fstarcsort --sort_type=ilabel {in_filename} {filename}")
-            run("cp {in_filename} {filename}-G")
+            # run("cp {in_filename} {filename}-G")
             run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
                 + " {tree} {final_mdl} {L_disambig_fst} {in_filename} {filename}")
 
@@ -180,31 +180,11 @@ class Compiler(object):
         kaldi_rule.compile_file()
         return kaldi_rule
 
-    # def compile_top_fst_tree(self):
-    #     # tree provides no benefit; increasing max_active helps large number of rules
-    #     kaldi_rule = KaldiRule(self, -1, 'top', nonterm=False)
-    #     fst = kaldi_rule.fst
-    #     state_initial = fst.add_state(initial=True)
-    #     state_final = fst.add_state(final=True)
-    #     num = 0
-    #     for i in range(10):
-    #         state_i = fst.add_state()
-    #         fst.add_arc(state_initial, state_i, None)
-    #         for j in range(10):
-    #             state_j = fst.add_state()
-    #             fst.add_arc(state_i, state_j, None)
-    #             for k in range(10):
-    #                 fst.add_arc(state_j, state_final, '#nonterm:rule'+str(num), olabel=WFST.eps)
-    #                 num += 1
-    #     fst.equalize_weights()
-    #     kaldi_rule.compile_file()
-    #     return kaldi_rule
-
     def _get_dictation_fst_filepath(self):
         if os.path.exists(self._dictation_fst_filepath):
             return self._dictation_fst_filepath
         _log.error("cannot find dictation fst: %s", self._dictation_fst_filepath)
-        _log.error("using universal dictation fst")
+        # _log.error("using universal dictation fst")
     dictation_fst_filepath = property(_get_dictation_fst_filepath)
 
     # def _construct_dictation_states(self, fst, src_state, dst_state, number=(1,None), words=None, start_weight=None):
