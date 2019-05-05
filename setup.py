@@ -14,6 +14,29 @@ from os import path
 # Python 3 only projects can skip this import
 from io import open
 
+
+# https://stackoverflow.com/questions/45150304/how-to-force-a-python-wheel-to-be-platform-specific-when-building-it
+# https://github.com/Yelp/dumb-init/blob/48db0c0d0ecb4598d1a6400710445b85d67616bf/setup.py#L11-L27
+try:
+    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
+
+    class bdist_wheel(_bdist_wheel):
+
+        def finalize_options(self):
+            _bdist_wheel.finalize_options(self)
+            # Mark us as not a pure python package
+            self.root_is_pure = False
+
+        def get_tag(self):
+            python, abi, plat = _bdist_wheel.get_tag(self)
+            # We don't contain any python source
+            python, abi = 'py2.py3', 'none'
+            return python, abi, plat
+
+except ImportError:
+    bdist_wheel = None
+
+
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
@@ -24,6 +47,10 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 # Fields marked as "Optional" may be commented out.
 
 setup(
+    cmdclass={
+        'bdist_wheel': bdist_wheel
+    },
+
     # This is the name of your project. The first time you publish this
     # package, this name will be registered for you. It will determine how
     # users can install this project, e.g.:
@@ -44,6 +71,7 @@ setup(
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
     version='0.1.0.dev1',  # Required
+    # version=open('VERSION').read().strip(),
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
