@@ -120,6 +120,8 @@ class Compiler(object):
             total = sum(count for word, count in word_count_pairs)
             self._lexicon_word_probs = {word: (float(count) / total) for word, count in word_count_pairs}
 
+        self._longest_word = max(self._lexicon_words, key=len)
+
         return self._lexicon_words
 
     ############################################################################################################################################################
