@@ -73,9 +73,11 @@ class Compiler(object):
         self.exec_dir = os.path.join(get_exec_dir(), '')
         self.data_dir = os.path.join(data_dir or '', '')
         self.tmp_dir = os.path.join(tmp_dir or 'kaldi_tmp', '')
-        if not os.path.exists(self.exec_dir): raise KaldiError("cannot find exec_dir")
-        if not os.path.exists(self.data_dir): raise KaldiError("cannot find data_dir")
-        if not os.path.exists(self.tmp_dir): os.mkdir(self.tmp_dir)
+        if not os.path.exists(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % exec_dir)
+        if not os.path.exists(self.data_dir): raise KaldiError("cannot find data_dir: %r" % data_dir)
+        if not os.path.exists(self.tmp_dir):
+            _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
+            os.mkdir(self.tmp_dir)
 
         self.files_dict = {
             'exec_dir': self.exec_dir,
@@ -103,7 +105,7 @@ class Compiler(object):
     nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(_max_rule_id + 1)])
 
     default_dictation_g_filepath = property(lambda self: os.path.join(self.data_dir, 'G_dictation.fst'))
-    _dictation_fst_filepath = property(lambda self: os.path.join(self.tmp_dir, 'Dictation.fst'))
+    _dictation_fst_filepath = property(lambda self: os.path.join(self.data_dir, 'Dictation.fst'))
 
     def load_words(self, words_file=None, unigram_probs_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']

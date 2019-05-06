@@ -43,7 +43,9 @@ Or use your own model. Standard Kaldi models must be converted to be usable. Con
 
 Please feel free to submit issues, suggestions, and feature requests. Pull requests are considered, but project structure is in flux.
 
-Donations are appreciated to encourage development. [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/daanzu)
+Donations are appreciated to encourage development.
+
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/daanzu)
 
 ## Author
 
