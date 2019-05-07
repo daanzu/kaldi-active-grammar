@@ -235,7 +235,7 @@ class Compiler(object):
         self.fst_cache.save()
 
     def parse_output_for_rule(self, kaldi_rule, output):
-        assert self.parsing_framework == 'text'
+        # Can be used even when self.parsing_framework == 'token'; specifically for mimic
         try:
             parse_results = kaldi_rule.matcher.parseString(output, parseAll=True)
         except pp.ParseException:
