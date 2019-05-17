@@ -7,7 +7,8 @@
 import base64, collections, logging, os.path, subprocess
 
 from . import _log, KaldiError
-from .utils import debug_timer, find_file, get_exec_dir, symbol_table_lookup, FileCache
+from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
+import utils
 from .wfst import WFST
 
 _log = _log.getChild('compiler')
@@ -70,11 +71,11 @@ class Compiler(object):
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('text', 'token')
 
-        self.exec_dir = os.path.join(get_exec_dir(), '')
+        self.exec_dir = os.path.join(utils.exec_dir, '')
         self.data_dir = os.path.join(data_dir or '', '')
         self.tmp_dir = os.path.join(tmp_dir or 'kaldi_tmp', '')
-        if not os.path.exists(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % exec_dir)
-        if not os.path.exists(self.data_dir): raise KaldiError("cannot find data_dir: %r" % data_dir)
+        if not os.path.exists(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
+        if not os.path.exists(self.data_dir): raise KaldiError("cannot find data_dir: %r" % self.data_dir)
         if not os.path.exists(self.tmp_dir):
             _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
             os.mkdir(self.tmp_dir)
@@ -170,8 +171,12 @@ class Compiler(object):
         format_kwargs = dict(self.files_dict)
         def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)
         # FIXME: check for existing before generating?
-        run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
-        run("(echo 0 1 #nonterm_end 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
+        if platform == 'windows':
+            run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
+            run("(echo 0 1 #nonterm_end 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
+        else:
+            run("(echo 0 1 \\#nonterm_begin 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
+            run("(echo 0 1 \\#nonterm_end 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
 
     def compile_top_fst(self):
         kaldi_rule = KaldiRule(self, -1, 'top', nonterm=False)

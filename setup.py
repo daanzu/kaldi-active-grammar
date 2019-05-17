@@ -18,23 +18,29 @@ from io import open
 # https://stackoverflow.com/questions/45150304/how-to-force-a-python-wheel-to-be-platform-specific-when-building-it
 # https://github.com/Yelp/dumb-init/blob/48db0c0d0ecb4598d1a6400710445b85d67616bf/setup.py#L11-L27
 try:
-    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
-
-    class bdist_wheel(_bdist_wheel):
+    from wheel.bdist_wheel import bdist_wheel as bdist_wheel
+    class bdist_wheel_impure(bdist_wheel):
 
         def finalize_options(self):
-            _bdist_wheel.finalize_options(self)
+            bdist_wheel.finalize_options(self)
             # Mark us as not a pure python package
             self.root_is_pure = False
 
         def get_tag(self):
-            python, abi, plat = _bdist_wheel.get_tag(self)
+            python, abi, plat = bdist_wheel.get_tag(self)
             # We don't contain any python source
             python, abi = 'py2.py3', 'none'
             return python, abi, plat
 
+    from setuptools.command.install import install
+    class install_platlib(install):
+        def finalize_options(self):
+            install.finalize_options(self)
+            self.install_lib = self.install_platlib
+
 except ImportError:
-    bdist_wheel = None
+    bdist_wheel_impure = None
+    install_platlib = None
 
 
 here = path.abspath(path.dirname(__file__))
@@ -48,7 +54,8 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     cmdclass={
-        'bdist_wheel': bdist_wheel
+        'bdist_wheel': bdist_wheel_impure,
+        'install': install_platlib,
     },
 
     # This is the name of your project. The first time you publish this
@@ -70,7 +77,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.1.0.dev4',  # Required
+    version='0.2.0',  # Required
     # version=open('VERSION').read().strip(),
 
     # This is a one-line description or tagline of what your project does. This
@@ -205,7 +212,9 @@ setup(
     # If using Python 2.6 or earlier, then these have to be included in
     # MANIFEST.in as well.
     package_data={  # Optional
-        'kaldi_active_grammar': ['exec/windows/*'],
+        # 'kaldi_active_grammar': ['exec/windows/*'],
+        'kaldi_active_grammar': ['exec/*/*'],
+        '': ['LICENSE.txt'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
@@ -215,7 +224,7 @@ setup(
     # In this case, 'data_file' will be installed into '<sys.prefix>/my_data'
     # data_files=[('my_data', ['data/data_file'])],  # Optional
     # data_files=[('my_data', ['exec/windows/dragonfly.dll'])],  # Optional
-    data_files=[('', ['LICENSE.txt'])],
+    # data_files=[('', ['LICENSE.txt'])],
 
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow

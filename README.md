@@ -49,7 +49,7 @@ Donations are appreciated to encourage development.
 
 ## Author
 
-* David Zurow [(daanzu)](https://github.com/daanzu)
+* David Zurow ([@daanzu](https://github.com/daanzu))
 
 ## License
 
@@ -60,5 +60,6 @@ If this license is problematic for you, please contact me.
 ## Acknowledgments
 
 * Based on and including code from [Kaldi ASR](https://github.com/kaldi-asr/kaldi), under the Apache-2.0 license.
-* Code from [OpenFST](http://www.openfst.org/), under the Apache-2.0 license.
+* Code from [OpenFST](http://www.openfst.org/) and [OpenFST port for Windows](https://github.com/kkm000/openfst), under the Apache-2.0 license.
+* [Intel Math Kernel Library](https://software.intel.com/en-us/mkl), copyright (c) 2018 Intel Corporation, under the [Intel Simplified Software License](https://software.intel.com/en-us/license/intel-simplified-software-license).
 * Modified generic English Kaldi nnet3 chain model from [Zamia Speech](https://github.com/gooofy/zamia-speech), under the LGPL-3.0 license.

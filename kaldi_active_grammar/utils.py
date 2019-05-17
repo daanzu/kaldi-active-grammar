@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import logging, platform, time
+import logging, sys, time
 import fnmatch, os
 import hashlib, json
 from contextlib import contextmanager
@@ -42,8 +42,17 @@ class CodeTimer(object):
 
 ########################################################################################################################
 
-def get_exec_dir():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exec', platform.system().lower())
+if sys.platform.startswith('win'): platform = 'windows'
+elif sys.platform.startswith('linux'): platform = 'linux'
+elif sys.platform.startswith('darwin'): platform = 'macos'
+else: raise KaldiError("unknown sys.platform")
+
+exec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exec', platform)
+library_extension = dict(windows='.dll', linux='.so', macos='.dylib')[platform]
+subprocess_seperator = '^&' if platform == 'windows' else ';'
+
+
+########################################################################################################################
 
 symbol_table_lookup_cache = dict()
 

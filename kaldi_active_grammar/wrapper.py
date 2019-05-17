@@ -14,7 +14,7 @@ import numpy as np
 from cffi import FFI
 
 from . import _log, KaldiError
-from .utils import find_file, get_exec_dir, symbol_table_lookup
+from .utils import exec_dir, find_file, platform, symbol_table_lookup
 
 _log = _log.getChild('wrapper')
 
@@ -27,7 +27,7 @@ class KaldiDecoderBase(object):
     def __init__(self):
         self._reset_decode_time()
 
-    _library_binary = os.path.join(get_exec_dir(), 'dragonfly.dll')
+    _library_binary = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
 
     def _reset_decode_time(self):
         self._decode_time = 0
@@ -43,7 +43,7 @@ class KaldiDecoderBase(object):
         self._decode_time += this
         self._decode_times.append(this)
         if finalize:
-            rtf = 1.0 * self._decode_real_time / self._decode_time
+            rtf = 1.0 * self._decode_time / self._decode_real_time
             pct = 100.0 * this / self._decode_time
             _log.debug("decoded at %.2f RTF, for %d ms audio, spending %d ms, of which %d ms (%d%%) in finalization",
                 rtf, self._decode_real_time, self._decode_time, this, pct)

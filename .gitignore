@@ -1,3 +1,6 @@
+kaldi_active_grammar/exec
+wheelhouse
+
 # general things to ignore
 build/
 dist/
