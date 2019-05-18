@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import base64, collections, logging, os.path, subprocess
+import base64, collections, logging, os.path, shlex, subprocess
 
 from . import _log, KaldiError
 from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
@@ -136,7 +136,9 @@ class Compiler(object):
             format_kwargs = dict(self.files_dict, **kwargs)
             def run(cmd, **kwargs):
                 with debug_timer(_log.debug, "otf graph compilation step", False):
-                    subprocess.check_call(cmd.format(**format_kwargs), **kwargs)
+                    args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
+                    _log.log(5, "subprocess.check_call(%r)", args)
+                    subprocess.check_call(args, **kwargs)
 
             p1 = run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {filename}.txt {filename}")
             p2 = run("{exec_dir}fstrelabel --relabel_ipairs={g.irelabel} {filename} {filename}")
@@ -155,7 +157,9 @@ class Compiler(object):
             def run(cmd, **kwargs):
                 with debug_timer(_log.debug, "agf graph compilation step", False), open(os.devnull, 'w') as devnull:
                     output = None if _log.isEnabledFor(logging.DEBUG) else devnull
-                    subprocess.check_call(cmd.format(**format_kwargs), stdout=output, stderr=output, **kwargs)
+                    args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
+                    _log.log(5, "subprocess.check_call(%r)", args)
+                    subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
                     format_kwargs.update(in_filename=filename)
 
             if fstcompile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {in_filename}.txt {filename}")
@@ -169,7 +173,7 @@ class Compiler(object):
 
     def _compile_base_fsts(self):
         format_kwargs = dict(self.files_dict)
-        def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)
+        def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)  # FIXME: unsafe shell?
         # FIXME: check for existing before generating?
         if platform == 'windows':
             run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
