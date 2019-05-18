@@ -5,7 +5,7 @@
 #
 
 _name = "kaldi_active_grammar"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 import logging
 _log = logging.getLogger("kaldi")
