@@ -282,7 +282,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
             raise KaldiError("get_output error")
         output_str = self._ffi.string(output_p)
         likelihood = likelihood_p[0]
-        _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
+        # _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
         return output_str, likelihood
 
     def get_word_align(self, output):
