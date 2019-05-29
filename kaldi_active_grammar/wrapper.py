@@ -175,7 +175,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
     """docstring for KaldiAgfNNet3Decoder"""
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-        model_file=None, top_fst_file=None, dictation_fst_file=None,
+            model_file=None, top_fst_file=None, dictation_fst_file=None,
             save_adaptation_state=True):
         super(KaldiAgfNNet3Decoder, self).__init__()
         self._ffi = FFI()
@@ -211,9 +211,12 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         self.top_fst_file = os.path.normpath(top_fst_file)
         self._model = self._lib.init_agf_nnet3(14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
             nonterm_phones_offset, words_file, word_align_lexicon_file or "", mfcc_conf_file, ie_conf_file, model_file, top_fst_file, dictation_fst_file or "")
-        self.sample_rate = 16000
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
+
+        self.sample_rate = 16000
+        self.num_channels = 1
+        self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
 
     saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
     @saving_adaptation_state.setter
@@ -249,6 +252,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         self.num_grammars += 1
 
     def decode(self, frames, finalize, grammars_activity=None):
+        """Continue decoding with given new audio data."""
         # grammars_activity = [True] * self.num_grammars
         # grammars_activity = np.random.choice([True, False], len(grammars_activity)).tolist(); print grammars_activity; time.sleep(5)
         if grammars_activity is None: grammars_activity = []
@@ -278,6 +282,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
             raise KaldiError("get_output error")
         output_str = self._ffi.string(output_p)
         likelihood = likelihood_p[0]
+        _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
         return output_str, likelihood
 
     def get_word_align(self, output):
@@ -288,7 +293,14 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         result = self._lib.get_word_align_agf_nnet3(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
         if not result:
             raise KaldiError("get_word_align error")
-        return zip(words, kaldi_frame_times_p, kaldi_frame_lengths_p)
+        times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
+        lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
+        return zip(words, times, lengths)
 
     def reset_adaptation_state(self):
         self._lib.reset_adaptation_state_agf_nnet3(self._model)
+
+    def kaldi_frame_num_to_audio_bytes(self, kaldi_frame_num):
+        kaldi_frame_length_ms = 30
+        sample_size_bytes = 2 * self.num_channels
+        return kaldi_frame_num * kaldi_frame_length_ms * self.sample_rate / 1000 * sample_size_bytes

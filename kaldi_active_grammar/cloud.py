@@ -1,3 +1,5 @@
+import wave
+
 from google.cloud import speech
 from google.cloud.speech import enums
 from google.cloud.speech import types
@@ -18,3 +20,11 @@ def transcribe_data(speech_data):
         # The first alternative is the most likely one for this portion.
         # print(u'Transcript: {}'.format(result.alternatives[0].transcript))
         return result.alternatives[0].transcript
+
+def write_wav(filename, audio_data, sample_rate=16000):
+    wf = wave.open(filename, 'wb')
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(sample_rate)
+    wf.writeframes(audio_data)
+    wf.close()

@@ -259,7 +259,7 @@ class Compiler(object):
     cloud_dictation = True
     dictation_regex = re.compile(r'#nonterm:dictation (.*?) #nonterm:end')
 
-    def parse_output(self, output, audio_data=None, word_align=None):
+    def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
         if output == '':
@@ -270,11 +270,31 @@ class Compiler(object):
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
-        if self.cloud_dictation and audio_data and kaldi_rule.has_dictation:
+        if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation:
+            audio_data, word_align = dictation_info_func()
+            # from IPython import embed; embed()
+            # times = [time for word, time, length in word_align if word.startswith('#nonterm:dictation')]
+            # word_align = list(word_align)
+            # word_align = zip(range(len(word_align)), *word_align)
+            # for i, _, time, _ in filter(lambda i, word, time, length: word.startswith('#nonterm:dictation'), word_align):
+            #     end_i = word_align
+            # dictation_indexes = [(i, time) for i, (word, time, length) in zip(range(len(word_align)), *word_align) if word.startswith('#nonterm:dictation')]
+            words, times, lengths = zip(*word_align)
+            dictation_spans = [[time, times[words.index('#nonterm:end', i)]]
+                for i, (word, time, length) in zip(range(len(word_align)), word_align)
+                if word.startswith('#nonterm:dictation')]
+            # dictation_spans[-1][1] = len(audio_data)
+            # FIXME: include <eps> following #nonterm:end
+            # for time_start, time_end in dictation_spans:
+            print words, times, lengths
             def replace_dictation(matchobj):
                 text = matchobj.group(1)
+                offset_start, offset_end = dictation_spans.pop(0)
                 import cloud
-                text = cloud.transcribe_data(audio_data)
+                with debug_timer(self._log.debug, "cloud dictation call"):
+                    text = cloud.transcribe_data(audio_data[offset_start:offset_end])
+                cloud.write_wav('test.wav', audio_data[offset_start:offset_end])
+                # from IPython import embed; embed()
                 return text
             parsed_output = self.dictation_regex.sub(replace_dictation, parsed_output)
 
