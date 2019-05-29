@@ -22,6 +22,7 @@ def convert_generic_model_to_agf(src_dir, data_dir):
     filenames = [
         'words.txt',
         'phones.txt',
+        'align_lexicon.int',
         'disambig.int',
         # 'L_disambig.fst',
         'tree',
@@ -64,6 +65,8 @@ def convert_generic_model_to_agf(src_dir, data_dir):
 
     with open(os.path.join(data_dir, 'nonterminals.txt'), 'wb') as f:
         f.writelines(nonterm + '\n' for nonterm in nonterminals)
+
+    # add nonterminals to align_lexicon.int
     
     # fix L_disambig.fst
 
@@ -77,6 +80,7 @@ def main():
     parser.add_argument('file', nargs='?')
     # parser.add_argument('file')
     # FIXME: helps
+    # FIXME: subparsers?
     # args = parser.parse_args()
     args, unknown = parser.parse_known_args()
     if not args.file and unknown: args.file = unknown.pop(0)

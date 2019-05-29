@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import base64, collections, logging, os.path, shlex, subprocess
+import base64, collections, logging, os.path, re, shlex, subprocess
 
 from . import _log, KaldiError
 from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
@@ -17,13 +17,13 @@ _log = _log.getChild('compiler')
 ########################################################################################################################
 
 class KaldiRule(object):
-    def __init__(self, compiler, id, name, nonterm=True, dictation=None):
+    def __init__(self, compiler, id, name, nonterm=True, has_dictation=None):
         self.compiler = compiler
         self.id = int(id)
         self.name = name
         if self.id > self.compiler._max_rule_id: raise KaldiError("KaldiRule id > compiler._max_rule_id")
         self.nonterm = nonterm
-        self.dictation = dictation
+        self.has_dictation = has_dictation
         self.fst = WFST()
         self.matcher = None
         self.active = True
@@ -127,7 +127,7 @@ class Compiler(object):
 
         return self._lexicon_words
 
-    ############################################################################################################################################################
+    ####################################################################################################################
     # Methods for compiling graphs.
 
     def _compile_otf_graph(self, **kwargs):
@@ -237,14 +237,14 @@ class Compiler(object):
     def compile_dictation_fst(self, g_filename):
         self._compile_agf_graph(in_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
-    ############################################################################################################################################################
+    ####################################################################################################################
     # Methods for recognition.
 
     def prepare_for_recognition(self):
         self.fst_cache.save()
 
     def parse_output_for_rule(self, kaldi_rule, output):
-        # Can be used even when self.parsing_framework == 'token'; specifically for mimic
+        # Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)
         try:
             parse_results = kaldi_rule.matcher.parseString(output, parseAll=True)
         except pp.ParseException:
@@ -256,12 +256,33 @@ class Compiler(object):
         assert kaldi_rule_id == kaldi_rule.id
         return parsed_output
 
-    def parse_output(self, output):
+    cloud_dictation = True
+    dictation_regex = re.compile(r'#nonterm:dictation (.*?) #nonterm:end')
+
+    def parse_output(self, output, audio_data=None, word_align=None):
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
         if output == '':
             return None, ''
+
         nonterm_token, _, parsed_output = output.partition(' ')
         assert nonterm_token.startswith('#nonterm:rule')
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
-        return self.kaldi_rule_by_id_dict[kaldi_rule_id], parsed_output
+        kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
+
+        if self.cloud_dictation and audio_data and kaldi_rule.has_dictation:
+            def replace_dictation(matchobj):
+                text = matchobj.group(1)
+                import cloud
+                text = cloud.transcribe_data(audio_data)
+                return text
+            parsed_output = self.dictation_regex.sub(replace_dictation, parsed_output)
+
+        parsed_output = remove_nonterms(parsed_output)
+        return kaldi_rule, parsed_output
+
+########################################################################################################################
+# Utility functions.
+
+def remove_nonterms(text):
+    return ' '.join(word for word in text.split() if not word.startswith('#nonterm:'))

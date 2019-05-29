@@ -89,10 +89,10 @@ class KaldiGmmDecoder(KaldiDecoderBase):
             raise RuntimeError("decoding error")
         return finalize
 
-    def get_output(self, max_output_length=1024):
-        output_p = self._ffi.new('char[]', max_output_length)
+    def get_output(self, output_max_length=4*1024):
+        output_p = self._ffi.new('char[]', output_max_length)
         likelihood_p = self._ffi.new('double *')
-        result = self._lib.get_output_gmm(self._model, output_p, max_output_length, likelihood_p)
+        result = self._lib.get_output_gmm(self._model, output_p, output_max_length, likelihood_p)
         output_str = self._ffi.string(output_p)
         likelihood = likelihood_p[0]
         return output_str, likelihood
@@ -160,10 +160,10 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
             raise KaldiError("decoding error")
         return finalize
 
-    def get_output(self, max_output_length=1024):
-        output_p = self._ffi.new('char[]', max_output_length)
+    def get_output(self, output_max_length=4*1024):
+        output_p = self._ffi.new('char[]', output_max_length)
         likelihood_p = self._ffi.new('double *')
-        result = self._lib.get_output_otf_gmm(self._model, output_p, max_output_length, likelihood_p)
+        result = self._lib.get_output_otf_gmm(self._model, output_p, output_max_length, likelihood_p)
         output_str = self._ffi.string(output_p)
         likelihood = likelihood_p[0]
         return output_str, likelihood
@@ -174,23 +174,27 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
 class KaldiAgfNNet3Decoder(KaldiDecoderBase):
     """docstring for KaldiAgfNNet3Decoder"""
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, mfcc_conf_file=None, ie_conf_file=None, model_file=None, top_fst_file=None, dictation_fst_file=None,
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
+        model_file=None, top_fst_file=None, dictation_fst_file=None,
             save_adaptation_state=True):
         super(KaldiAgfNNet3Decoder, self).__init__()
         self._ffi = FFI()
         self._ffi.cdef("""
             void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-                int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp,
+                int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
+                char* mfcc_config_filename_cp, char* ie_config_filename_cp,
                 char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp);
             bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
             bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
                 bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-            bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
+            bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+            bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
             void reset_adaptation_state_agf_nnet3(void* model_vp);
         """)
         self._lib = self._ffi.dlopen(self._library_binary)
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
+        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # warning?
         if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
@@ -200,12 +204,13 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
         self.words_file = os.path.normpath(words_file)
+        self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
         self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
         self.ie_conf_file = os.path.normpath(ie_conf_file)
         self.model_file = os.path.normpath(model_file)
         self.top_fst_file = os.path.normpath(top_fst_file)
         self._model = self._lib.init_agf_nnet3(14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            nonterm_phones_offset, words_file, mfcc_conf_file, ie_conf_file, model_file, top_fst_file, dictation_fst_file or "")
+            nonterm_phones_offset, words_file, word_align_lexicon_file or "", mfcc_conf_file, ie_conf_file, model_file, top_fst_file, dictation_fst_file or "")
         self.sample_rate = 16000
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
@@ -265,13 +270,25 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
             raise KaldiError("decoding error")
         return finalize
 
-    def get_output(self, max_output_length=1024):
-        output_p = self._ffi.new('char[]', max_output_length)
+    def get_output(self, output_max_length=4*1024):
+        output_p = self._ffi.new('char[]', output_max_length)
         likelihood_p = self._ffi.new('double *')
-        result = self._lib.get_output_agf_nnet3(self._model, output_p, max_output_length, likelihood_p)
+        result = self._lib.get_output_agf_nnet3(self._model, output_p, output_max_length, likelihood_p)
+        if not result:
+            raise KaldiError("get_output error")
         output_str = self._ffi.string(output_p)
         likelihood = likelihood_p[0]
         return output_str, likelihood
+
+    def get_word_align(self, output):
+        words = output.split()
+        num_words = len(words)
+        kaldi_frame_times_p = self._ffi.new('int32_t[]', num_words)
+        kaldi_frame_lengths_p = self._ffi.new('int32_t[]', num_words)
+        result = self._lib.get_word_align_agf_nnet3(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
+        if not result:
+            raise KaldiError("get_word_align error")
+        return zip(words, kaldi_frame_times_p, kaldi_frame_lengths_p)
 
     def reset_adaptation_state(self):
         self._lib.reset_adaptation_state_agf_nnet3(self._model)
