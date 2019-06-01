@@ -304,3 +304,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         kaldi_frame_length_ms = 30
         sample_size_bytes = 2 * self.num_channels
         return kaldi_frame_num * kaldi_frame_length_ms * self.sample_rate / 1000 * sample_size_bytes
+
+    def audio_bytes_to_s(self, audio_bytes):
+        sample_size_bytes = 2 * self.num_channels
+        return 1.0 * audio_bytes / sample_size_bytes / self.sample_rate

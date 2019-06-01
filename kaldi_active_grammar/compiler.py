@@ -11,6 +11,8 @@ from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCa
 import utils
 from .wfst import WFST
 
+import cloud
+
 _log = _log.getChild('compiler')
 
 
@@ -272,39 +274,37 @@ class Compiler(object):
 
         if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation:
             audio_data, word_align = dictation_info_func()
-            # from IPython import embed; embed()
-            # times = [time for word, time, length in word_align if word.startswith('#nonterm:dictation')]
-            # word_align = list(word_align)
-            # word_align = zip(range(len(word_align)), *word_align)
-            # for i, _, time, _ in filter(lambda i, word, time, length: word.startswith('#nonterm:dictation'), word_align):
-            #     end_i = word_align
-            # dictation_indexes = [(i, time) for i, (word, time, length) in zip(range(len(word_align)), *word_align) if word.startswith('#nonterm:dictation')]
             words, times, lengths = zip(*word_align)
-            print words, times, lengths
-            dictation_spans = [[i, time, words.index('#nonterm:end', i), times[words.index('#nonterm:end', i)]]
-                for i, (word, time, length) in zip(range(len(word_align)), word_align)
+            dictation_spans = [{
+                    'index_start': index,
+                    'offset_start': time,
+                    'index_end': words.index('#nonterm:end', index),
+                    'offset_end': times[words.index('#nonterm:end', index)],
+                }
+                for index, (word, time, length) in zip(range(len(word_align)), word_align)
                 if word.startswith('#nonterm:dictation')]
-            # if words[-1] == '#nonterm:end':
-            #     dictation_spans[-1][3] = len(audio_data)
-            # else:
-            #     dictation_spans[-1][3] = ???
-            # If last dictation is at end of utterance, include rest of audio_data; else include half of audio_data between dictation end and start of next word
-            if dictation_spans[-1][2] == len(word_align) - 1:
-                dictation_spans[-1][3] = len(audio_data)
+
+            # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
+            dictation_span = dictation_spans[-1]
+            if dictation_span['index_end'] == len(word_align) - 1:
+                dictation_span['offset_end'] = len(audio_data)
             else:
-                next_word_time = times[dictation_spans[-1][2] + 1]
-                dictation_spans[-1][3] = (dictation_spans[-1][3] + next_word_time) / 2
-            # FIXME: include <eps> following #nonterm:end
-            # for time_start, time_end in dictation_spans:
+                next_word_time = times[dictation_span['index_end'] + 1]
+                dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) / 2
+
             def replace_dictation(matchobj):
-                text = matchobj.group(1)
-                i_start, offset_start, i_end, offset_end = dictation_spans.pop(0)
-                import cloud
-                with debug_timer(self._log.debug, "cloud dictation call"):
-                    text = cloud.transcribe_data(audio_data[offset_start:offset_end])
-                # cloud.write_wav('test.wav', audio_data[offset_start:offset_end])
-                # from IPython import embed; embed()
-                return text
+                orig_text = matchobj.group(1)
+                dictation_span = dictation_spans.pop(0)
+                dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                with debug_timer(self._log.debug, 'cloud dictation call'):
+                    cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio)
+                    self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                # with debug_timer(self._log.debug, 'cloud dictation call'):
+                #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio)
+                #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                # cloud.write_wav('test.wav', dictation_audio)
+                return cloud_text or orig_text
+
             parsed_output = self.dictation_regex.sub(replace_dictation, parsed_output)
 
         parsed_output = remove_nonterms(parsed_output)
