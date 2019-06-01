@@ -259,7 +259,7 @@ class Compiler(object):
         return parsed_output
 
     cloud_dictation = True
-    dictation_regex = re.compile(r'#nonterm:dictation (.*?) #nonterm:end')
+    cloud_dictation_regex = re.compile(r'#nonterm:dictation_cloud (.*?) #nonterm:end')
 
     def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
@@ -272,7 +272,7 @@ class Compiler(object):
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
-        if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation:
+        if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
             audio_data, word_align = dictation_info_func()
             words, times, lengths = zip(*word_align)
             dictation_spans = [{
@@ -282,7 +282,7 @@ class Compiler(object):
                     'offset_end': times[words.index('#nonterm:end', index)],
                 }
                 for index, (word, time, length) in zip(range(len(word_align)), word_align)
-                if word.startswith('#nonterm:dictation')]
+                if word.startswith('#nonterm:dictation_cloud')]
 
             # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
             dictation_span = dictation_spans[-1]
@@ -300,12 +300,15 @@ class Compiler(object):
                     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio)
                     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
                 # with debug_timer(self._log.debug, 'cloud dictation call'):
+                #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search')
+                #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                # with debug_timer(self._log.debug, 'cloud dictation call'):
                 #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio)
                 #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
                 # cloud.write_wav('test.wav', dictation_audio)
                 return cloud_text or orig_text
 
-            parsed_output = self.dictation_regex.sub(replace_dictation, parsed_output)
+            parsed_output = self.cloud_dictation_regex.sub(replace_dictation, parsed_output)
 
         parsed_output = remove_nonterms(parsed_output)
         return kaldi_rule, parsed_output
