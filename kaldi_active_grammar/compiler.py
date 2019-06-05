@@ -40,7 +40,7 @@ class KaldiRule(object):
         _log.debug("%s: Compiling exported rule %r to %s" % (self, self.name, self.filename))
 
         if self.filename in self.compiler._fst_filenames_set:
-            raise KaldiError("KaldiRule fst filename collision: %r" % self.filename)
+            raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
         self.compiler._fst_filenames_set.add(self.filename)
 
         fst_text = self.fst.fst_text
@@ -67,33 +67,33 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, data_dir, tmp_dir=None):
+    def __init__(self, model_dir, tmp_dir=None):
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('text', 'token')
 
         self.exec_dir = os.path.join(utils.exec_dir, '')
-        self.data_dir = os.path.join(data_dir or '', '')
+        self.model_dir = os.path.join(model_dir or '', '')
         self.tmp_dir = os.path.join(tmp_dir or 'kaldi_tmp', '')
         if not os.path.exists(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
-        if not os.path.exists(self.data_dir): raise KaldiError("cannot find data_dir: %r" % self.data_dir)
+        if not os.path.exists(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
         if not os.path.exists(self.tmp_dir):
             _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
             os.mkdir(self.tmp_dir)
 
         self.files_dict = {
             'exec_dir': self.exec_dir,
-            'data_dir': self.data_dir,
+            'model_dir': self.model_dir,
             'tmp_dir': self.tmp_dir,
-            'words.txt': find_file(self.data_dir, 'words.txt'),
-            'phones.txt': find_file(self.data_dir, 'phones.txt'),
-            'disambig.int': find_file(self.data_dir, 'disambig.int'),
-            'L_disambig.fst': find_file(self.data_dir, 'L_disambig.fst'),
-            'tree': find_file(self.data_dir, 'tree'),
-            '1.mdl': find_file(self.data_dir, '1.mdl'),
-            'final.mdl': find_file(self.data_dir, 'final.mdl'),
-            'g.irelabel': find_file(self.data_dir, 'g.irelabel'),  # otf
+            'words.txt': find_file(self.model_dir, 'words.txt'),
+            'phones.txt': find_file(self.model_dir, 'phones.txt'),
+            'disambig.int': find_file(self.model_dir, 'disambig.int'),
+            'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst'),
+            'tree': find_file(self.model_dir, 'tree'),
+            '1.mdl': find_file(self.model_dir, '1.mdl'),
+            'final.mdl': find_file(self.model_dir, 'final.mdl'),
+            'g.irelabel': find_file(self.model_dir, 'g.irelabel'),  # otf
         }
         self.files_dict.update({ k.replace('.', '_'): v for k, v in self.files_dict.items() })  # for named placeholder access in str.format()
         self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
@@ -107,8 +107,8 @@ class Compiler(object):
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
     nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(_max_rule_id + 1)])
 
-    default_dictation_g_filepath = property(lambda self: os.path.join(self.data_dir, 'G_dictation.fst'))
-    _dictation_fst_filepath = property(lambda self: os.path.join(self.data_dir, 'Dictation.fst'))
+    default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
+    _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
 
     def load_words(self, words_file=None, unigram_probs_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']
