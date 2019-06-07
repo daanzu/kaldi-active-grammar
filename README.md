@@ -21,10 +21,12 @@ This project extends that to allow each grammar/rule to be **independently marke
 * A compatible [**general English Kaldi nnet3 chain model**](https://github.com/daanzu/kaldi-active-grammar/releases/latest/download/kaldi_model_zamia.zip) is available, under releases.
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development, currently in the kaldi branch of my fork.
 
+Donations are appreciated to encourage development.
+
 ## Setup
 
 Requirements:
-* Python 2.7, 3.?+ (only 2.7 tested currently); *64-bit required*
+* Python 2.7 (3.x support planned); *64-bit required!*
     * Microphone support provided by [pyaudio](https://pypi.org/project/PyAudio/) package
 * OS: *Linux or Windows*; macOS planned if there is interest
 * Only supports Kaldi left-biphone models, specifically *nnet3 chain* models
@@ -38,6 +40,12 @@ pip install kaldi-active-grammar
 Download compatible generic English Kaldi nnet3 chain model from project releases. Unzip the model and pass the directory path to kaldi-active-grammar constructor.
 
 Or use your own model. Standard Kaldi models must be converted to be usable. Conversion can be performed automatically, but this hasn't been fully implemented yet.
+
+### Troubleshooting
+
+* Errors installing
+    * Make sure you are using a 64-bit Python.
+    * Update your `pip` by executing `pip install --upgrade pip`.
 
 ## Contributing
 
