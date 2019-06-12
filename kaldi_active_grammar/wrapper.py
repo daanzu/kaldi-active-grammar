@@ -185,6 +185,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp,
                 char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp);
             bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+            bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
             bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
                 bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
             bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
@@ -251,14 +252,25 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
             raise KaldiError("error adding grammar")
         self.num_grammars += 1
 
+    def remove_grammar_fst(self, grammar_fst_index):
+        _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
+        result = self._lib.remove_grammar_fst_agf_nnet3(self._model, grammar_fst_index)
+        if not result:
+            raise KaldiError("error removing grammar")
+        self.num_grammars -= 1
+
     def decode(self, frames, finalize, grammars_activity=None):
         """Continue decoding with given new audio data."""
         # grammars_activity = [True] * self.num_grammars
         # grammars_activity = np.random.choice([True, False], len(grammars_activity)).tolist(); print grammars_activity; time.sleep(5)
-        if grammars_activity is None: grammars_activity = []
-        else: _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
-        # if len(grammars_activity) != self.num_grammars:
-        #     raise KaldiError("wrong len(grammars_activity)")
+        if grammars_activity is None:
+            grammars_activity = []
+        else:
+            # Start of utterance
+            _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
+            if len(grammars_activity) != self.num_grammars:
+                _log.warn("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
+                # raise KaldiError("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
 
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)

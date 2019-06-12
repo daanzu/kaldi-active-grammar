@@ -21,7 +21,7 @@ _log = _log.getChild('compiler')
 class KaldiRule(object):
     def __init__(self, compiler, id, name, nonterm=True, has_dictation=None):
         self.compiler = compiler
-        self.id = int(id)
+        self.id = int(id)  # matches "nonterm:rule__"; 0-based
         self.name = name
         if self.id > self.compiler._max_rule_id: raise KaldiError("KaldiRule id > compiler._max_rule_id")
         self.nonterm = nonterm
@@ -33,6 +33,7 @@ class KaldiRule(object):
     def __str__(self):
         return "KaldiRule(%s, %s)" % (self.id, self.name)
 
+    decoder = property(lambda self: self.compiler.decoder)
     filename = property(lambda self: base64.b16encode(self.name) + '.fst')  # FIXME: need to handle unicode?
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
 
@@ -62,12 +63,27 @@ class KaldiRule(object):
 
         self.compiler.fst_cache.add(self.filename, fst_text)
 
+    def load(self):
+        self.decoder.add_grammar_fst(self.filepath)
+
+    def destroy(self):
+        self.decoder.remove_grammar_fst(self.id)
+        self.compiler._fst_filenames_set.remove(self.filename)
+        # Adjust kaldi_rules ids down, if above self.id
+        for kaldi_rule in self.compiler.kaldi_rule_by_id_dict.values():
+            if kaldi_rule.id > self.id:
+                kaldi_rule.id -= 1
+        # Rebuild dict
+        self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in self.compiler.kaldi_rule_by_id_dict.values() }
+        self.compiler.free_rule_id()
+
 
 ########################################################################################################################
 
 class Compiler(object):
 
     def __init__(self, model_dir, tmp_dir=None):
+        self.decoder = None
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'
@@ -128,6 +144,16 @@ class Compiler(object):
         self._longest_word = max(self._lexicon_words, key=len)
 
         return self._lexicon_words
+
+    def alloc_rule_id(self):
+        id = self._num_kaldi_rules
+        self._num_kaldi_rules += 1
+        return id
+
+    def free_rule_id(self):
+        id = self._num_kaldi_rules
+        self._num_kaldi_rules -= 1
+        return id
 
     ####################################################################################################################
     # Methods for compiling graphs.
