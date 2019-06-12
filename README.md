@@ -37,7 +37,7 @@ Install Python package, which includes necessary Kaldi binaries:
 pip install kaldi-active-grammar
 ```
 
-Download compatible generic English Kaldi nnet3 chain model from project releases. Unzip the model and pass the directory path to kaldi-active-grammar constructor.
+Download compatible generic English Kaldi nnet3 chain model from [project releases](https://github.com/daanzu/kaldi-active-grammar/releases). Unzip the model and pass the directory path to kaldi-active-grammar constructor.
 
 Or use your own model. Standard Kaldi models must be converted to be usable. Conversion can be performed automatically, but this hasn't been fully implemented yet.
 
