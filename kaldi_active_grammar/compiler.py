@@ -299,42 +299,45 @@ class Compiler(object):
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
         if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
-            audio_data, word_align = dictation_info_func()
-            words, times, lengths = zip(*word_align)
-            dictation_spans = [{
-                    'index_start': index,
-                    'offset_start': time,
-                    'index_end': words.index('#nonterm:end', index),
-                    'offset_end': times[words.index('#nonterm:end', index)],
-                }
-                for index, (word, time, length) in zip(range(len(word_align)), word_align)
-                if word.startswith('#nonterm:dictation_cloud')]
+            try:
+                audio_data, word_align = dictation_info_func()
+                words, times, lengths = zip(*word_align)
+                dictation_spans = [{
+                        'index_start': index,
+                        'offset_start': time,
+                        'index_end': words.index('#nonterm:end', index),
+                        'offset_end': times[words.index('#nonterm:end', index)],
+                    }
+                    for index, (word, time, length) in zip(range(len(word_align)), word_align)
+                    if word.startswith('#nonterm:dictation_cloud')]
 
-            # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
-            dictation_span = dictation_spans[-1]
-            if dictation_span['index_end'] == len(word_align) - 1:
-                dictation_span['offset_end'] = len(audio_data)
-            else:
-                next_word_time = times[dictation_span['index_end'] + 1]
-                dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) / 2
+                # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
+                dictation_span = dictation_spans[-1]
+                if dictation_span['index_end'] == len(word_align) - 1:
+                    dictation_span['offset_end'] = len(audio_data)
+                else:
+                    next_word_time = times[dictation_span['index_end'] + 1]
+                    dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) / 2
 
-            def replace_dictation(matchobj):
-                orig_text = matchobj.group(1)
-                dictation_span = dictation_spans.pop(0)
-                dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
-                with debug_timer(self._log.debug, 'cloud dictation call'):
-                    cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio)
-                    self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
-                # with debug_timer(self._log.debug, 'cloud dictation call'):
-                #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search')
-                #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
-                # with debug_timer(self._log.debug, 'cloud dictation call'):
-                #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio)
-                #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
-                # cloud.write_wav('test.wav', dictation_audio)
-                return cloud_text or orig_text
+                def replace_dictation(matchobj):
+                    orig_text = matchobj.group(1)
+                    dictation_span = dictation_spans.pop(0)
+                    dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                    with debug_timer(self._log.debug, 'cloud dictation call'):
+                        cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio)
+                        self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                    # with debug_timer(self._log.debug, 'cloud dictation call'):
+                    #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search')
+                    #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                    # with debug_timer(self._log.debug, 'cloud dictation call'):
+                    #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio)
+                    #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                    # cloud.write_wav('test.wav', dictation_audio)
+                    return cloud_text or orig_text
 
-            parsed_output = self.cloud_dictation_regex.sub(replace_dictation, parsed_output)
+                parsed_output = self.cloud_dictation_regex.sub(replace_dictation, parsed_output)
+            except Exception as e:
+                self._log.exception("Exception performing cloud dictation")
 
         parsed_output = remove_nonterms(parsed_output)
         return kaldi_rule, parsed_output
