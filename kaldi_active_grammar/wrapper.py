@@ -184,7 +184,8 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
                 int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp,
                 char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp);
-            bool add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+            int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+            bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
             bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
             bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
                 bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
@@ -246,17 +247,25 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
 
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
-        _log.debug("%s: adding grammar_fst_file: %s", self, grammar_fst_file)
-        result = self._lib.add_grammar_fst_agf_nnet3(self._model, grammar_fst_file)
-        if not result:
-            raise KaldiError("error adding grammar")
+        _log.debug("%s: adding grammar_fst_file: %r", self, grammar_fst_file)
+        grammar_fst_index = self._lib.add_grammar_fst_agf_nnet3(self._model, grammar_fst_file)
+        if grammar_fst_index < 0:
+            raise KaldiError("error adding grammar %r" % grammar_fst_file)
+        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
         self.num_grammars += 1
+        return grammar_fst_index
+
+    def reload_grammar_fst(self, grammar_fst_index, grammar_fst_file):
+        _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
+        result = self._lib.reload_grammar_fst_agf_nnet3(self._model, grammar_fst_index, grammar_fst_file)
+        if not result:
+            raise KaldiError("error reloading grammar #%s %r" % grammar_fst_index, grammar_fst_file)
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
         result = self._lib.remove_grammar_fst_agf_nnet3(self._model, grammar_fst_index)
         if not result:
-            raise KaldiError("error removing grammar")
+            raise KaldiError("error removing grammar #%s" % grammar_fst_index)
         self.num_grammars -= 1
 
     def decode(self, frames, finalize, grammars_activity=None):

@@ -65,18 +65,14 @@ class KaldiRule(object):
         self.compiler.fst_cache.add(self.filename, fst_text)
 
     def load(self):
-        self.decoder.add_grammar_fst(self.filepath)
-
-    # def reload(self):
-    #     self.decoder.remove_grammar_fst(self.id)
-    #     self.decoder.add_grammar_fst(self.filepath)
+        grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
+        assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
 
     @contextmanager
     def reloading(self):
-        self.decoder.remove_grammar_fst(self.id)
         self.fst.clear()
         yield
-        self.decoder.add_grammar_fst(self.filepath)
+        self.decoder.reload_grammar_fst(self.id, self.filepath)
 
     def destroy(self):
         self.decoder.remove_grammar_fst(self.id)
