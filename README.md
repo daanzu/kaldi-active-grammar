@@ -18,7 +18,7 @@ Normally, Kaldi decoding graphs are **monolithic**, require **expensive up-front
 This project extends that to allow each grammar/rule to be **independently marked** as active/inactive **dynamically** on a **per-utterance** basis (set at the beginning of each utterance). Dragonfly is then capable of activating **only the appropriate grammars for the current environment**, resulting in increased accuracy due to fewer possible recognitions. Furthermore, the dictation grammar can be **shared** between all the command grammars, which can be **compiled quickly** without needing to include large-vocabulary dictation directly.
 
 * The Python package **includes all necessary binaries** for decoding on **Linux or Windows**.
-* A compatible [**general English Kaldi nnet3 chain model**](https://github.com/daanzu/kaldi-active-grammar/releases/latest/download/kaldi_model_zamia.zip) is available, under releases.
+* A compatible **general English Kaldi nnet3 chain model** is available, under [releases](https://github.com/daanzu/kaldi-active-grammar/releases), trained on ~1200 hours of open audio.
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development, currently in the kaldi branch of my fork.
 
 Donations are appreciated to encourage development.

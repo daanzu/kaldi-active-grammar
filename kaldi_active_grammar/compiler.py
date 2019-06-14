@@ -7,7 +7,7 @@
 import base64, collections, logging, os.path, re, shlex, subprocess
 from contextlib import contextmanager
 
-from . import _log, KaldiError
+from . import _log, KaldiError, required_model_version
 from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
 import utils
 from .wfst import WFST
@@ -102,11 +102,21 @@ class Compiler(object):
         self.exec_dir = os.path.join(utils.exec_dir, '')
         self.model_dir = os.path.join(model_dir or '', '')
         self.tmp_dir = os.path.join(tmp_dir or 'kaldi_tmp', '')
-        if not os.path.exists(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
-        if not os.path.exists(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
+        if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
+        if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
         if not os.path.exists(self.tmp_dir):
             _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
             os.mkdir(self.tmp_dir)
+        if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
+
+        version_file = os.path.join(self.model_dir, 'KAG_VERSION')
+        if os.path.isfile(version_file):
+            with open(version_file) as f:
+                model_version = f.read().strip()
+                if model_version != required_model_version:
+                    raise KaldiError("invalid model_dir version! please download a compatible model")
+        else:
+            self._log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
         self.files_dict = {
             'exec_dir': self.exec_dir,
@@ -114,6 +124,7 @@ class Compiler(object):
             'tmp_dir': self.tmp_dir,
             'words.txt': find_file(self.model_dir, 'words.txt'),
             'phones.txt': find_file(self.model_dir, 'phones.txt'),
+            'align_lexicon.int': find_file(model_dir, 'align_lexicon.int'),
             'disambig.int': find_file(self.model_dir, 'disambig.int'),
             'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst'),
             'tree': find_file(self.model_dir, 'tree'),
