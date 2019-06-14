@@ -12,6 +12,9 @@ class WFST(object):
     one = 0.0
 
     def __init__(self):
+        self.clear()
+
+    def clear(self):
         self._arc_table = []
         self._state_table = []
         self._state_to_num_arcs = collections.Counter()

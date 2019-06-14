@@ -5,6 +5,7 @@
 #
 
 import base64, collections, logging, os.path, re, shlex, subprocess
+from contextlib import contextmanager
 
 from . import _log, KaldiError
 from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
@@ -37,10 +38,10 @@ class KaldiRule(object):
     filename = property(lambda self: base64.b16encode(self.name) + '.fst')  # FIXME: need to handle unicode?
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
 
-    def compile_file(self):
+    def compile_file(self, reloading=False):
         _log.debug("%s: Compiling exported rule %r to %s" % (self, self.name, self.filename))
 
-        if self.filename in self.compiler._fst_filenames_set:
+        if not reloading and self.filename in self.compiler._fst_filenames_set:
             raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
         self.compiler._fst_filenames_set.add(self.filename)
 
@@ -66,13 +67,26 @@ class KaldiRule(object):
     def load(self):
         self.decoder.add_grammar_fst(self.filepath)
 
+    # def reload(self):
+    #     self.decoder.remove_grammar_fst(self.id)
+    #     self.decoder.add_grammar_fst(self.filepath)
+
+    @contextmanager
+    def reloading(self):
+        self.decoder.remove_grammar_fst(self.id)
+        self.fst.clear()
+        yield
+        self.decoder.add_grammar_fst(self.filepath)
+
     def destroy(self):
         self.decoder.remove_grammar_fst(self.id)
         self.compiler._fst_filenames_set.remove(self.filename)
+
         # Adjust kaldi_rules ids down, if above self.id
         for kaldi_rule in self.compiler.kaldi_rule_by_id_dict.values():
             if kaldi_rule.id > self.id:
                 kaldi_rule.id -= 1
+
         # Rebuild dict
         self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in self.compiler.kaldi_rule_by_id_dict.values() }
         self.compiler.free_rule_id()
