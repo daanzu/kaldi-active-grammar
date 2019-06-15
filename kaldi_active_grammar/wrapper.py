@@ -17,6 +17,7 @@ from . import _log, KaldiError
 from .utils import exec_dir, find_file, platform, symbol_table_lookup
 
 _log = _log.getChild('wrapper')
+_log_library = _log.getChild('library')
 
 
 ########################################################################################################################
@@ -183,7 +184,8 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
             void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
                 int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp,
-                char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp);
+                char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp,
+                int32_t verbosity);
             int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
             bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
             bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
@@ -211,8 +213,9 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         self.ie_conf_file = os.path.normpath(ie_conf_file)
         self.model_file = os.path.normpath(model_file)
         self.top_fst_file = os.path.normpath(top_fst_file)
+        verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
         self._model = self._lib.init_agf_nnet3(14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            nonterm_phones_offset, words_file, word_align_lexicon_file or "", mfcc_conf_file, ie_conf_file, model_file, top_fst_file, dictation_fst_file or "")
+            nonterm_phones_offset, words_file, word_align_lexicon_file or "", mfcc_conf_file, ie_conf_file, model_file, top_fst_file, dictation_fst_file or "", verbosity)
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
 

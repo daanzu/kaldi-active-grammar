@@ -200,8 +200,9 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'cffi',
-        'numpy',
+        'cffi ~= 1.12',
+        'numpy ~= 1.16',
+        'pyparsing ~= 2.2',
         'six',
     ],  # Optional
 

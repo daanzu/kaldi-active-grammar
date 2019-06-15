@@ -79,14 +79,14 @@ class FileCache(object):
         try:
             self.load()
         except Exception as e:
-            _log.warning("%s: failed to load cache from %r; initializing empty", self, filename)
+            _log.info("%s: failed to load cache from %r; initializing empty", self, filename)
             self.cache = dict()
         # If list of dependencies has changed, or any of the files' contents (as stored in cache) has changed, then reset cache.
         if (sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
                 or any(not self.contains(name, open(path, 'rb').read())
                     for name, path in dependencies_dict.items()
                     if path and os.path.isfile(path))):
-            _log.warning("%s: dependencies did not match cache from %r; initializing empty", self, filename)
+            _log.info("%s: dependencies did not match cache from %r; initializing empty", self, filename)
             self.cache = dict(dependencies_dict=dependencies_dict)
             for name, path in dependencies_dict.items():
                 if path and os.path.isfile(path):

@@ -7,11 +7,12 @@
 import base64, collections, logging, os.path, re, shlex, subprocess
 from contextlib import contextmanager
 
+import pyparsing as pp
+
 from . import _log, KaldiError, required_model_version
 from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
 import utils
 from .wfst import WFST
-
 import cloud
 
 _log = _log.getChild('compiler')
