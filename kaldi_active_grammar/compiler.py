@@ -93,7 +93,7 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir, tmp_dir=None):
+    def __init__(self, model_dir, tmp_dir=None, cloud_dictation=None):
         self.decoder = None
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
@@ -140,6 +140,8 @@ class Compiler(object):
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self._fst_filenames_set = set()
         self._lexicon_words = set()
+
+        self.cloud_dictation = cloud_dictation
 
     _max_rule_id = 999
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
@@ -306,7 +308,6 @@ class Compiler(object):
         assert kaldi_rule_id == kaldi_rule.id
         return parsed_output
 
-    cloud_dictation = True
     cloud_dictation_regex = re.compile(r'#nonterm:dictation_cloud (.*?) #nonterm:end')
 
     def parse_output(self, output, dictation_info_func=None):
