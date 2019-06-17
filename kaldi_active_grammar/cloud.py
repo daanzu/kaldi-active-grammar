@@ -1,6 +1,7 @@
 import wave
 
 try:
+    # google-cloud-speech==0.36.3
     from google.cloud import speech
     from google.cloud.speech import enums
     from google.cloud.speech import types
@@ -8,11 +9,19 @@ try:
 except ImportError:
     gcloud_imported = False
 
+from . import _log
+
+_log = _log.getChild('cloud')
+
 class GCloud(object):
 
     @staticmethod
     def transcribe_data_sync(speech_data, model='default'):
         # model in ['video', 'phone_call', 'command_and_search', 'default']
+
+        if not gcloud_imported:
+            _log.error("cloud_dictation failed because cannot find google.cloud package!")
+            return None
         client = speech.SpeechClient()
 
         audio = types.RecognitionAudio(content=speech_data)
@@ -35,6 +44,10 @@ class GCloud(object):
     @staticmethod
     def transcribe_data_streaming(speech_data, model=None):
         # model in ['video', 'phone_call', 'command_and_search', 'default']
+
+        if not gcloud_imported:
+            _log.error("cloud_dictation failed because cannot find google.cloud package!")
+            return None
         client = speech.SpeechClient()
 
         # In practice, stream should be a generator yielding chunks of audio data.
