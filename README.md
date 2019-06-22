@@ -21,7 +21,7 @@ This project extends that to allow each grammar/rule to be **independently marke
 * A compatible **general English Kaldi nnet3 chain model** is available, under [releases](https://github.com/daanzu/kaldi-active-grammar/releases), trained on ~1200 hours of open audio.
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development, currently in the kaldi branch of my fork.
 
-Donations are appreciated to encourage development.
+**Donations are appreciated to encourage development.**
 
 ## Setup
 
@@ -29,7 +29,9 @@ Requirements:
 * Python 2.7 (3.x support planned); *64-bit required!*
     * Microphone support provided by [pyaudio](https://pypi.org/project/PyAudio/) package
 * OS: *Linux or Windows*; macOS planned if there is interest
-* Only supports Kaldi left-biphone models, specifically *nnet3 chain* models
+* Only supports Kaldi left-biphone models, specifically *nnet3 chain* models, with specific modifications
+* ~1GB+ disk space for model plus temporary storage and cache, depending on your grammar complexity
+* ~500MB+ RAM for model and grammars, depending on your model and grammar complexity
 
 Install Python package, which includes necessary Kaldi binaries:
 
@@ -47,9 +49,13 @@ Or use your own model. Standard Kaldi models must be converted to be usable. Con
     * Make sure you are using a 64-bit Python.
     * Update your `pip` by executing `pip install --upgrade pip`.
 
+## Documentation
+
+Documentation is sorely lacking currently. To see example usage, examine the [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi).
+
 ## Contributing
 
-Please feel free to submit issues, suggestions, and feature requests. Pull requests are considered, but project structure is in flux.
+Issues, suggestions, and feature requests are welcome & encouraged. Pull requests are considered, but project structure is in flux.
 
 Donations are appreciated to encourage development.
 
