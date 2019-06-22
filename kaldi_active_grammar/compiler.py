@@ -20,6 +20,18 @@ _log = _log.getChild('compiler')
 
 ########################################################################################################################
 
+def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=None, **kwargs):
+    with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'w') as devnull:
+        output = None if _log.isEnabledFor(logging.DEBUG) else devnull
+        args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
+        _log.log(5, "subprocess.check_call(%r)", args)
+        subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
+        if format_kwargs_update:
+            format_kwargs.update(format_kwargs_update)
+
+
+########################################################################################################################
+
 class KaldiRule(object):
     def __init__(self, compiler, id, name, nonterm=True, has_dictation=None):
         self.compiler = compiler
@@ -186,11 +198,7 @@ class Compiler(object):
         # FIXME: documentation
         with debug_timer(_log.debug, "otf graph compilation"):
             format_kwargs = dict(self.files_dict, **kwargs)
-            def run(cmd, **kwargs):
-                with debug_timer(_log.debug, "otf graph compilation step", False):
-                    args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
-                    _log.log(5, "subprocess.check_call(%r)", args)
-                    subprocess.check_call(args, **kwargs)
+            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "otf graph compilation step", **kwargs)
 
             p1 = run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {filename}.txt {filename}")
             p2 = run("{exec_dir}fstrelabel --relabel_ipairs={g.irelabel} {filename} {filename}")
@@ -206,13 +214,7 @@ class Compiler(object):
             format_kwargs.update(nonterm_phones_offset = symbol_table_lookup(format_kwargs['phones.txt'], '#nonterm_bos'))
             if format_kwargs['nonterm_phones_offset'] is None:
                 raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
-            def run(cmd, **kwargs):
-                with debug_timer(_log.debug, "agf graph compilation step", False), open(os.devnull, 'w') as devnull:
-                    output = None if _log.isEnabledFor(logging.DEBUG) else devnull
-                    args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
-                    _log.log(5, "subprocess.check_call(%r)", args)
-                    subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
-                    format_kwargs.update(in_filename=filename)
+            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(in_filename=filename), **kwargs)
 
             if fstcompile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {in_filename}.txt {filename}")
             # run("cp {in_filename} {filename}-G")
