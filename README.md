@@ -20,6 +20,7 @@ This project extends that to allow each grammar/rule to be **independently marke
 * The Python package **includes all necessary binaries** for decoding on **Linux or Windows**.
 * A compatible **general English Kaldi nnet3 chain model** is available, under [releases](https://github.com/daanzu/kaldi-active-grammar/releases), trained on ~1200 hours of open audio.
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development, currently in the kaldi branch of my fork.
+    * A beta version has been merged as of Dragonfly **v0.15.0**! See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), and try out a [demo](https://github.com/daanzu/dragonfly/blob/kaldi/dragonfly/examples/kaldi_demo.py).
 
 **Donations are appreciated to encourage development.**
 
@@ -46,7 +47,7 @@ Or use your own model. Standard Kaldi models must be converted to be usable. Con
 ### Troubleshooting
 
 * Errors installing
-    * Make sure you are using a 64-bit Python.
+    * Make sure you're using a 64-bit Python.
     * Update your `pip` by executing `pip install --upgrade pip`.
 
 ## Documentation
