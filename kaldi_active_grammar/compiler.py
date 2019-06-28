@@ -8,6 +8,7 @@ import base64, collections, logging, os.path, re, shlex, subprocess
 from contextlib import contextmanager
 
 import pyparsing as pp
+import ush
 
 from . import _log, KaldiError, required_model_version
 from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
@@ -29,11 +30,16 @@ def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=No
         if format_kwargs_update:
             format_kwargs.update(format_kwargs_update)
 
+shell = ush.Shell(raise_on_error=True)
+
 
 ########################################################################################################################
 
 class KaldiRule(object):
     def __init__(self, compiler, id, name, nonterm=True, has_dictation=None):
+        """
+        :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
+        """
         self.compiler = compiler
         self.id = int(id)  # matches "nonterm:rule__"; 0-based
         self.name = name
@@ -67,11 +73,12 @@ class KaldiRule(object):
             #     self.compiler.fst_cache.hash(self.compiler.fst_cache.cache[self.filename]) if self.filename in self.compiler.fst_cache.cache else None,
             #     self.compiler.fst_cache.hash(fst_text)))
             pass
-        with open(self.filepath + '.txt', 'w') as f:
+        with open(self.filepath + '.txt', 'wb') as f:
+            # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
             f.write(fst_text)
 
         if self.compiler.decoding_framework == 'agf':
-            self.compiler._compile_agf_graph(fstcompile=True, nonterm=self.nonterm, filename=self.filepath)
+            self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, filename=self.filepath)
         elif self.compiler.decoding_framework == 'otf':
             self.compiler._compile_otf_graph(filename=self.filepath)
 
@@ -205,25 +212,74 @@ class Compiler(object):
             p3 = run("{exec_dir}fstarcsort {filename} {filename}")
             # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
 
-    def _compile_agf_graph(self, fstcompile=False, nonterm=False, in_filename=None, filename=None, **kwargs):
+    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, **kwargs):
+        """
+        :param compile: bool whether to compile FST (False if it has already been compiled, like importing dictation FST)
+        :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
+        """
+        # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
         with debug_timer(_log.debug, "agf graph compilation"):
-            in_filename = in_filename or filename
+            input_filename = input_filename or filename
             verbose_level = 5 if _log.isEnabledFor(5) else 0
-            format_kwargs = dict(self.files_dict, in_filename=in_filename, filename=filename, verbose=verbose_level, **kwargs)
+            format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset = symbol_table_lookup(format_kwargs['phones.txt'], '#nonterm_bos'))
             if format_kwargs['nonterm_phones_offset'] is None:
                 raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
-            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(in_filename=filename), **kwargs)
+            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(input_filename=filename), **kwargs)
 
-            if fstcompile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {in_filename}.txt {filename}")
-            # run("cp {in_filename} {filename}-G")
-            if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {in_filename} {filename}")
-            if nonterm: run("{exec_dir}fstconcat {in_filename} {tmp_dir}nonterm_end.fst {filename}")
-            if fstcompile: run("{exec_dir}fstarcsort --sort_type=ilabel {in_filename} {filename}")
-            # run("cp {in_filename} {filename}-G")
-            run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
-                + " {tree} {final_mdl} {L_disambig_fst} {in_filename} {filename}")
+            if 1:
+                # Pipeline-style
+                format = lambda *args: [arg.format(**format_kwargs) for arg in args]
+                fst_exec = ush.Shell(cwd=self.exec_dir, raise_on_error=True)
+                shell = ush.Shell(cwd=self.tmp_dir, raise_on_error=True)
+                shell = ush.Shell(raise_on_error=True)
+                fstcompile, fstarcsort, fstconcat, compile_graph_agf = shell(*[os.path.join(self.exec_dir, exe) for exe in ['fstcompile', 'fstarcsort', 'fstconcat', 'compile-graph-agf']])
+                if 1:
+                    if input_data and input_filename: raise KaldiError("_compile_agf_graph passed both input_data and input_filename")
+                    elif input_data: input = shell.echo(input_data)
+                    elif input_filename: input = input_filename + '.txt'
+                    else: raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
+                    compile_command = input
+                    args = []
+                    if compile:
+                        compile_command |= fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+                        args.extend(['--arcsort-grammar'])
+                    if nonterm:
+                        args.extend(format('--grammar-prepend-nonterm={tmp_dir}nonterm_begin.fst'))
+                        args.extend(format('--grammar-append-nonterm={tmp_dir}nonterm_end.fst'))
+                    args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
+                        '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
+                    compile_command |= compile_graph_agf(*args)
+                    compile_command()
+                else:
+                    input = None
+                    output = None
+                    if compile:
+                        # from IPython import embed; embed()
+                        output = (input_filename + '.txt') | fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+                        output = output | fstarcsort(*format('--sort_type=ilabel'))
+                        (output | filename)()
+                    # run("cp {input_filename} {filename}-G")
+                    # if nonterm:
+                    #     output = (output or input_filename) | fstconcat_exec(*format("--isymbols={words_txt}", "--osymbols={words_txt}"))
+                    #     run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {filename}")
+                    if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {filename}")
+                    if nonterm: run("{exec_dir}fstconcat {input_filename} {tmp_dir}nonterm_end.fst {filename}")
+                    # if compile: run("{exec_dir}fstarcsort --sort_type=ilabel {input_filename} {filename}")
+                    # run("cp {input_filename} {filename}-G")
+                    run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
+                        + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
+            else:
+                # CLI-style
+                if compile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {filename}")
+                # run("cp {input_filename} {filename}-G")
+                if compile: run("{exec_dir}fstarcsort --sort_type=ilabel {input_filename} {filename}")
+                if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {filename}")
+                if nonterm: run("{exec_dir}fstconcat {input_filename} {tmp_dir}nonterm_end.fst {filename}")
+                # run("cp {input_filename} {filename}-G")
+                run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
+                    + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
 
     def _compile_base_fsts(self):
         format_kwargs = dict(self.files_dict)
@@ -289,7 +345,7 @@ class Compiler(object):
         return kaldi_rule
 
     def compile_dictation_fst(self, g_filename):
-        self._compile_agf_graph(in_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
+        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
     ####################################################################################################################
     # Methods for recognition.
