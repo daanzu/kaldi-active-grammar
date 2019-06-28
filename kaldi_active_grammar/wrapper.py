@@ -182,9 +182,10 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         self._ffi = FFI()
         self._ffi.cdef("""
             void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-                int32_t nonterm_phones_offset, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
-                char* mfcc_config_filename_cp, char* ie_config_filename_cp,
-                char* model_filename_cp, char* top_fst_filename_cp, char* dictation_fst_filename_cp,
+                char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+                int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
+                char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
+                char* top_fst_filename_cp, char* dictation_fst_filename_cp,
                 int32_t verbosity);
             int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
             bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
@@ -200,13 +201,21 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # warning?
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
         if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
             find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
+
         nonterm_phones_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm_bos')
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
+        rules_nonterm_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm:rule0') - nonterm_phones_offset
+        if rules_nonterm_offset is None:
+            raise KaldiError("cannot find #nonterm:rule0 symbol in phones.txt")
+        dictation_nonterm_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm:dictation') - nonterm_phones_offset
+        if dictation_nonterm_offset is None:
+            raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
+
         self.words_file = os.path.normpath(words_file)
         self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
         self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
@@ -214,8 +223,14 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         self.model_file = os.path.normpath(model_file)
         self.top_fst_file = os.path.normpath(top_fst_file)
         verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
-        self._model = self._lib.init_agf_nnet3(14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            nonterm_phones_offset, words_file, word_align_lexicon_file or "", mfcc_conf_file, ie_conf_file, model_file, top_fst_file, dictation_fst_file or "", verbosity)
+
+        self._model = self._lib.init_agf_nnet3(
+            14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
+            mfcc_conf_file, ie_conf_file, model_file,
+            nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
+            words_file, word_align_lexicon_file or "",
+            top_fst_file, dictation_fst_file or "",
+            verbosity)
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
 
