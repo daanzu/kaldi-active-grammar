@@ -203,6 +203,7 @@ setup(
         'cffi ~= 1.12',
         'numpy ~= 1.16',
         'pyparsing ~= 2.2',
+        'ush ~= 3.1',
         'six',
     ],  # Optional
 
