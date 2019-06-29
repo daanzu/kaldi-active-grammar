@@ -1,3 +1,9 @@
+#
+# This file is part of kaldi-active-grammar.
+# (c) Copyright 2019 by David Zurow
+# Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
+#
+
 import wave
 
 try:

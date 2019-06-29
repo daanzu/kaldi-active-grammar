@@ -206,13 +206,14 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
             find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
 
-        nonterm_phones_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm_bos')
+        phones_file = find_file(model_dir, 'phones.txt')
+        nonterm_phones_offset = symbol_table_lookup(phones_file, '#nonterm_bos')
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
-        rules_nonterm_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm:rule0') - nonterm_phones_offset
+        rules_nonterm_offset = symbol_table_lookup(phones_file, '#nonterm:rule0') - nonterm_phones_offset
         if rules_nonterm_offset is None:
             raise KaldiError("cannot find #nonterm:rule0 symbol in phones.txt")
-        dictation_nonterm_offset = symbol_table_lookup(find_file(model_dir, 'phones.txt'), '#nonterm:dictation') - nonterm_phones_offset
+        dictation_nonterm_offset = symbol_table_lookup(phones_file, '#nonterm:dictation') - nonterm_phones_offset
         if dictation_nonterm_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
 

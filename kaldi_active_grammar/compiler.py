@@ -7,11 +7,12 @@
 import base64, collections, logging, os.path, re, shlex, subprocess
 from contextlib import contextmanager
 
+from six import StringIO
 import pyparsing as pp
 import ush
 
 from . import _log, KaldiError, required_model_version
-from .utils import debug_timer, find_file, platform, symbol_table_lookup, FileCache
+from .utils import debug_timer, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache
 import utils
 from .wfst import WFST
 import cloud
@@ -156,15 +157,17 @@ class Compiler(object):
         self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
 
         self._num_kaldi_rules = 0
+        self._max_rule_id = load_symbol_table(self.files_dict['phones.txt'])[-1][1] - symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm:rule0')  # FIXME: inaccuracy
+        self._max_rule_id = 999
+        self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
+
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self._fst_filenames_set = set()
         self._lexicon_words = set()
 
         self.cloud_dictation = cloud_dictation
 
-    _max_rule_id = 999
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
-    nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(_max_rule_id + 1)])
 
     default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
     _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
@@ -246,7 +249,8 @@ class Compiler(object):
                     args.extend(format('--grammar-append-nonterm={tmp_dir}nonterm_end.fst'))
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
-                compile_command |= compile_graph_agf(*args)
+                kwargs = dict() if verbose_level else dict(stderr=StringIO())
+                compile_command |= compile_graph_agf(*args, **kwargs)
                 compile_command()
 
             else:

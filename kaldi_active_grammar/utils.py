@@ -61,6 +61,9 @@ subprocess_seperator = '^&' if platform == 'windows' else ';'
 symbol_table_lookup_cache = dict()
 
 def symbol_table_lookup(filename, input):
+    """
+    Returns the RHS corresponding to LHS == ``input`` in symbol table in ``filename``.
+    """
     cached = symbol_table_lookup_cache.get((filename, input))
     if cached is not None:
         return cached
@@ -75,6 +78,10 @@ def symbol_table_lookup(filename, input):
                     symbol_table_lookup_cache[(filename, input)] = tokens[1]
                     return tokens[1]
         return None
+
+def load_symbol_table(filename):
+    with open(filename) as f:
+        return [[int(token) if token.isdigit() else token for token in line.strip().split()] for line in f]
 
 class FileCache(object):
 
