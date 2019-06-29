@@ -19,6 +19,10 @@ _debug_timer_stack = []
 
 @contextmanager
 def debug_timer(log, desc, enabled=True, independent=False):
+    """
+    Contextmanager that outputs timing to ``log`` with ``desc``.
+    :param independent: if True, tracks entire time spent inside context, rather than subtracting time within inner ``debug_timer`` instances
+    """
     start_time = time.clock()
     if not independent: _debug_timer_stack.append(start_time)
     spent_time_func = lambda: time.clock() - start_time

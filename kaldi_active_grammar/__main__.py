@@ -12,13 +12,13 @@ from .utils import debug_timer, find_file
 from .compiler import Compiler
 from .kaldi import augment_phones_txt, augment_words_txt
 
-def compile_dictation_graph(data_dir, tmp_dir, g_filepath=None):
-    compiler = Compiler(data_dir, tmp_dir)
+def compile_dictation_graph(model_dir, tmp_dir, g_filepath=None):
+    compiler = Compiler(model_dir, tmp_dir)
     if g_filepath is None: g_filepath = compiler.default_dictation_g_filepath
     with debug_timer(six.print_, "graph compilation", independent=True):
         compiler.compile_dictation_fst(g_filepath)
 
-def convert_generic_model_to_agf(src_dir, data_dir):
+def convert_generic_model_to_agf(src_dir, model_dir):
     filenames = [
         'words.txt',
         'phones.txt',
@@ -49,21 +49,21 @@ def convert_generic_model_to_agf(src_dir, data_dir):
     for filename in filenames:
         path = find_file(src_dir, filename)
         if path is None:
-            _log.error("cannot find %r in %r", filename, data_dir)
+            _log.error("cannot find %r in %r", filename, model_dir)
             continue
-        _log.info("copying %r to %r", path, data_dir)
-        shutil.copy(path, data_dir)
+        _log.info("copying %r to %r", path, model_dir)
+        shutil.copy(path, model_dir)
 
-    _log.info("converting %r in %r", 'phones.txt', data_dir)
-    lines, highest_symbol = augment_phones_txt.read_phones_txt(os.path.join(data_dir, 'phones.txt'))
-    augment_phones_txt.write_phones_txt(lines, highest_symbol, nonterminals, os.path.join(data_dir, 'phones.txt'))
+    _log.info("converting %r in %r", 'phones.txt', model_dir)
+    lines, highest_symbol = augment_phones_txt.read_phones_txt(os.path.join(model_dir, 'phones.txt'))
+    augment_phones_txt.write_phones_txt(lines, highest_symbol, nonterminals, os.path.join(model_dir, 'phones.txt'))
 
-    _log.info("converting %r in %r", 'words.txt', data_dir)
-    lines, highest_symbol = augment_words_txt.read_words_txt(os.path.join(data_dir, 'words.txt'))
+    _log.info("converting %r in %r", 'words.txt', model_dir)
+    lines, highest_symbol = augment_words_txt.read_words_txt(os.path.join(model_dir, 'words.txt'))
     # FIXME: leave space for adding words later
-    augment_words_txt.write_words_txt(lines, highest_symbol, nonterminals, os.path.join(data_dir, 'words.txt'))
+    augment_words_txt.write_words_txt(lines, highest_symbol, nonterminals, os.path.join(model_dir, 'words.txt'))
 
-    with open(os.path.join(data_dir, 'nonterminals.txt'), 'wb') as f:
+    with open(os.path.join(model_dir, 'nonterminals.txt'), 'wb') as f:
         f.writelines(nonterm + '\n' for nonterm in nonterminals)
 
     # add nonterminals to align_lexicon.int
@@ -74,7 +74,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(prog='python -m %s' % _name)
     parser.add_argument('-v', '--verbose', action='store_true')
-    parser.add_argument('-d', '--data_dir')
+    parser.add_argument('-m', '--model_dir')
     parser.add_argument('-t', '--tmp_dir')
     parser.add_argument('command', choices=['compile_dictation_graph', 'convert_generic_model_to_agf'])
     parser.add_argument('file', nargs='?')
@@ -87,11 +87,11 @@ def main():
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     if args.command == 'compile_dictation_graph':
-        if not args.data_dir: parser.error("DATA_DIR required for compile_dictation_graph")
-        compile_dictation_graph(args.data_dir, args.tmp_dir, args.file)
+        if not args.model_dir: parser.error("MODEL_DIR required for compile_dictation_graph")
+        compile_dictation_graph(args.model_dir, args.tmp_dir, args.file)
     if args.command == 'convert_generic_model_to_agf':
-        if not args.data_dir: parser.error("DATA_DIR required for convert_generic_model_to_agf")
-        convert_generic_model_to_agf(args.file, args.data_dir)
+        if not args.model_dir: parser.error("MODEL_DIR required for convert_generic_model_to_agf")
+        convert_generic_model_to_agf(args.file, args.model_dir)
 
 if __name__ == '__main__':
     main()
