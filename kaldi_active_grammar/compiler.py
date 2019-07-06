@@ -47,9 +47,12 @@ class KaldiRule(object):
         if self.id > self.compiler._max_rule_id: raise KaldiError("KaldiRule id > compiler._max_rule_id")
         self.nonterm = nonterm
         self.has_dictation = has_dictation
+
         self.fst = WFST()
+        self.fst_compiled = False
         self.matcher = None
         self.active = True
+        self.reloading = False
 
     def __str__(self):
         return "KaldiRule(%s, %s)" % (self.id, self.name)
@@ -58,10 +61,10 @@ class KaldiRule(object):
     filename = property(lambda self: base64.b16encode(self.name) + '.fst')  # FIXME: need to handle unicode?
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
 
-    def compile_file(self, reloading=False):
+    def compile_file(self):
         _log.debug("%s: Compiling exported rule %r to %s" % (self, self.name, self.filename))
 
-        if not reloading and self.filename in self.compiler._fst_filenames_set:
+        if not self.reloading and self.filename in self.compiler._fst_filenames_set:
             raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
         self.compiler._fst_filenames_set.add(self.filename)
 
@@ -83,17 +86,20 @@ class KaldiRule(object):
                 f.write(fst_text)
             self.compiler._compile_otf_graph(filename=self.filepath)
 
+        self.fst_compiled = True
         self.compiler.fst_cache.add(self.filename, fst_text)
 
-    def load(self):
+    def load_fst(self):
         grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
         assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
 
     @contextmanager
     def reloading(self):
+        self.reloading = True
         self.fst.clear()
         yield
         self.decoder.reload_grammar_fst(self.id, self.filepath)
+        self.reloading = False
 
     def destroy(self):
         self.decoder.remove_grammar_fst(self.id)
