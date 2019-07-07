@@ -12,7 +12,7 @@ import pyparsing as pp
 import ush
 
 from . import _log, KaldiError, required_model_version
-from .utils import debug_timer, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache
+from .utils import debug_timer, lazy_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache
 import utils
 from .wfst import WFST
 import cloud
@@ -145,21 +145,12 @@ class Compiler(object):
         else:
             self._log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
-        self.files_dict = {
+        self.model = Model(self.model_dir)
+        self.files_dict = dict(self.model.files_dict, **{
             'exec_dir': self.exec_dir,
             'model_dir': self.model_dir,
             'tmp_dir': self.tmp_dir,
-            'words.txt': find_file(self.model_dir, 'words.txt'),
-            'phones.txt': find_file(self.model_dir, 'phones.txt'),
-            'align_lexicon.int': find_file(model_dir, 'align_lexicon.int'),
-            'disambig.int': find_file(self.model_dir, 'disambig.int'),
-            'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst'),
-            'tree': find_file(self.model_dir, 'tree'),
-            '1.mdl': find_file(self.model_dir, '1.mdl'),
-            'final.mdl': find_file(self.model_dir, 'final.mdl'),
-            'g.irelabel': find_file(self.model_dir, 'g.irelabel'),  # otf
-        }
-        self.files_dict.update({ k.replace('.', '_'): v for k, v in self.files_dict.items() })  # for named placeholder access in str.format()
+        })
         self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
 
         self._num_kaldi_rules = 0
@@ -173,10 +164,20 @@ class Compiler(object):
 
         self.cloud_dictation = cloud_dictation
 
+        self._compile_base_fsts()
+        self.load_words()
+
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
 
     default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
     _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
+
+    @lazy_property
+    def nonterm_phones_offset(self):
+        offset = symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm_bos')
+        if offset is None:
+            raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
+        return offset
 
     def load_words(self, words_file=None, unigram_probs_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']
@@ -231,9 +232,7 @@ class Compiler(object):
         with debug_timer(_log.debug, "agf graph compilation"):
             verbose_level = 5 if _log.isEnabledFor(5) else 0
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
-            format_kwargs.update(nonterm_phones_offset = symbol_table_lookup(format_kwargs['phones.txt'], '#nonterm_bos'))
-            if format_kwargs['nonterm_phones_offset'] is None:
-                raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
+            format_kwargs.update(nonterm_phones_offset=self.nonterm_phones_offset)
 
             if 1:
                 # Pipeline-style

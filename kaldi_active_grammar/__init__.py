@@ -18,3 +18,4 @@ from .utils import FileCache
 from .wfst import WFST
 from .compiler import Compiler, KaldiRule
 from .wrapper import KaldiAgfNNet3Decoder
+from .model import Model

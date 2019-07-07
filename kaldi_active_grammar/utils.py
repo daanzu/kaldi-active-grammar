@@ -6,6 +6,7 @@
 
 import logging, sys, time
 import fnmatch, os
+import functools
 import hashlib, json
 from contextlib import contextmanager
 
@@ -58,6 +59,35 @@ subprocess_seperator = '^&' if platform == 'windows' else ';'
 
 ########################################################################################################################
 
+class lazy_property(object):
+    '''
+    meant to be used for lazy evaluation of an object attribute.
+    property should represent non-mutable data, as it replaces itself.
+    '''
+    # From https://stackoverflow.com/questions/3012421/python-memoising-deferred-lookup-property-decorator
+
+    def __init__(self, fget):
+        self.fget = fget
+        # copy the getter function's docstring and other attributes
+        functools.update_wrapper(self, fget)
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return self
+        value = self.fget(obj)
+        setattr(obj, self.fget.__name__, value)
+        return value
+
+    def __set__(self, obj, cls):
+        raise AttributeError("can't set attribute")
+
+
+########################################################################################################################
+
+def touch(filename):
+    with open(filename, 'a'):
+        pass
+
 symbol_table_lookup_cache = dict()
 
 def symbol_table_lookup(filename, input):
@@ -85,13 +115,21 @@ def load_symbol_table(filename):
 
 class FileCache(object):
 
-    def __init__(self, filename, dependencies_dict=dict()):
+    def __init__(self, filename, dependencies_dict=None):
+        """
+        Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary.
+        Also stores an entry ``dependencies_dict`` mapping filename -> hash of its contents/data, for detecting changes in our dependencies.
+        """
+
         self.filename = filename
+        if dependencies_dict is None: dependencies_dict = dict()
+
         try:
             self.load()
         except Exception as e:
             _log.info("%s: failed to load cache from %r; initializing empty", self, filename)
             self.cache = dict()
+
         # If list of dependencies has changed, or any of the files' contents (as stored in cache) has changed, then reset cache.
         if (sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
                 or any(not self.contains(name, open(path, 'rb').read())

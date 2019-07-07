@@ -34,13 +34,18 @@ def main():
 
     if args.command == 'compile_dictation_graph':
         if not args.model_dir: parser.error("MODEL_DIR required for compile_dictation_graph")
-        compile_dictation_graph(args.model_dir, args.tmp_dir, unknown[0])
+        file = unknown[0]
+        compile_dictation_graph(args.model_dir, args.tmp_dir, file)
     if args.command == 'convert_generic_model_to_agf':
         if not args.model_dir: parser.error("MODEL_DIR required for convert_generic_model_to_agf")
-        convert_generic_model_to_agf(unknown[0], args.model_dir)
+        file = unknown[0]
+        convert_generic_model_to_agf(file, args.model_dir)
     if args.command == 'add_word':
         if not args.model_dir: parser.error("MODEL_DIR required for add_word")
-        Model(args.model_dir).add_word(unknown[0], unknown[1].split())
+        word = unknown[0]
+        phones = unknown[1].split() if len(unknown) >= 2 else None
+        phones = Model(args.model_dir).add_word(word, phones)
+        six.print_("Added word %r: %r" % (word, phones))
 
 if __name__ == '__main__':
     main()
