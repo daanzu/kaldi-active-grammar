@@ -8,6 +8,7 @@
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dw/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/daanzu)
+[![Donate](https://img.shields.io/badge/Donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 
 > Python package developed to enable context-based command & control of computer applications, as in the [Dragonfly](https://github.com/dictation-toolbox/dragonfly) speech recognition framework, using the [Kaldi](https://github.com/kaldi-asr/kaldi) automatic speech recognition engine.
 
@@ -22,7 +23,7 @@ This project extends that to allow each grammar/rule to be **independently marke
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development, currently in the kaldi branch of my fork.
     * A beta version has been merged as of Dragonfly **v0.15.0**! See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), and try out a [demo](https://github.com/daanzu/dragonfly/blob/kaldi/dragonfly/examples/kaldi_demo.py).
 
-**Donations are appreciated to encourage development.**
+**Donations are appreciated to encourage development (see badges above).**
 
 ## Setup
 
@@ -61,6 +62,7 @@ Issues, suggestions, and feature requests are welcome & encouraged. Pull request
 Donations are appreciated to encourage development.
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/daanzu)
+[![Donate](https://img.shields.io/badge/Donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 
 ## Author
 
