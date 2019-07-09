@@ -16,7 +16,6 @@ except ImportError:
 
 from . import _log, KaldiError
 from .utils import find_file, load_symbol_table, symbol_table_lookup, touch
-from .compiler import Compiler
 from .kaldi import augment_phones_txt, augment_words_txt
 
 _log = _log.getChild('model')
@@ -149,25 +148,34 @@ class Model(object):
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.txt'], '#nonterm_begin')
 
+    def read_user_lexicon(self):
+        with open(self.files_dict['user_lexicon.txt'], 'rb') as file:
+            entries = [line.split() for line in file]
+            for tokens in entries:
+                if len(tokens) >= 1:
+                    # word lowercase
+                    tokens[0] = tokens[0].lower()
+        return entries
+
     def add_word(self, word, phones=None):
         word = word.strip().lower()
         if phones is None:
             phones = Lexicon.generate_pronunciation(word)
-        phones = Lexicon.cmu_to_xsampa(phones)
-        entry = ' '.join([word] + phones)
+            phones = Lexicon.cmu_to_xsampa(phones)
+        new_entry = [word] + phones
 
-        # If not already in user_lexicon, add it and regenerate
-        with open(self.files_dict['user_lexicon.txt'], 'rb') as file:
-            entry_tokens = entry.split()
-            for line in file:
-                line_tokens = line.split()
-                if line_tokens == entry_tokens:
-                    _log.warning("word & pronunciation already in user_lexicon")
-                    return phones
-                if line_tokens[0] == word:
-                    _log.warning("word (with different pronunciation) already in user_lexicon")
-        with open(self.files_dict['user_lexicon.txt'], 'ab') as file:
-            file.write(entry + '\n')
+        entries = self.read_user_lexicon()
+        if any(new_entry == entry for entry in entries):
+            _log.warning("word & pronunciation already in user_lexicon")
+            return phones
+        for tokens in entries:
+            if word == tokens[0]:
+                _log.warning("word (with different pronunciation) already in user_lexicon: %s" % tokens[1:])
+
+        entries.append(new_entry)
+        lines = [' '.join(tokens) + '\n' for tokens in entries]
+        with open(self.files_dict['user_lexicon.txt'], 'wb') as file:
+            file.writelines(lines)
         self.generate_lexicon_files()
 
         return phones
@@ -203,6 +211,8 @@ class Model(object):
 
 
 def convert_generic_model_to_agf(src_dir, model_dir):
+    from .compiler import Compiler
+
     filenames = [
         'words.txt',
         'phones.txt',

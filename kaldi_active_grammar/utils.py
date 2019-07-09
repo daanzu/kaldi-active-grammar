@@ -59,7 +59,20 @@ subprocess_seperator = '^&' if platform == 'windows' else ';'
 
 ########################################################################################################################
 
-class lazy_property(object):
+def lazy_readonly_property(func):
+    # From https://stackoverflow.com/questions/3012421/python-memoising-deferred-lookup-property-decorator
+    attr_name = '_lazy_' + func.__name__
+
+    @property
+    @functools.wraps(func)
+    def _lazyprop(self):
+        if not hasattr(self, attr_name):
+            setattr(self, attr_name, func(self))
+        return getattr(self, attr_name)
+
+    return _lazyprop
+
+class lazy_settable_property(object):
     '''
     meant to be used for lazy evaluation of an object attribute.
     property should represent non-mutable data, as it replaces itself.
@@ -77,9 +90,6 @@ class lazy_property(object):
         value = self.fget(obj)
         setattr(obj, self.fget.__name__, value)
         return value
-
-    def __set__(self, obj, cls):
-        raise AttributeError("can't set attribute")
 
 
 ########################################################################################################################

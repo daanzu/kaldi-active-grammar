@@ -12,9 +12,10 @@ import pyparsing as pp
 import ush
 
 from . import _log, KaldiError, required_model_version
-from .utils import debug_timer, lazy_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache
+from .utils import debug_timer, lazy_readonly_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache
 import utils
 from .wfst import WFST
+from .model import Model
 import cloud
 
 _log = _log.getChild('compiler')
@@ -172,7 +173,7 @@ class Compiler(object):
     default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
     _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
 
-    @lazy_property
+    @lazy_readonly_property
     def nonterm_phones_offset(self):
         offset = symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm_bos')
         if offset is None:

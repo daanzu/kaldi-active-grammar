@@ -7,8 +7,8 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dw/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/daanzu)
-[![Donate](https://img.shields.io/badge/Donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
+[![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
+[![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 
 > Python package developed to enable context-based command & control of computer applications, as in the [Dragonfly](https://github.com/dictation-toolbox/dragonfly) speech recognition framework, using the [Kaldi](https://github.com/kaldi-asr/kaldi) automatic speech recognition engine.
 
@@ -61,8 +61,8 @@ Issues, suggestions, and feature requests are welcome & encouraged. Pull request
 
 Donations are appreciated to encourage development.
 
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/daanzu)
-[![Donate](https://img.shields.io/badge/Donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
+[![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
+[![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 
 ## Author
 
