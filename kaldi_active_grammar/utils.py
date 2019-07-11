@@ -56,6 +56,24 @@ exec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exec', plat
 library_extension = dict(windows='.dll', linux='.so', macos='.dylib')[platform]
 subprocess_seperator = '^&' if platform == 'windows' else ';'
 
+import ush
+
+class ExternalProcess(object):
+
+    shell = ush.Shell(raise_on_error=True)
+
+    fstcompile = shell(os.path.join(exec_dir, 'fstcompile'))
+    fstarcsort = shell(os.path.join(exec_dir, 'fstarcsort'))
+    fstaddselfloops = shell(os.path.join(exec_dir, 'fstaddselfloops'))
+    compile_graph = shell(os.path.join(exec_dir, 'compile-graph'))
+    compile_graph_agf = shell(os.path.join(exec_dir, 'compile-graph-agf'))  # FIXME: linux
+
+    make_lexicon_fst = shell(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst_py2.py')])
+
+    @staticmethod
+    def get_formatter(format_kwargs):
+        return lambda *args: [arg.format(**format_kwargs) for arg in args]
+
 
 ########################################################################################################################
 

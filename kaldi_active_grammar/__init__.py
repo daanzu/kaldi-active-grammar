@@ -6,7 +6,8 @@
 
 _name = "kaldi_active_grammar"
 __version__ = "0.4.0"
-required_model_version = "0.5.0"
+REQUIRED_MODEL_VERSION = "0.5.0"
+DEFAULT_MODEL_DIR = "kaldi_model_zamia"
 
 import logging
 _log = logging.getLogger("kaldi")

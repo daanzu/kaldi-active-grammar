@@ -14,8 +14,8 @@ try:
 except ImportError:
     g2p_en = None
 
-from . import _log, KaldiError
-from .utils import find_file, load_symbol_table, symbol_table_lookup, touch
+from . import _log, KaldiError, DEFAULT_MODEL_DIR
+from .utils import ExternalProcess, find_file, load_symbol_table, symbol_table_lookup, touch
 from .kaldi import augment_phones_txt, augment_words_txt
 
 _log = _log.getChild('model')
@@ -126,14 +126,14 @@ class Lexicon(object):
 ########################################################################################################################
 
 class Model(object):
-    def __init__(self, model_dir):
-        self.model_dir = os.path.join(model_dir, '')
+    def __init__(self, model_dir=None):
+        self.model_dir = os.path.join(model_dir or DEFAULT_MODEL_DIR, '')
 
         touch(os.path.join(self.model_dir, 'user_lexicon.txt'))
         self.files_dict = {
             'words.txt': find_file(self.model_dir, 'words.txt'),
             'phones.txt': find_file(self.model_dir, 'phones.txt'),
-            'align_lexicon.int': find_file(model_dir, 'align_lexicon.int'),
+            'align_lexicon.int': find_file(self.model_dir, 'align_lexicon.int'),
             'disambig.int': find_file(self.model_dir, 'disambig.int'),
             'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst'),
             'tree': find_file(self.model_dir, 'tree'),
@@ -141,6 +141,10 @@ class Model(object):
             'final.mdl': find_file(self.model_dir, 'final.mdl'),
             'g.irelabel': find_file(self.model_dir, 'g.irelabel'),  # otf
             'user_lexicon.txt': find_file(self.model_dir, 'user_lexicon.txt'),
+            'left_context_phones.txt': find_file(self.model_dir, 'left_context_phones.txt'),
+            'nonterminals.txt': find_file(self.model_dir, 'nonterminals.txt'),
+            'wdisambig_phones.int': find_file(self.model_dir, 'wdisambig_phones.int'),
+            'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int'),
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt'),
         }
         self.files_dict.update({ k.replace('.', '_'): v for k, v in self.files_dict.items() })  # for named placeholder access in str.format()
@@ -181,6 +185,7 @@ class Model(object):
         return phones
 
     def generate_lexicon_files(self):
+        _log.debug("generating lexicon files")
         max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
 
         entries = []
@@ -208,6 +213,31 @@ class Model(object):
             str_space_join([word_id, word_id] + [str(self.phone_to_int_dict[phone]) for phone in phones]))
         generate_file('lexiconp_disambig.txt', lambda word, word_id, phones:
             '%s\t1.0 %s' % (word, ' '.join(phones)))
+
+        format = ExternalProcess.get_formatter(self.files_dict)
+        command = ExternalProcess.make_lexicon_fst(*format(
+            '--left-context-phones={left_context_phones_txt}',
+            '--nonterminals={nonterminals_txt}',
+            '--sil-prob=0.5',
+            '--sil-phone=SIL',
+            '--sil-disambig=#14',  # FIXME
+            '{lexiconp_disambig_txt}',
+        ))
+        command |= ExternalProcess.fstcompile(*format(
+            '--isymbols={phones_txt}',
+            '--osymbols={words_txt}',
+            '--keep_isymbols=false',
+            '--keep_osymbols=false',
+        ))
+        command |= ExternalProcess.fstaddselfloops(*format('{wdisambig_phones_int}', '{wdisambig_words_int}'))
+        command |= ExternalProcess.fstarcsort(*format('--sort_type=olabel'))
+        command |= self.files_dict['L_disambig.fst']
+        command()
+
+    def reset_user_lexicon(self):
+        with open(self.files_dict['user_lexicon.txt'], 'wb') as user_lexicon:
+            pass
+        self.generate_lexicon_files()
 
 
 def convert_generic_model_to_agf(src_dir, model_dir):

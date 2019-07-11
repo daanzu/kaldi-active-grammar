@@ -9,10 +9,9 @@ from contextlib import contextmanager
 
 from six import StringIO
 import pyparsing as pp
-import ush
 
-from . import _log, KaldiError, required_model_version
-from .utils import debug_timer, lazy_readonly_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache
+from . import _log, KaldiError, DEFAULT_MODEL_DIR, REQUIRED_MODEL_VERSION
+from .utils import debug_timer, lazy_readonly_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache, ExternalProcess
 import utils
 from .wfst import WFST
 from .model import Model
@@ -31,8 +30,6 @@ def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=No
         subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
         if format_kwargs_update:
             format_kwargs.update(format_kwargs_update)
-
-shell = ush.Shell(raise_on_error=True)
 
 
 ########################################################################################################################
@@ -120,7 +117,7 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir, tmp_dir=None, cloud_dictation=None):
+    def __init__(self, model_dir=None, tmp_dir=None, cloud_dictation=None):
         self.decoder = None
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
@@ -128,7 +125,7 @@ class Compiler(object):
         assert self.parsing_framework in ('text', 'token')
 
         self.exec_dir = os.path.join(utils.exec_dir, '')
-        self.model_dir = os.path.join(model_dir or '', '')
+        self.model_dir = os.path.join(model_dir or DEFAULT_MODEL_DIR, '')
         self.tmp_dir = os.path.join(tmp_dir or 'kaldi_tmp', '')
         if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
         if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
@@ -141,7 +138,7 @@ class Compiler(object):
         if os.path.isfile(version_file):
             with open(version_file) as f:
                 model_version = f.read().strip()
-                if model_version != required_model_version:
+                if model_version != REQUIRED_MODEL_VERSION:
                     raise KaldiError("invalid model_dir version! please download a compatible model")
         else:
             self._log.warning("model_dir has no version information; errors below may indicate an incompatible model")
@@ -166,7 +163,8 @@ class Compiler(object):
         self.cloud_dictation = cloud_dictation
 
         self._compile_base_fsts()
-        self.load_words()
+        self.load_words()  # FIXME
+        # self.model.generate_lexicon_files()  # FIXME: unnecessary?
 
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
 
@@ -237,18 +235,16 @@ class Compiler(object):
 
             if 1:
                 # Pipeline-style
-                format = lambda *args: [arg.format(**format_kwargs) for arg in args]
-                fstcompile, compile_graph_agf = shell(*[os.path.join(self.exec_dir, exe) for exe in ['fstcompile', 'compile-graph-agf']])
-
                 if input_data and input_filename: raise KaldiError("_compile_agf_graph passed both input_data and input_filename")
-                elif input_data: input = shell.echo(input_data)
+                elif input_data: input = ExternalProcess.shell.echo(input_data)
                 elif input_filename: input = input_filename
                 else: raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
                 compile_command = input
                 args = []
 
+                format = ExternalProcess.get_formatter(format_kwargs)
                 if compile:
-                    compile_command |= fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+                    compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
                     args.extend(['--arcsort-grammar'])
                 if nonterm:
                     args.extend(format('--grammar-prepend-nonterm={tmp_dir}nonterm_begin.fst'))
@@ -256,7 +252,7 @@ class Compiler(object):
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 kwargs = dict() if verbose_level else dict(stderr=StringIO())
-                compile_command |= compile_graph_agf(*args, **kwargs)
+                compile_command |= ExternalProcess.compile_graph_agf(*args, **kwargs)
                 compile_command()
 
             else:
