@@ -154,10 +154,10 @@ def find_file(directory, filename):
         _log.debug("%s: find_file cannot find file %r in %r", _name, filename, directory)
         return None
 
-def is_file_up_to_date(filename, parent_filename=None):
-    if not os.path.isfile(filename): return False
-    if parent_filename:
-        if not os.path.isfile(parent_filename): return False
+def is_file_up_to_date(filename, *parent_filenames):
+    if not os.path.exists(filename): return False
+    for parent_filename in parent_filenames:
+        if not os.path.exists(parent_filename): return False
         if os.path.getmtime(filename) < os.path.getmtime(parent_filename): return False
     return True
 
@@ -208,8 +208,8 @@ class FileCache(object):
         if data is None: data = filename
         return (filename in self.cache) and (self.cache[filename] == self.hash(data))
 
-    def need_file(self, filename, data=None):
-        return not self.contains(filename, data) or not os.path.exists(filename)
+    def is_current(self, filename, data=None):
+        return self.contains(filename, data) and os.path.exists(filename)
 
     def invalidate(self, filename=None):
         if filename is None:

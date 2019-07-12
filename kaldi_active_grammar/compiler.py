@@ -67,7 +67,7 @@ class KaldiRule(object):
         self.compiler._fst_filenames_set.add(self.filename)
 
         fst_text = self.fst.fst_text
-        if not self.compiler.fst_cache.need_file(self.filename, fst_text):
+        if self.compiler.fst_cache.is_current(self.filename, fst_text):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             return
         else:
@@ -252,7 +252,7 @@ class Compiler(object):
 
     def _compile_base_fsts(self):
         filenames = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
-        if not any(self.fst_cache.need_file(filename) for filename in filenames):
+        if all(self.fst_cache.is_current(filename) for filename in filenames):
             return
 
         format_kwargs = dict(self.files_dict)
