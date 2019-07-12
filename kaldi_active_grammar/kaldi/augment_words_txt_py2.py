@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 
+from __future__ import print_function
 import argparse
 import os
 import sys
@@ -37,7 +38,7 @@ def read_words_txt(filename):
     # spaces are also spaces in ascii (which we check).  It is basically how we
     # emulate the behavior of python before python3.
     whitespace = re.compile("[ \t]+")
-    with open(filename, 'r', encoding='latin-1') as f:
+    with open(filename, 'r') as f:
         lines = [line.strip(" \t\r\n") for line in f]
         highest_numbered_symbol = 0
         for line in lines:
@@ -60,7 +61,7 @@ def read_nonterminals(filename):
        it has the expected format and has no duplicates, and returns the nonterminal
        symbols as a list of strings, e.g.
        ['#nonterm:contact_list', '#nonterm:phone_number', ... ]. """
-    ans = [line.strip(" \t\r\n") for line in open(filename, 'r', encoding='latin-1')]
+    ans = [line.strip(" \t\r\n") for line in open(filename, 'r')]
     if len(ans) == 0:
         raise RuntimeError("The file {0} contains no nonterminal symbols.".format(filename))
     for nonterm in ans:
@@ -76,7 +77,7 @@ def write_words_txt(orig_lines, highest_numbered_symbol, nonterminals, filename)
        in the words.txt file as a list of strings (without the newlines);
        highest_numbered_symbol is the highest numbered symbol in the original
        words.txt; nonterminals is a list of strings like '#nonterm:foo'."""
-    with open(filename, 'w', encoding='latin-1') as f:
+    with open(filename, 'wb') as f:
         for l in orig_lines:
             print(l, file=f)
         cur_symbol = highest_numbered_symbol + 1

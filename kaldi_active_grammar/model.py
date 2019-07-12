@@ -16,7 +16,7 @@ except ImportError:
 
 from . import _log, KaldiError, DEFAULT_MODEL_DIR
 from .utils import ExternalProcess, find_file, load_symbol_table, symbol_table_lookup, touch
-from .kaldi import augment_phones_txt, augment_words_txt
+from .kaldi import augment_phones_txt_py2, augment_words_txt_py2
 
 _log = _log.getChild('model')
 
