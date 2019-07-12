@@ -151,6 +151,27 @@ class Model(object):
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.txt'], '#nonterm_begin')
+        self.load_words(self.files_dict['words.txt'])  # sets self.lexicon_words, self.longest_word
+
+    def load_words(self, words_file=None):
+        if words_file is None: words_file = self.files_dict['words.txt']
+        _log.debug("loading words from %r", words_file)
+        invalid_words = "<eps> !SIL <UNK> #0 <s> </s>".lower().split()
+
+        with open(words_file, 'r') as file:
+            word_id_pairs = [line.strip().split() for line in file]
+        self.lexicon_words = set([word for word, id in word_id_pairs
+            if word.lower() not in invalid_words and not word.startswith('#nonterm')])
+        self.longest_word = max(self.lexicon_words, key=len)
+
+        # if unigram_probs_file:
+        #     with open(unigram_probs_file, 'r') as file:
+        #         word_count_pairs = [line.strip().split() for line in file]
+        #     word_count_pairs = [(word, int(count)) for word, count in word_count_pairs[:30000] if word in self.lexicon_words]
+        #     total = sum(count for word, count in word_count_pairs)
+        #     self._lexicon_word_probs = {word: (float(count) / total) for word, count in word_count_pairs}
+
+        return self.lexicon_words
 
     def read_user_lexicon(self):
         with open(self.files_dict['user_lexicon.txt'], 'rb') as file:
@@ -239,6 +260,8 @@ class Model(object):
             pass
         self.generate_lexicon_files()
 
+
+########################################################################################################################
 
 def convert_generic_model_to_agf(src_dir, model_dir):
     from .compiler import Compiler

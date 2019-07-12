@@ -187,6 +187,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
                 char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
                 char* top_fst_filename_cp, char* dictation_fst_filename_cp,
                 int32_t verbosity);
+            bool load_lexicon_fst_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
             int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
             bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
             bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
@@ -264,6 +265,13 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
                 new_file.write("%s=%s\n" % (key, value))
         return new_filename
 
+    def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
+        if words_file is None: words_file = self.words_file
+        if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
+        result = self._lib.load_lexicon_fst_agf_nnet3(self._model, words_file, word_align_lexicon_file)
+        if not result:
+            raise KaldiError("error loading lexicon (%r, %r)" % (words_file, word_align_lexicon_file))
+
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
         _log.debug("%s: adding grammar_fst_file: %r", self, grammar_fst_file)
@@ -278,7 +286,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
         result = self._lib.reload_grammar_fst_agf_nnet3(self._model, grammar_fst_index, grammar_fst_file)
         if not result:
-            raise KaldiError("error reloading grammar #%s %r" % grammar_fst_index, grammar_fst_file)
+            raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)

@@ -163,10 +163,11 @@ class Compiler(object):
         self.cloud_dictation = cloud_dictation
 
         self._compile_base_fsts()
-        self.load_words()  # FIXME
         # self.model.generate_lexicon_files()  # FIXME: unnecessary?
 
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
+    lexicon_words = property(lambda self: self.model.lexicon_words)
+    _longest_word = property(lambda self: self.model.longest_word)
 
     default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
     _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
@@ -177,25 +178,6 @@ class Compiler(object):
         if offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
         return offset
-
-    def load_words(self, words_file=None, unigram_probs_file=None):
-        if words_file is None: words_file = self.files_dict['words.txt']
-        _log.debug("loading words from %r", words_file)
-        with open(words_file, 'r') as file:
-            word_id_pairs = [line.strip().split() for line in file]
-        self._lexicon_words = set([word for word, id in word_id_pairs
-            if word.lower() not in "<eps> !SIL <UNK> #0 <s> </s>".lower().split() and not word.startswith('#nonterm')])
-
-        if unigram_probs_file:
-            with open(unigram_probs_file, 'r') as file:
-                word_count_pairs = [line.strip().split() for line in file]
-            word_count_pairs = [(word, int(count)) for word, count in word_count_pairs[:30000] if word in self._lexicon_words]
-            total = sum(count for word, count in word_count_pairs)
-            self._lexicon_word_probs = {word: (float(count) / total) for word, count in word_count_pairs}
-
-        self._longest_word = max(self._lexicon_words, key=len)
-
-        return self._lexicon_words
 
     def alloc_rule_id(self):
         id = self._num_kaldi_rules
