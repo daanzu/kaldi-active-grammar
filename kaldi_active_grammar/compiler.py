@@ -11,7 +11,7 @@ from six import StringIO
 import pyparsing as pp
 
 from . import _log, KaldiError, DEFAULT_MODEL_DIR, REQUIRED_MODEL_VERSION
-from .utils import debug_timer, lazy_readonly_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache, ExternalProcess
+from .utils import debug_timer, lazy_readonly_property, find_file, is_file_up_to_date, platform, load_symbol_table, symbol_table_lookup, FileCache, ExternalProcess
 import utils
 from .wfst import WFST
 from .model import Model
@@ -67,7 +67,7 @@ class KaldiRule(object):
         self.compiler._fst_filenames_set.add(self.filename)
 
         fst_text = self.fst.fst_text
-        if self.compiler.fst_cache.contains(self.filename, fst_text) and os.path.exists(self.filepath) and True or False:
+        if not self.compiler.fst_cache.need_file(self.filename, fst_text):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             return
         else:
@@ -163,7 +163,8 @@ class Compiler(object):
         self.cloud_dictation = cloud_dictation
 
         self._compile_base_fsts()
-        # self.model.generate_lexicon_files()  # FIXME: unnecessary?
+        if not is_file_up_to_date(self.files_dict['L_disambig.fst'], self.files_dict['user_lexicon.txt']):
+            self.model.generate_lexicon_files()
 
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
     lexicon_words = property(lambda self: self.model.lexicon_words)
@@ -250,15 +251,21 @@ class Compiler(object):
                     + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
 
     def _compile_base_fsts(self):
+        filenames = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
+        if not any(self.fst_cache.need_file(filename) for filename in filenames):
+            return
+
         format_kwargs = dict(self.files_dict)
         def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)  # FIXME: unsafe shell?
-        # FIXME: check for existing before generating?
         if platform == 'windows':
             run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
             run("(echo 0 1 #nonterm_end 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
         else:
             run("(echo 0 1 \\#nonterm_begin 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
             run("(echo 0 1 \\#nonterm_end 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
+
+        for filename in filenames:
+            self.fst_cache.add(filename)
 
     def compile_top_fst(self):
         kaldi_rule = KaldiRule(self, -1, 'top', nonterm=False)

@@ -141,6 +141,26 @@ def load_symbol_table(filename):
     with open(filename) as f:
         return [[int(token) if token.isdigit() else token for token in line.strip().split()] for line in f]
 
+def find_file(directory, filename):
+    matches = []
+    for root, dirnames, filenames in os.walk(directory):
+        for filename in fnmatch.filter(filenames, filename):
+            matches.append(os.path.join(root, filename))
+    if matches:
+        matches.sort(key=len)
+        _log.debug("%s: find_file found file %r", _name, matches[0])
+        return matches[0]
+    else:
+        _log.debug("%s: find_file cannot find file %r in %r", _name, filename, directory)
+        return None
+
+def is_file_up_to_date(filename, parent_filename=None):
+    if not os.path.isfile(filename): return False
+    if parent_filename:
+        if not os.path.isfile(parent_filename): return False
+        if os.path.getmtime(filename) < os.path.getmtime(parent_filename): return False
+    return True
+
 class FileCache(object):
 
     def __init__(self, filename, dependencies_dict=None):
@@ -180,11 +200,16 @@ class FileCache(object):
     def hash(self, data):
         return hashlib.md5(data).hexdigest()
 
-    def add(self, filename, data):
+    def add(self, filename, data=None):
+        if data is None: data = filename
         self.cache[filename] = self.hash(data)
 
-    def contains(self, filename, data):
+    def contains(self, filename, data=None):
+        if data is None: data = filename
         return (filename in self.cache) and (self.cache[filename] == self.hash(data))
+
+    def need_file(self, filename, data=None):
+        return not self.contains(filename, data) or not os.path.exists(filename)
 
     def invalidate(self, filename=None):
         if filename is None:
@@ -193,16 +218,3 @@ class FileCache(object):
         elif filename in self.cache:
             _log.info("%s: invalidating cache entry for %r", self, filename)
             del self.cache[filename]
-
-def find_file(directory, filename):
-    matches = []
-    for root, dirnames, filenames in os.walk(directory):
-        for filename in fnmatch.filter(filenames, filename):
-            matches.append(os.path.join(root, filename))
-    if matches:
-        matches.sort(key=len)
-        _log.debug("%s: find_file found file %r", _name, matches[0])
-        return matches[0]
-    else:
-        _log.debug("%s: find_file cannot find file %r in %r", _name, filename, directory)
-        return None
