@@ -101,24 +101,33 @@ class Lexicon(object):
     def generate_pronunciation(cls, word):
         """returns CMU/arpabet phones"""
         if g2p_en:
-            if not cls.g2p_en:
-                cls.g2p_en = g2p_en.G2p()
-            phones = cls.g2p_en(word)
-            _log.debug("generated pronunciation with g2p_en for %r: %r" % (word, phones))
-            return phones
-
-        else:
-            files = {'wordfile': ('wordfile', word)}
-            req = requests.post('http://www.speech.cs.cmu.edu/cgi-bin/tools/logios/lextool.pl', files=files)
-            match = re.search(r'<!-- DICT (.*)  -->', req.text)
-            if match:
-                url = match.group(1)
-                req = requests.get(url)
-                results = req.text.split()
-                assert results[0].lower() == word
-                phones = results[1:]
-                _log.debug("generated pronunciation with cloud-cmudict for %r: %r" % (word, phones))
+            try:
+                if not cls.g2p_en:
+                    cls.g2p_en = g2p_en.G2p()
+                phones = cls.g2p_en(word)
+                _log.debug("generated pronunciation with g2p_en for %r: %r" % (word, phones))
                 return phones
+            except Exception as e:
+                _log.exception("generate_pronunciation exception using g2p_en")
+
+        if True:
+            try:
+                files = {'wordfile': ('wordfile', word)}
+                req = requests.post('http://www.speech.cs.cmu.edu/cgi-bin/tools/logios/lextool.pl', files=files)
+                req.raise_for_status()
+                # FIXME: handle network failures
+                match = re.search(r'<!-- DICT (.*)  -->', req.text)
+                if match:
+                    url = match.group(1)
+                    req = requests.get(url)
+                    req.raise_for_status()
+                    results = req.text.split()
+                    assert results[0].lower() == word
+                    phones = results[1:]
+                    _log.debug("generated pronunciation with cloud-cmudict for %r: %r" % (word, phones))
+                    return phones
+            except Exception as e:
+                _log.exception("generate_pronunciation exception accessing www.speech.cs.cmu.edu")
 
         raise KaldiError("cannot generate word pronunciation")
 
