@@ -92,7 +92,7 @@ class KaldiRule(object):
         assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
 
     @contextmanager
-    def reloading(self):
+    def reload(self):
         self.reloading = True
         self.fst.clear()
         yield
