@@ -60,8 +60,6 @@ class KaldiRule(object):
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
 
     def compile_file(self):
-        _log.debug("%s: Compiling exported rule %r to %s" % (self, self.name, self.filename))
-
         if not self.reloading and self.filename in self.compiler._fst_filenames_set:
             raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
         self.compiler._fst_filenames_set.add(self.filename)
@@ -75,6 +73,8 @@ class KaldiRule(object):
             #     self.compiler.fst_cache.hash(self.compiler.fst_cache.cache[self.filename]) if self.filename in self.compiler.fst_cache.cache else None,
             #     self.compiler.fst_cache.hash(fst_text)))
             pass
+
+        _log.debug("%s: Compiling %s byte fst_text file to %s" % (self, len(fst_text), self.filename))
 
         if self.compiler.decoding_framework == 'agf':
             self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=fst_text, filename=self.filepath)

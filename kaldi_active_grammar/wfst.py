@@ -43,7 +43,7 @@ class WFST(object):
     @property
     def fst_text(self, eps2disambig=False):
         eps_replacement = '#0' if eps2disambig else self.eps
-        text = ''.join("%s %s %s %s %s\n" % (src_state, dst_state, ilabel if ilabel != self.eps else eps_replacement, olabel, weight)
+        text = ''.join("%s %s %s %s %s\n" % (src_state, dst_state, str(ilabel) if ilabel != self.eps else eps_replacement, str(olabel), weight)
             for (src_state, dst_state, ilabel, olabel, weight) in self._arc_table)
         text += ''.join("%s %s\n" % (id, weight) for (id, weight) in self._state_table if weight is not self.zero)
         return text
