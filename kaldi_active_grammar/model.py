@@ -195,7 +195,7 @@ class Model(object):
         word = word.strip().lower()
         if phones is None:
             phones = Lexicon.generate_pronunciation(word)
-            phones = Lexicon.cmu_to_xsampa(phones)
+        phones = Lexicon.cmu_to_xsampa(phones)
         new_entry = [word] + phones
 
         entries = self.read_user_lexicon()
