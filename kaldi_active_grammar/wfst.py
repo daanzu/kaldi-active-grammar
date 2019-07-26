@@ -7,12 +7,16 @@
 import collections, math
 
 class WFST(object):
-    eps = '<eps>'
     zero = float('inf')
     one = 0.0
+    eps = '<eps>'
+    eps_disambig = '#0'
 
     def __init__(self):
         self.clear()
+
+    num_arcs = property(lambda self: len(self._arc_table))
+    num_states = property(lambda self: len(self._state_table))
 
     def clear(self):
         self._arc_table = []
@@ -42,7 +46,7 @@ class WFST(object):
 
     @property
     def fst_text(self, eps2disambig=False):
-        eps_replacement = '#0' if eps2disambig else self.eps
+        eps_replacement = self.eps_disambig if eps2disambig else self.eps
         text = ''.join("%s %s %s %s %s\n" % (src_state, dst_state, str(ilabel) if ilabel != self.eps else eps_replacement, str(olabel), weight)
             for (src_state, dst_state, ilabel, olabel, weight) in self._arc_table)
         text += ''.join("%s %s\n" % (id, weight) for (id, weight) in self._state_table if weight is not self.zero)
