@@ -7,27 +7,44 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dw/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
-[![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
-[![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
+[![Batteries-Included](https://img.shields.io/badge/batteries-included-blue.svg)](https://github.com/daanzu/kaldi-active-grammar/releases)
 
 > Python package developed to enable context-based command & control of computer applications, as in the [Dragonfly](https://github.com/dictation-toolbox/dragonfly) speech recognition framework, using the [Kaldi](https://github.com/kaldi-asr/kaldi) automatic speech recognition engine.
 
-> **_BETA RELEASE_**
+> **_UNDER ACTIVE DEVELOPMENT_**
 
 Normally, Kaldi decoding graphs are **monolithic**, require **expensive up-front off-line** compilation, and are **static during decoding**. Kaldi's new grammar framework allows **multiple independent** grammars with nonterminals, to be compiled separately and **stitched together dynamically** at decode-time, but all the grammars are **always active** and capable of being recognized.
 
 This project extends that to allow each grammar/rule to be **independently marked** as active/inactive **dynamically** on a **per-utterance** basis (set at the beginning of each utterance). Dragonfly is then capable of activating **only the appropriate grammars for the current environment**, resulting in increased accuracy due to fewer possible recognitions. Furthermore, the dictation grammar can be **shared** between all the command grammars, which can be **compiled quickly** without needing to include large-vocabulary dictation directly.
 
-* The Python package **includes all necessary binaries** for decoding on **Linux or Windows**.
-* A compatible **general English Kaldi nnet3 chain model** is available, under [releases](https://github.com/daanzu/kaldi-active-grammar/releases), trained on ~1200 hours of open audio.
-* A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development, currently in the kaldi branch of my fork.
-    * A beta version has been merged as of Dragonfly **v0.15.0**! See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), and try out a [demo](https://github.com/daanzu/dragonfly/blob/kaldi/dragonfly/examples/kaldi_demo.py).
+* The Python package **includes all necessary binaries** for decoding on **Linux or Windows**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
+* A compatible **general English Kaldi nnet3 chain model** is trained on ~1200 hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
+* A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development in the `kaldi` branch of my fork.
+    * A beta version has been merged as of Dragonfly **v0.15.0**!
+        * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py).
+    * Support for KaldiAG **v0.5.0** has been merged as of Dragonfly **v0.16.0**!
+        * **User Lexicon**: you can add new words/pronunciations to the model's lexicon to be recognized & used in grammars, and the pronunciations can be either specified explicitly or inferred automatically.
+        * **Compilation Optimizations**: compilation while loading grammars uses the disk much less, and far fewer passes are made over the graphs, as separate modules have been customized & combined.
+        * **Better Model**: 50% more training data.
 
-**Donations are appreciated to encourage development (see badges above).**
+### **Donations are appreciated to encourage development.**
 
-## Setup
+[![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
+[![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 
-Requirements:
+## Getting Started
+
+Want to get started **quickly & easily on Windows**?
+Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases):
+
+* **`kaldi-dragonfly-winpython`**: a self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2
+* **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] a self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2
+
+Otherwise...
+
+### Setup
+
+**Requirements**:
 * Python 2.7 (3.x support planned); *64-bit required!*
     * Microphone support provided by [pyaudio](https://pypi.org/project/PyAudio/) package
 * OS: *Linux or Windows*; macOS planned if there is interest
