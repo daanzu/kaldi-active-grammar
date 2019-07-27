@@ -65,13 +65,11 @@ class KaldiRule(object):
         self.compiler._fst_filenames_set.add(self.filename)
 
         fst_text = self.fst.fst_text
-        if self.compiler.fst_cache.is_current(self.filename, fst_text):
+        if self.compiler.fst_cache.file_is_current(self.filepath, fst_text):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             return
         else:
-            # _log.info("%s: FileCache useless; has %s not %s" % (self,
-            #     self.compiler.fst_cache.hash(self.compiler.fst_cache.cache[self.filename]) if self.filename in self.compiler.fst_cache.cache else None,
-            #     self.compiler.fst_cache.hash(fst_text)))
+            # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.compiler.fst_cache.cache.get(self.filepath), self.compiler.fst_cache.hash_data(fst_text)))
             pass
 
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(fst_text), self.filename))
@@ -85,7 +83,8 @@ class KaldiRule(object):
             self.compiler._compile_otf_graph(filename=self.filepath)
 
         self.fst_compiled = True
-        self.compiler.fst_cache.add(self.filename, fst_text)
+        self.compiler.fst_cache.add(self.filepath, fst_text)
+        self.compiler.fst_cache.save()
 
     def load_fst(self):
         grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
@@ -261,8 +260,8 @@ class Compiler(object):
                     + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
 
     def _compile_base_fsts(self):
-        filenames = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
-        if all(self.fst_cache.is_current(filename) for filename in filenames):
+        filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
+        if all(self.fst_cache.file_is_current(filepath) for filepath in filepaths):
             return
 
         format_kwargs = dict(self.files_dict)
@@ -274,8 +273,8 @@ class Compiler(object):
             run("(echo 0 1 \\#nonterm_begin 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
             run("(echo 0 1 \\#nonterm_end 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
 
-        for filename in filenames:
-            self.fst_cache.add(filename)
+        for filepath in filepaths:
+            self.fst_cache.add(filepath)
 
     def compile_top_fst(self):
         kaldi_rule = KaldiRule(self, -1, 'top', nonterm=False)

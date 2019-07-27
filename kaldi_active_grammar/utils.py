@@ -165,58 +165,64 @@ def is_file_up_to_date(filename, *parent_filenames):
 
 class FileCache(object):
 
-    def __init__(self, filename, dependencies_dict=None):
+    def __init__(self, cache_filename, dependencies_dict=None):
         """
-        Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary.
-        Also stores an entry ``dependencies_dict`` mapping filename -> hash of its contents/data, for detecting changes in our dependencies.
+        Stores mapping filepath -> hash of its contents/data, to detect when recalculaion is necessary.
+        Also stores an entry ``dependencies_dict`` itself mapping filepath -> hash of its contents/data, for detecting changes in our dependencies.
         """
 
-        self.filename = filename
+        self.cache_filename = cache_filename
         if dependencies_dict is None: dependencies_dict = dict()
 
         try:
             self.load()
         except Exception as e:
-            _log.info("%s: failed to load cache from %r; initializing empty", self, filename)
+            _log.info("%s: failed to load cache from %r; initializing empty", self, cache_filename)
             self.cache = dict()
 
-        # If list of dependencies has changed, or any of the files' contents (as stored in cache) has changed, then reset cache.
-        if (sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
-                or any(not self.contains(name, open(path, 'rb').read())
-                    for name, path in dependencies_dict.items()
-                    if path and os.path.isfile(path))):
-            _log.info("%s: dependencies did not match cache from %r; initializing empty", self, filename)
+        if (
+            # If list of dependencies has changed
+            sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
+            or
+            # If any of the files' contents (as stored in cache) has changed
+            any(not self.contains(name, open(path, 'rb').read())
+                for name, path in dependencies_dict.items()
+                if path and os.path.isfile(path))
+            ):
+            # Then reset cache
+            _log.info("%s: dependencies did not match cache from %r; initializing empty", self, cache_filename)
             self.cache = dict(dependencies_dict=dependencies_dict)
             for name, path in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add(name, open(path, 'rb').read())
 
     def load(self):
-        with open(self.filename, 'r') as f:
+        with open(self.cache_filename, 'r') as f:
             self.cache = json.load(f)
 
     def save(self):
-        with open(self.filename, 'w') as f:
+        with open(self.cache_filename, 'w') as f:
             json.dump(self.cache, f)
 
-    def hash(self, data):
+    def hash_data(self, data):
         return hashlib.md5(data).hexdigest()
 
-    def add(self, filename, data=None):
-        if data is None: data = filename
-        self.cache[filename] = self.hash(data)
+    def add(self, filepath, data=None):
+        if data is None: data = filepath
+        self.cache[filepath] = self.hash_data(data)
 
-    def contains(self, filename, data=None):
-        if data is None: data = filename
-        return (filename in self.cache) and (self.cache[filename] == self.hash(data))
+    def contains(self, filepath, data=None):
+        if data is None: data = filepath
+        return (filepath in self.cache) and (self.cache[filepath] == self.hash_data(data))
 
-    def is_current(self, filename, data=None):
-        return self.contains(filename, data) and os.path.exists(filename)
+    def file_is_current(self, filepath, data=None):
+        """Returns bool whether filepath file exists and, if given data, has given data (according to cache)"""
+        return (data is None or self.contains(filepath, data)) and os.path.exists(filepath)
 
-    def invalidate(self, filename=None):
-        if filename is None:
+    def invalidate(self, filepath=None):
+        if filepath is None:
             _log.info("%s: invalidating whole cache", self)
             self.cache.clear()
-        elif filename in self.cache:
-            _log.info("%s: invalidating cache entry for %r", self, filename)
-            del self.cache[filename]
+        elif filepath in self.cache:
+            _log.info("%s: invalidating cache entry for %r", self, filepath)
+            del self.cache[filepath]
