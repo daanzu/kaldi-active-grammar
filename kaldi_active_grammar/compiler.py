@@ -74,7 +74,7 @@ class KaldiRule(object):
             #     self.compiler.fst_cache.hash(fst_text)))
             pass
 
-        _log.debug("%s: Compiling %s byte fst_text file to %s" % (self, len(fst_text), self.filename))
+        _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(fst_text), self.filename))
 
         if self.compiler.decoding_framework == 'agf':
             self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=fst_text, filename=self.filepath)
@@ -211,7 +211,7 @@ class Compiler(object):
         """
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
-        with debug_timer(_log.debug, "agf graph compilation"):
+        with debug_timer(_log.debug, "agf graph compilation") as get_time_spent:
             verbose_level = 5 if _log.isEnabledFor(5) else 0
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.nonterm_phones_offset)
@@ -223,9 +223,12 @@ class Compiler(object):
                 elif input_filename: input = input_filename
                 else: raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
                 compile_command = input
+                format = ExternalProcess.get_formatter(format_kwargs)
                 args = []
 
-                format = ExternalProcess.get_formatter(format_kwargs)
+                # if True: (input | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | ExternalProcess.fstinfo | 'stats.log+')()
+                if True: (ExternalProcess.shell.echo(input_data) | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | (filename+'-G'))()
+
                 if compile:
                     compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
                     args.extend(['--arcsort-grammar'])
@@ -236,7 +239,14 @@ class Compiler(object):
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 kwargs = dict() if verbose_level else dict(stderr=StringIO())
                 compile_command |= ExternalProcess.compile_graph_agf(*args, **kwargs)
+                # compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
+                # if len(input_data) >= 1000000:
+                #     compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
+                # else:
+                #     compile_command |= ExternalProcess.compile_graph_agf(*args, **kwargs)
                 compile_command()
+
+                # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_data), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
 
             else:
                 # CLI-style

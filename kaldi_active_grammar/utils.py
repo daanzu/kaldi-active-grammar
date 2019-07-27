@@ -65,8 +65,10 @@ class ExternalProcess(object):
     fstcompile = shell(os.path.join(exec_dir, 'fstcompile'))
     fstarcsort = shell(os.path.join(exec_dir, 'fstarcsort'))
     fstaddselfloops = shell(os.path.join(exec_dir, 'fstaddselfloops'))
+    fstinfo = shell(os.path.join(exec_dir, 'fstinfo'))
     compile_graph = shell(os.path.join(exec_dir, 'compile-graph'))
-    compile_graph_agf = shell(os.path.join(exec_dir, 'compile-graph-agf'))  # FIXME: linux
+    compile_graph_agf = shell(os.path.join(exec_dir, 'compile-graph-agf'))
+    compile_graph_agf_debug = shell(os.path.join(exec_dir, 'compile-graph-agf-debug'))
 
     make_lexicon_fst = shell(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst_py2.py')])
 
