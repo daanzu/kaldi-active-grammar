@@ -15,7 +15,7 @@ except ImportError:
     g2p_en = None
 
 from . import _log, KaldiError, DEFAULT_MODEL_DIR
-from .utils import ExternalProcess, find_file, load_symbol_table, symbol_table_lookup, touch
+from .utils import ExternalProcess, find_file, is_file_up_to_date, load_symbol_table, symbol_table_lookup, touch
 from .kaldi import augment_phones_txt_py2, augment_words_txt_py2
 
 _log = _log.getChild('model')
@@ -157,6 +157,10 @@ class Model(object):
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt'),
         }
         self.files_dict.update({ k.replace('.', '_'): v for k, v in self.files_dict.items() })  # for named placeholder access in str.format()
+
+        # Update files if needed, before loading words
+        if not is_file_up_to_date(self.files_dict['L_disambig.fst'], self.files_dict['user_lexicon.txt']):
+            self.generate_lexicon_files()
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.txt'], '#nonterm_begin')

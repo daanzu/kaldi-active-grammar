@@ -11,7 +11,7 @@ from six import StringIO
 import pyparsing as pp
 
 from . import _log, KaldiError, DEFAULT_MODEL_DIR, REQUIRED_MODEL_VERSION
-from .utils import debug_timer, lazy_readonly_property, find_file, is_file_up_to_date, platform, load_symbol_table, symbol_table_lookup, FileCache, ExternalProcess
+from .utils import debug_timer, lazy_readonly_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache, ExternalProcess
 import utils
 from .wfst import WFST
 from .model import Model
@@ -157,13 +157,10 @@ class Compiler(object):
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self._fst_filenames_set = set()
-        self._lexicon_words = set()
 
         self.cloud_dictation = cloud_dictation
 
         self._compile_base_fsts()
-        if not is_file_up_to_date(self.files_dict['L_disambig.fst'], self.files_dict['user_lexicon.txt']):
-            self.model.generate_lexicon_files()
 
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
     lexicon_words = property(lambda self: self.model.lexicon_words)
