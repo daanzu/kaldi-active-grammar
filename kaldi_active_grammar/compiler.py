@@ -35,16 +35,21 @@ def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=No
 ########################################################################################################################
 
 class KaldiRule(object):
-    def __init__(self, compiler, id, name, nonterm=True, has_dictation=None):
+    def __init__(self, compiler, name, nonterm=True, has_dictation=None):
         """
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
         """
         self.compiler = compiler
-        self.id = int(id)  # matches "nonterm:rule__"; 0-based
         self.name = name
-        if self.id > self.compiler._max_rule_id: raise KaldiError("KaldiRule id > compiler._max_rule_id")
         self.nonterm = nonterm
         self.has_dictation = has_dictation
+
+        # id: matches "nonterm:rule__"; 0-based; can/will change due to rule unloading!
+        self.id = int(self.compiler.alloc_rule_id() if nonterm else -1)
+        if self.id > self.compiler._max_rule_id: raise KaldiError("KaldiRule id > compiler._max_rule_id")
+        if self.id in self.compiler.kaldi_rule_by_id_dict: raise KaldiError("KaldiRule id already in use")
+        if self.id >= 0:
+            self.compiler.kaldi_rule_by_id_dict[self.id] = self
 
         self.fst = WFST()
         self.fst_compiled = False
@@ -92,6 +97,7 @@ class KaldiRule(object):
 
     @contextmanager
     def reload(self):
+        """Used for modifying a rule in place, e.g. ListRef."""
         self.reloading = True
         self.fst.clear()
         yield
@@ -99,16 +105,18 @@ class KaldiRule(object):
         self.reloading = False
 
     def destroy(self):
+        """Unloads rule."""
         self.decoder.remove_grammar_fst(self.id)
         self.compiler._fst_filenames_set.remove(self.filename)
 
-        # Adjust kaldi_rules ids down, if above self.id
-        for kaldi_rule in self.compiler.kaldi_rule_by_id_dict.values():
+        # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
+        other_kaldi_rules = self.compiler.kaldi_rule_by_id_dict.values()
+        other_kaldi_rules.remove(self)
+        for kaldi_rule in other_kaldi_rules:
             if kaldi_rule.id > self.id:
                 kaldi_rule.id -= 1
+        self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in other_kaldi_rules }
 
-        # Rebuild dict
-        self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in self.compiler.kaldi_rule_by_id_dict.values() }
         self.compiler.free_rule_id()
 
 
@@ -274,7 +282,7 @@ class Compiler(object):
             self.fst_cache.add(filepath)
 
     def compile_top_fst(self):
-        kaldi_rule = KaldiRule(self, -1, 'top', nonterm=False)
+        kaldi_rule = KaldiRule(self, 'top', nonterm=False)
         fst = kaldi_rule.fst
         state_initial = fst.add_state(initial=True)
         state_final = fst.add_state(final=True)
@@ -313,7 +321,7 @@ class Compiler(object):
 
     def compile_universal_grammar(self, words=None):
         """recognizes any sequence of words"""
-        kaldi_rule = KaldiRule(self, -1, 'universal')
+        kaldi_rule = KaldiRule(self, 'universal', nonterm=False)
         if words is None: words = self._lexicon_words
         fst = kaldi_rule.fst
         backoff_state = fst.add_state(initial=True, final=True)
@@ -335,7 +343,7 @@ class Compiler(object):
         self.fst_cache.save()
 
     def parse_output_for_rule(self, kaldi_rule, output):
-        # Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)
+        """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
         try:
             parse_results = kaldi_rule.matcher.parseString(output, parseAll=True)
         except pp.ParseException:
@@ -343,8 +351,8 @@ class Compiler(object):
         parsed_output = ' '.join(parse_results)
         if parsed_output.lower() != output:
             self._log.error("parsed_output(%r).lower() != output(%r)" % (parse_results, output))
-        kaldi_rule_id = int(parse_results.getName())
-        assert kaldi_rule_id == kaldi_rule.id
+        kaldi_rule_name = str(parse_results.getName())
+        assert kaldi_rule_name == kaldi_rule.name
         return parsed_output
 
     cloud_dictation_regex = re.compile(r'#nonterm:dictation_cloud (.*?) #nonterm:end')
