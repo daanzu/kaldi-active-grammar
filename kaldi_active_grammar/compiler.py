@@ -241,7 +241,7 @@ class Compiler(object):
                     args.extend(format('--grammar-append-nonterm={tmp_dir}nonterm_end.fst'))
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
-                kwargs = dict() if verbose_level else dict(stderr=StringIO())
+                kwargs = dict() if _log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO())
                 compile_command |= ExternalProcess.compile_graph_agf(*args, **kwargs)
                 # compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
                 # if len(input_data) >= 1000000:

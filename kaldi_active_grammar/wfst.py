@@ -19,8 +19,8 @@ class WFST(object):
     num_states = property(lambda self: len(self._state_table))
 
     def clear(self):
-        self._arc_table = []
-        self._state_table = []
+        self._arc_table = []  # [src_state, dst_state, label, olabel, weight]
+        self._state_table = []  # [id, weight]
         self._state_to_num_arcs = collections.Counter()
         self._next_state_id = 1
         self.start_state = self.add_state()
@@ -32,7 +32,7 @@ class WFST(object):
             weight = self.one if final else self.zero
         else:
             weight = -math.log(weight)
-        self._state_table.append((id, weight))
+        self._state_table.append([id, weight])
         if initial:
             self.add_arc(self.start_state, id, self.eps)
         return id
@@ -56,3 +56,18 @@ class WFST(object):
         # breakeven 10-13?
         for arc in self._arc_table:
             arc[4] = -math.log(1.0 / self._state_to_num_arcs[arc[0]])
+
+    def has_eps_path(self, src_state, dst_state):
+        """Returns True iff there is a epsilon path from src_state to dst_state."""
+        eps_like = [self.eps, self.eps_disambig]
+        state_queue = collections.deque([src_state])
+        queued = set(state_queue)
+        while state_queue:
+            state = state_queue.pop()
+            if state == dst_state:
+                return True
+            next_states = [dst_state for (src_state, dst_state, label, olabel, weight) in self._arc_table
+                if src_state == state and label in eps_like and dst_state not in queued]
+            state_queue.extendleft(next_states)
+            queued.update(next_states)
+        return False
