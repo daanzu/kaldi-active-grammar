@@ -14,8 +14,9 @@ try:
 except ImportError:
     g2p_en = None
 
-from . import _log, KaldiError, DEFAULT_MODEL_DIR
-from .utils import ExternalProcess, find_file, is_file_up_to_date, load_symbol_table, symbol_table_lookup, touch
+from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR, REQUIRED_MODEL_VERSION
+from .utils import ExternalProcess, FileCache, find_file, load_symbol_table, symbol_table_lookup, touch
+import utils
 from .kaldi import augment_phones_txt_py2, augment_words_txt_py2
 
 _log = _log.getChild('model')
@@ -135,11 +136,32 @@ class Lexicon(object):
 ########################################################################################################################
 
 class Model(object):
-    def __init__(self, model_dir=None):
+    def __init__(self, model_dir=None, tmp_dir=None):
+        self.exec_dir = os.path.join(utils.exec_dir, '')
         self.model_dir = os.path.join(model_dir or DEFAULT_MODEL_DIR, '')
+        self.tmp_dir = os.path.join(tmp_dir or DEFAULT_TMP_DIR, '')
+
+        if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
+        if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
+        if not os.path.exists(self.tmp_dir):
+            _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
+            os.mkdir(self.tmp_dir)
+        if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
+
+        version_file = os.path.join(self.model_dir, 'KAG_VERSION')
+        if os.path.isfile(version_file):
+            with open(version_file) as f:
+                model_version = f.read().strip()
+                if model_version != REQUIRED_MODEL_VERSION:
+                    raise KaldiError("invalid model_dir version! please download a compatible model")
+        else:
+            self._log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
         touch(os.path.join(self.model_dir, 'user_lexicon.txt'))
         self.files_dict = {
+            'exec_dir': self.exec_dir,
+            'model_dir': self.model_dir,
+            'tmp_dir': self.tmp_dir,
             'words.txt': find_file(self.model_dir, 'words.txt'),
             'phones.txt': find_file(self.model_dir, 'phones.txt'),
             'align_lexicon.int': find_file(self.model_dir, 'align_lexicon.int'),
@@ -157,13 +179,13 @@ class Model(object):
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt'),
         }
         self.files_dict.update({ k.replace('.', '_'): v for k, v in self.files_dict.items() })  # for named placeholder access in str.format()
+        self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.txt'], '#nonterm_begin')
 
         # Update files if needed, before loading words
-        # FIXME: FileCache
-        if not is_file_up_to_date(self.files_dict['L_disambig.fst'], self.files_dict['user_lexicon.txt']):
+        if not self.fst_cache.is_current(self.files_dict['user_lexicon.txt']):
             self.generate_lexicon_files()
 
         self.load_words(self.files_dict['words.txt'])  # sets self.lexicon_words, self.longest_word

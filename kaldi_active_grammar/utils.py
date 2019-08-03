@@ -184,17 +184,17 @@ class FileCache(object):
             # If list of dependencies has changed
             sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
             or
-            # If any of the files' contents (as stored in cache) has changed
-            any(not self.contains(name, open(path, 'rb').read())
-                for name, path in dependencies_dict.items()
+            # If any of the dependencies files' contents (as stored in cache) has changed
+            any(not self.is_current(path)
+                for (name, path) in dependencies_dict.items()
                 if path and os.path.isfile(path))
             ):
             # Then reset cache
             _log.info("%s: dependencies did not match cache from %r; initializing empty", self, cache_filename)
             self.cache = dict(dependencies_dict=dependencies_dict)
-            for name, path in dependencies_dict.items():
+            for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
-                    self.add(name, open(path, 'rb').read())
+                    self.add(path)
 
     def load(self):
         with open(self.cache_filename, 'r') as f:
@@ -208,16 +208,22 @@ class FileCache(object):
         return hashlib.md5(data).hexdigest()
 
     def add(self, filepath, data=None):
-        if data is None: data = filepath
+        if data is None:
+            with open(filepath, 'rb') as f:
+                data = f.read()
         self.cache[filepath] = self.hash_data(data)
 
-    def contains(self, filepath, data=None):
-        if data is None: data = filepath
+    def contains(self, filepath, data):
         return (filepath in self.cache) and (self.cache[filepath] == self.hash_data(data))
 
-    def file_is_current(self, filepath, data=None):
-        """Returns bool whether filepath file exists and, if given data, has given data (according to cache)"""
-        return (data is None or self.contains(filepath, data)) and os.path.exists(filepath)
+    def is_current(self, filepath, data=None):
+        """Returns bool whether filepath file exists and the cache contains the given data (or the file's current data if none given)."""
+        if not os.path.isfile(filepath):
+            return False
+        if data is None:
+            with open(filepath, 'rb') as f:
+                data = f.read()
+        return self.contains(filepath, data)
 
     def invalidate(self, filepath=None):
         if filepath is None:

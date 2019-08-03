@@ -10,8 +10,8 @@ from contextlib import contextmanager
 from six import StringIO
 import pyparsing as pp
 
-from . import _log, KaldiError, DEFAULT_MODEL_DIR, REQUIRED_MODEL_VERSION
-from .utils import debug_timer, lazy_readonly_property, find_file, platform, load_symbol_table, symbol_table_lookup, FileCache, ExternalProcess
+from . import _log, KaldiError
+from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
 import utils
 from .wfst import WFST
 from .model import Model
@@ -60,9 +60,10 @@ class KaldiRule(object):
     def __str__(self):
         return "KaldiRule(%s, %s)" % (self.id, self.name)
 
-    decoder = property(lambda self: self.compiler.decoder)
     filename = property(lambda self: base64.b16encode(self.name) + '.fst')  # FIXME: need to handle unicode?
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
+    fst_cache = property(lambda self: self.compiler.fst_cache)
+    decoder = property(lambda self: self.compiler.decoder)
 
     def compile_file(self):
         if not self.reloading and self.filename in self.compiler._fst_filenames_set:
@@ -70,11 +71,11 @@ class KaldiRule(object):
         self.compiler._fst_filenames_set.add(self.filename)
 
         fst_text = self.fst.fst_text
-        if self.compiler.fst_cache.file_is_current(self.filepath, fst_text):
+        if self.fst_cache.is_current(self.filepath, fst_text):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             return
         else:
-            # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.compiler.fst_cache.cache.get(self.filepath), self.compiler.fst_cache.hash_data(fst_text)))
+            # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(fst_text)))
             pass
 
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(fst_text), self.filename))
@@ -88,8 +89,8 @@ class KaldiRule(object):
             self.compiler._compile_otf_graph(filename=self.filepath)
 
         self.fst_compiled = True
-        self.compiler.fst_cache.add(self.filepath, fst_text)
-        self.compiler.fst_cache.save()
+        self.fst_cache.add(self.filepath, fst_text)
+        self.fst_cache.save()
 
     def load_fst(self):
         grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
@@ -131,32 +132,7 @@ class Compiler(object):
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('text', 'token')
 
-        self.exec_dir = os.path.join(utils.exec_dir, '')
-        self.model_dir = os.path.join(model_dir or DEFAULT_MODEL_DIR, '')
-        self.tmp_dir = os.path.join(tmp_dir or 'kaldi_tmp', '')
-        if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
-        if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
-        if not os.path.exists(self.tmp_dir):
-            _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
-            os.mkdir(self.tmp_dir)
-        if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
-
-        version_file = os.path.join(self.model_dir, 'KAG_VERSION')
-        if os.path.isfile(version_file):
-            with open(version_file) as f:
-                model_version = f.read().strip()
-                if model_version != REQUIRED_MODEL_VERSION:
-                    raise KaldiError("invalid model_dir version! please download a compatible model")
-        else:
-            self._log.warning("model_dir has no version information; errors below may indicate an incompatible model")
-
-        self.model = Model(self.model_dir)
-        self.files_dict = dict(self.model.files_dict, **{
-            'exec_dir': self.exec_dir,
-            'model_dir': self.model_dir,
-            'tmp_dir': self.tmp_dir,
-        })
-        self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
+        self.model = Model(model_dir, tmp_dir)
 
         self._num_kaldi_rules = 0
         self._max_rule_id = load_symbol_table(self.files_dict['phones.txt'])[-1][1] - symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm:rule0')  # FIXME: inaccuracy
@@ -169,6 +145,12 @@ class Compiler(object):
         self.cloud_dictation = cloud_dictation
 
         self._compile_base_fsts()
+
+    exec_dir = property(lambda self: self.model.exec_dir)
+    model_dir = property(lambda self: self.model.model_dir)
+    tmp_dir = property(lambda self: self.model.tmp_dir)
+    files_dict = property(lambda self: self.model.files_dict)
+    fst_cache = property(lambda self: self.model.fst_cache)
 
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
     lexicon_words = property(lambda self: self.model.lexicon_words)
@@ -266,7 +248,7 @@ class Compiler(object):
 
     def _compile_base_fsts(self):
         filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
-        if all(self.fst_cache.file_is_current(filepath) for filepath in filepaths):
+        if all(self.fst_cache.is_current(filepath) for filepath in filepaths):
             return
 
         format_kwargs = dict(self.files_dict)

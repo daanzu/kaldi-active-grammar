@@ -4,13 +4,14 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-_name = "kaldi_active_grammar"
-__version__ = "0.6.0"
-REQUIRED_MODEL_VERSION = "0.5.0"
-DEFAULT_MODEL_DIR = "kaldi_model_zamia"
+_name = 'kaldi_active_grammar'
+__version__ = '0.6.0'
+REQUIRED_MODEL_VERSION = '0.5.0'
+DEFAULT_MODEL_DIR = 'kaldi_model_zamia'
+DEFAULT_TMP_DIR = 'kaldi_tmp'
 
 import logging
-_log = logging.getLogger("kaldi")
+_log = logging.getLogger('kaldi')
 
 class KaldiError(Exception):
     pass
