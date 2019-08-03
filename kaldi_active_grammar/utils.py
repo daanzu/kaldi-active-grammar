@@ -173,12 +173,14 @@ class FileCache(object):
 
         self.cache_filename = cache_filename
         if dependencies_dict is None: dependencies_dict = dict()
+        self.cache_is_new = False
 
         try:
             self.load()
         except Exception as e:
             _log.info("%s: failed to load cache from %r; initializing empty", self, cache_filename)
             self.cache = dict()
+            self.cache_is_new = True
 
         if (
             # If list of dependencies has changed
@@ -195,6 +197,7 @@ class FileCache(object):
             for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add(path)
+            self.cache_is_new = True
 
     def load(self):
         with open(self.cache_filename, 'r') as f:
@@ -218,6 +221,8 @@ class FileCache(object):
 
     def is_current(self, filepath, data=None):
         """Returns bool whether filepath file exists and the cache contains the given data (or the file's current data if none given)."""
+        if self.cache_is_new and filepath in self.cache.get('dependencies_dict', dict()).values():
+            return False
         if not os.path.isfile(filepath):
             return False
         if data is None:
