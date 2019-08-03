@@ -334,6 +334,7 @@ class KaldiAgfNNet3Decoder(KaldiDecoderBase):
         return output_str, likelihood
 
     def get_word_align(self, output):
+        """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
         words = output.split()
         num_words = len(words)
         kaldi_frame_times_p = self._ffi.new('int32_t[]', num_words)

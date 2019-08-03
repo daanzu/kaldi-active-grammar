@@ -353,15 +353,16 @@ class Compiler(object):
             self._log.error("parsed_output(%r).lower() != output(%r)" % (parse_results, output))
         kaldi_rule_name = str(parse_results.getName())
         assert kaldi_rule_name == kaldi_rule.name
-        return parsed_output
+        words = parsed_output.split()
+        return words
 
-    cloud_dictation_regex = re.compile(r'#nonterm:dictation_cloud (.*?) #nonterm:end')
+    cloud_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
         if output == '':
-            return None, ''
+            return None, [], []
 
         nonterm_token, _, parsed_output = output.partition(' ')
         assert nonterm_token.startswith('#nonterm:rule')
@@ -372,6 +373,7 @@ class Compiler(object):
             try:
                 audio_data, word_align = dictation_info_func()
                 words, times, lengths = zip(*word_align)
+                # Find start & end word-index & byte-offset of each cloud dictation span
                 dictation_spans = [{
                         'index_start': index,
                         'offset_start': time,
@@ -403,14 +405,28 @@ class Compiler(object):
                     #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio)
                     #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
                     # cloud.write_wav('test.wav', dictation_audio)
-                    return cloud_text or orig_text
+                    return (cloud_text or orig_text)
 
                 parsed_output = self.cloud_dictation_regex.sub(replace_dictation, parsed_output)
             except Exception as e:
                 self._log.exception("Exception performing cloud dictation")
 
-        parsed_output = remove_nonterms(parsed_output)
-        return kaldi_rule, parsed_output
+        words = []
+        words_are_dictation = []
+        in_dictation = False
+        for word in parsed_output.split():
+            if word.startswith('#nonterm:'):
+                if word.startswith('#nonterm:dictation'):
+                    in_dictation = True
+                elif in_dictation and word == '#nonterm:end':
+                    in_dictation = False
+            else:
+                words.append(word)
+                words_are_dictation.append(in_dictation)
+
+        # parsed_output = remove_nonterms(parsed_output)
+
+        return kaldi_rule, words, words_are_dictation
 
 ########################################################################################################################
 # Utility functions.
