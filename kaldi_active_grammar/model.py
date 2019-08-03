@@ -201,25 +201,17 @@ class Model(object):
             if word.lower() not in invalid_words and not word.startswith('#nonterm')])
         self.longest_word = max(self.lexicon_words, key=len)
 
-        # if unigram_probs_file:
-        #     with open(unigram_probs_file, 'r') as file:
-        #         word_count_pairs = [line.strip().split() for line in file]
-        #     word_count_pairs = [(word, int(count)) for word, count in word_count_pairs[:30000] if word in self.lexicon_words]
-        #     total = sum(count for word, count in word_count_pairs)
-        #     self._lexicon_word_probs = {word: (float(count) / total) for word, count in word_count_pairs}
-
         return self.lexicon_words
 
     def read_user_lexicon(self):
         with open(self.files_dict['user_lexicon.txt'], 'rb') as file:
-            entries = [line.split() for line in file]
+            entries = [line.split() for line in file if line.split()]
             for tokens in entries:
-                if len(tokens) >= 1:
-                    # word lowercase
-                    tokens[0] = tokens[0].lower()
+                # word lowercase
+                tokens[0] = tokens[0].lower()
         return entries
 
-    def add_word(self, word, phones=None):
+    def add_word(self, word, phones=None, lazy_compilation=False):
         word = word.strip().lower()
         if phones is None:
             phones = Lexicon.generate_pronunciation(word)
@@ -238,7 +230,11 @@ class Model(object):
         lines = [' '.join(tokens) + '\n' for tokens in entries]
         with open(self.files_dict['user_lexicon.txt'], 'wb') as file:
             file.writelines(lines)
-        self.generate_lexicon_files()
+
+        if lazy_compilation:
+            self.lexicon_words.add(word)
+        else:
+            self.generate_lexicon_files()
 
         return phones
 
