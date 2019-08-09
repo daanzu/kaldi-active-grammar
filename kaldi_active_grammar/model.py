@@ -155,7 +155,7 @@ class Model(object):
                 if model_version != REQUIRED_MODEL_VERSION:
                     raise KaldiError("invalid model_dir version! please download a compatible model")
         else:
-            self._log.warning("model_dir has no version information; errors below may indicate an incompatible model")
+            _log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
         touch(os.path.join(self.model_dir, 'user_lexicon.txt'))
         self.files_dict = {
