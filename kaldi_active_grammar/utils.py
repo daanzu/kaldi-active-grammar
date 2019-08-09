@@ -10,7 +10,7 @@ import functools
 import hashlib, json
 from contextlib import contextmanager
 
-from . import _log, _name
+from . import _log, _name, __version__
 
 
 ########################################################################################################################
@@ -163,6 +163,9 @@ def is_file_up_to_date(filename, *parent_filenames):
         if os.path.getmtime(filename) < os.path.getmtime(parent_filename): return False
     return True
 
+
+########################################################################################################################
+
 class FileCache(object):
 
     def __init__(self, cache_filename, dependencies_dict=None):
@@ -173,16 +176,19 @@ class FileCache(object):
 
         self.cache_filename = cache_filename
         if dependencies_dict is None: dependencies_dict = dict()
-        self.cache_is_new = False
 
         try:
-            self.load()
+            self._load()
         except Exception as e:
-            _log.info("%s: failed to load cache from %r; initializing empty", self, cache_filename)
-            self.cache = dict()
-            self.cache_is_new = True
+            _log.info("%s: failed to load cache from %r", self, cache_filename)
+            self.cache = None
 
         if (
+            self.cache is None
+            or
+            # If version changed
+            self.cache.get('version') != __version__
+            or
             # If list of dependencies has changed
             sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
             or
@@ -192,16 +198,18 @@ class FileCache(object):
                 if path and os.path.isfile(path))
             ):
             # Then reset cache
-            _log.info("%s: dependencies did not match cache from %r; initializing empty", self, cache_filename)
-            self.cache = dict(dependencies_dict=dependencies_dict)
+            _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
+            self.cache = dict({ 'version': __version__ })
+            self.cache_is_new = True
+            self.cache.update(dependencies_dict=dependencies_dict)
             for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add(path)
-            self.cache_is_new = True
 
-    def load(self):
+    def _load(self):
         with open(self.cache_filename, 'r') as f:
             self.cache = json.load(f)
+        self.cache_is_new = False
 
     def save(self):
         with open(self.cache_filename, 'w') as f:
