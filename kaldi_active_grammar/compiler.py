@@ -267,10 +267,13 @@ class Compiler(object):
         kaldi_rule = KaldiRule(self, 'top', nonterm=False)
         fst = kaldi_rule.fst
         state_initial = fst.add_state(initial=True)
+        state_return = fst.add_state()
         state_final = fst.add_state(final=True)
         for i in range(self._max_rule_id + 1):
             # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i), olabel=WFST.eps)
-            fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i), olabel='#nonterm:rule'+str(i))
+            # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i))
+            fst.add_arc(state_initial, state_return, '#nonterm:rule'+str(i))
+        fst.add_arc(state_return, state_final, None, '#nonterm:end')
         fst.equalize_weights()
         kaldi_rule.compile_file()
         return kaldi_rule
@@ -406,7 +409,40 @@ class Compiler(object):
                 words.append(word)
                 words_are_dictation.append(in_dictation)
 
-        # parsed_output = remove_nonterms(parsed_output)
+        assert words.pop() == '#nonterm:end'
+
+        return kaldi_rule, words, words_are_dictation
+
+    def parse_partial_output(self, output):
+        assert self.parsing_framework == 'token'
+        self._log.debug("parse_partial_output(%r)" % output)
+        if output == '':
+            return None, [], []
+
+        nonterm_token, _, parsed_output = output.partition(' ')
+        assert nonterm_token.startswith('#nonterm:rule')
+        kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
+        kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
+
+        words = []
+        words_are_dictation = []
+        in_dictation = False
+        for word in parsed_output.split():
+            if word.startswith('#nonterm:'):
+                if word.startswith('#nonterm:dictation'):
+                    in_dictation = True
+                elif in_dictation and word == '#nonterm:end':
+                    in_dictation = False
+            else:
+                words.append(word)
+                words_are_dictation.append(in_dictation)
+
+        assert words[-1] != '#nonterm:end'
+        # if words[-1] == '#nonterm:end':
+        #     assert words.pop() == '#nonterm:end'
+        #     final = True
+        # else:
+        #     final = False
 
         return kaldi_rule, words, words_are_dictation
 
