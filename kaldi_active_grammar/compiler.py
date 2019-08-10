@@ -35,7 +35,7 @@ def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=No
 ########################################################################################################################
 
 class KaldiRule(object):
-    def __init__(self, compiler, name, nonterm=True, has_dictation=None):
+    def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
         """
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
         """
@@ -43,6 +43,7 @@ class KaldiRule(object):
         self.name = name
         self.nonterm = nonterm
         self.has_dictation = has_dictation
+        self.is_complex = is_complex
 
         # id: matches "nonterm:rule__"; 0-based; can/will change due to rule unloading!
         self.id = int(self.compiler.alloc_rule_id() if nonterm else -1)
@@ -409,15 +410,13 @@ class Compiler(object):
                 words.append(word)
                 words_are_dictation.append(in_dictation)
 
-        assert words.pop() == '#nonterm:end'
-
         return kaldi_rule, words, words_are_dictation
 
     def parse_partial_output(self, output):
         assert self.parsing_framework == 'token'
-        self._log.debug("parse_partial_output(%r)" % output)
+        # self._log.debug("parse_partial_output(%r)" % output)
         if output == '':
-            return None, [], []
+            return None, [], [], False
 
         nonterm_token, _, parsed_output = output.partition(' ')
         assert nonterm_token.startswith('#nonterm:rule')
@@ -437,14 +436,7 @@ class Compiler(object):
                 words.append(word)
                 words_are_dictation.append(in_dictation)
 
-        assert words[-1] != '#nonterm:end'
-        # if words[-1] == '#nonterm:end':
-        #     assert words.pop() == '#nonterm:end'
-        #     final = True
-        # else:
-        #     final = False
-
-        return kaldi_rule, words, words_are_dictation
+        return kaldi_rule, words, words_are_dictation, in_dictation
 
 ########################################################################################################################
 # Utility functions.
