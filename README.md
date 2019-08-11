@@ -20,12 +20,15 @@ This project extends that to allow each grammar/rule to be **independently marke
 * The Python package **includes all necessary binaries** for decoding on **Linux or Windows**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
 * A compatible **general English Kaldi nnet3 chain model** is trained on ~1200 hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development in the `kaldi` branch of my fork.
+    * You can try it out easily on Windows using a simple no-install package: see [Getting Started](#getting-started) below.
     * A beta version has been merged as of Dragonfly **v0.15.0**!
         * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py).
     * Support for KaldiAG **v0.5.0** has been merged as of Dragonfly **v0.16.0**!
         * **User Lexicon**: you can add new words/pronunciations to the model's lexicon to be recognized & used in grammars, and the pronunciations can be either specified explicitly or inferred automatically.
         * **Compilation Optimizations**: compilation while loading grammars uses the disk much less, and far fewer passes are made over the graphs, as separate modules have been customized & combined.
         * **Better Model**: 50% more training data.
+    * Support for KaldiAG **v0.6.0** has been merged as of Dragonfly **v0.16.1**!
+        * **Caster**: many big fixes and optimizations to get Caster running.
 
 ### **Donations are appreciated to encourage development.**
 
@@ -37,8 +40,9 @@ This project extends that to allow each grammar/rule to be **independently marke
 Want to get started **quickly & easily on Windows**?
 Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases):
 
-* **`kaldi-dragonfly-winpython`**: a self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2
-* **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] a self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2
+* **`kaldi-dragonfly-winpython`**: A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
 
 Otherwise...
 
