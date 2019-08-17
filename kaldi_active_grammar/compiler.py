@@ -127,13 +127,14 @@ class KaldiRule(object):
 class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, cloud_dictation=None):
-        self.decoder = None
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('text', 'token')
 
         self.model = Model(model_dir, tmp_dir)
+        self.cloud_dictation = cloud_dictation
+        self.decoder = None
 
         self._num_kaldi_rules = 0
         self._max_rule_id = load_symbol_table(self.files_dict['phones.txt'])[-1][1] - symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm:rule0')  # FIXME: inaccuracy
