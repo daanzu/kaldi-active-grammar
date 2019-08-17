@@ -68,9 +68,6 @@ class KaldiRule(object):
     decoder = property(lambda self: self.compiler.decoder)
 
     def compile_file(self):
-        # if not self.reloading and self.filename in self.compiler.fst_filenames_set:
-        #     raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
-        # self.compiler.fst_filenames_set.add(self.filename)
 
         fst_text = self.fst.get_fst_text()
         self.filename = self.fst_cache.fst_filename(fst_text)
@@ -111,7 +108,6 @@ class KaldiRule(object):
     def destroy(self):
         """Unloads rule."""
         self.decoder.remove_grammar_fst(self.id)
-        self.compiler._fst_filenames_set.remove(self.filename)
 
         # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
         other_kaldi_rules = self.compiler.kaldi_rule_by_id_dict.values()
@@ -144,7 +140,6 @@ class Compiler(object):
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
-        self._fst_filenames_set = set()
 
         self.cloud_dictation = cloud_dictation
 
