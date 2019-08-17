@@ -145,8 +145,6 @@ class Compiler(object):
 
         self.cloud_dictation = cloud_dictation
 
-        self._compile_base_fsts()
-
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)
     tmp_dir = property(lambda self: self.model.tmp_dir)
@@ -159,13 +157,6 @@ class Compiler(object):
 
     default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
     _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
-
-    @lazy_readonly_property
-    def nonterm_phones_offset(self):
-        offset = symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm_bos')
-        if offset is None:
-            raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
-        return offset
 
     def alloc_rule_id(self):
         id = self._num_kaldi_rules
@@ -201,7 +192,8 @@ class Compiler(object):
         with debug_timer(_log.debug, "agf graph compilation") as get_time_spent:
             verbose_level = 5 if _log.isEnabledFor(5) else 0
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
-            format_kwargs.update(nonterm_phones_offset=self.nonterm_phones_offset)
+            format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
+            format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
 
             if 1:
                 # Pipeline-style
@@ -220,8 +212,8 @@ class Compiler(object):
                     compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
                     args.extend(['--arcsort-grammar'])
                 if nonterm:
-                    args.extend(format('--grammar-prepend-nonterm={tmp_dir}nonterm_begin.fst'))
-                    args.extend(format('--grammar-append-nonterm={tmp_dir}nonterm_end.fst'))
+                    args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}'))
+                    args.extend(format('--grammar-append-nonterm={words_nonterm_end}'))
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 kwargs = dict() if _log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO())
@@ -247,22 +239,20 @@ class Compiler(object):
                 run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
                     + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
 
-    def _compile_base_fsts(self):
-        filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
-        if all(self.fst_cache.is_current(filepath) for filepath in filepaths):
-            return
-
-        format_kwargs = dict(self.files_dict)
-        def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)  # FIXME: unsafe shell?
-        if platform == 'windows':
-            run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
-            run("(echo 0 1 #nonterm_end 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
-        else:
-            run("(echo 0 1 \\#nonterm_begin 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
-            run("(echo 0 1 \\#nonterm_end 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
-
-        for filepath in filepaths:
-            self.fst_cache.add(filepath)
+    # def _compile_base_fsts(self):
+    #     filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
+    #     if all(self.fst_cache.is_current(filepath) for filepath in filepaths):
+    #         return
+    #     format_kwargs = dict(self.files_dict)
+    #     def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)  # FIXME: unsafe shell?
+    #     if platform == 'windows':
+    #     else:
+    #         run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
+    #         run("(echo 0 1 #nonterm_end 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
+    #         run("(echo 0 1 \\#nonterm_begin 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
+    #         run("(echo 0 1 \\#nonterm_end 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
+    #     for filepath in filepaths:
+    #         self.fst_cache.add(filepath)
 
     def compile_top_fst(self):
         kaldi_rule = KaldiRule(self, 'top', nonterm=False)

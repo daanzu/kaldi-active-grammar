@@ -184,6 +184,7 @@ class Model(object):
         self.fst_cache = FileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
+        self.nonterm_phones_offset = self.phone_to_int_dict['#nonterm_bos']
         self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.txt'], '#nonterm_begin')
 
         # Update files if needed, before loading words
