@@ -14,7 +14,7 @@ try:
 except ImportError:
     g2p_en = None
 
-from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR, REQUIRED_MODEL_VERSION
+from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR_SUFFIX, REQUIRED_MODEL_VERSION
 from .utils import ExternalProcess, FileCache, find_file, load_symbol_table, symbol_table_lookup
 import utils
 from .kaldi import augment_phones_txt_py2, augment_words_txt_py2
@@ -139,7 +139,7 @@ class Model(object):
     def __init__(self, model_dir=None, tmp_dir=None):
         self.exec_dir = os.path.join(utils.exec_dir, '')
         self.model_dir = os.path.join(model_dir or DEFAULT_MODEL_DIR, '')
-        self.tmp_dir = os.path.join(tmp_dir or DEFAULT_TMP_DIR, '')
+        self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + DEFAULT_TMP_DIR_SUFFIX), '')
 
         if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
         if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
