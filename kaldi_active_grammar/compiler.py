@@ -180,16 +180,16 @@ class Compiler(object):
     ####################################################################################################################
     # Methods for compiling graphs.
 
-    def _compile_otf_graph(self, **kwargs):
-        # FIXME: documentation
-        with debug_timer(_log.debug, "otf graph compilation"):
-            format_kwargs = dict(self.files_dict, **kwargs)
-            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "otf graph compilation step", **kwargs)
+    # def _compile_otf_graph(self, **kwargs):
+    #     # FIXME: documentation
+    #     with debug_timer(_log.debug, "otf graph compilation"):
+    #         format_kwargs = dict(self.files_dict, **kwargs)
+    #         run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "otf graph compilation step", **kwargs)
 
-            p1 = run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {filename}.txt {filename}")
-            p2 = run("{exec_dir}fstrelabel --relabel_ipairs={g.irelabel} {filename} {filename}")
-            p3 = run("{exec_dir}fstarcsort {filename} {filename}")
-            # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
+    #         p1 = run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {filename}.txt {filename}")
+    #         p2 = run("{exec_dir}fstrelabel --relabel_ipairs={g.irelabel} {filename} {filename}")
+    #         p3 = run("{exec_dir}fstarcsort {filename} {filename}")
+    #         # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
 
     def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, **kwargs):
         """

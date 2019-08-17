@@ -15,7 +15,7 @@ except ImportError:
     g2p_en = None
 
 from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR, REQUIRED_MODEL_VERSION
-from .utils import ExternalProcess, FileCache, find_file, load_symbol_table, symbol_table_lookup, touch
+from .utils import ExternalProcess, FileCache, find_file, load_symbol_table, symbol_table_lookup
 import utils
 from .kaldi import augment_phones_txt_py2, augment_words_txt_py2
 
@@ -146,6 +146,7 @@ class Model(object):
         if not os.path.exists(self.tmp_dir):
             _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
             os.mkdir(self.tmp_dir)
+            utils.touch(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
         if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
 
         version_file = os.path.join(self.model_dir, 'KAG_VERSION')
@@ -157,7 +158,7 @@ class Model(object):
         else:
             _log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
-        touch(os.path.join(self.model_dir, 'user_lexicon.txt'))
+        utils.touch(os.path.join(self.model_dir, 'user_lexicon.txt'))
         self.files_dict = {
             'exec_dir': self.exec_dir,
             'model_dir': self.model_dir,

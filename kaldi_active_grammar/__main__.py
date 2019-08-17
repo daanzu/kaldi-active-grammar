@@ -27,9 +27,9 @@ def main():
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     if args.command == 'compile_dictation_graph':
+        compiler = Compiler(args.model_dir, args.tmp_dir)
         g_filepath = compiler.default_dictation_g_filepath if not unknown else unknown[0]
         six.print_("Compiling dictation graph from %r..." % g_filepath)
-        compiler = Compiler(args.model_dir, args.tmp_dir)
         with debug_timer(six.print_, "graph compilation", independent=True):
             compiler.compile_dictation_fst(g_filepath)
 
