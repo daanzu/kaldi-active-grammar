@@ -53,6 +53,7 @@ class KaldiRule(object):
             self.compiler.kaldi_rule_by_id_dict[self.id] = self
 
         self.fst = WFST()
+        self.filename = None
         self.fst_compiled = False
         self.matcher = None
         self.active = True
@@ -61,18 +62,19 @@ class KaldiRule(object):
     def __str__(self):
         return "KaldiRule(%s, %s)" % (self.id, self.name)
 
-    filename = property(lambda self: base64.b16encode(self.name) + '.fst')  # FIXME: need to handle unicode?
+    path = property(lambda self: self.compiler.tmp_dir)
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
     fst_cache = property(lambda self: self.compiler.fst_cache)
     decoder = property(lambda self: self.compiler.decoder)
 
     def compile_file(self):
-        if not self.reloading and self.filename in self.compiler._fst_filenames_set:
-            raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
-        self.compiler._fst_filenames_set.add(self.filename)
+        # if not self.reloading and self.filename in self.compiler.fst_filenames_set:
+        #     raise KaldiError("KaldiRule fst filename collision %r. Duplicate grammar/rule name %r?" % (self.filename, self.name))
+        # self.compiler.fst_filenames_set.add(self.filename)
 
-        fst_text = self.fst.fst_text
-        if self.fst_cache.is_current(self.filepath, fst_text):
+        fst_text = self.fst.get_fst_text()
+        self.filename = self.fst_cache.fst_filename(fst_text)
+        if self.fst_cache.fst_is_current(self.filepath):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             return
         else:
@@ -90,7 +92,7 @@ class KaldiRule(object):
             self.compiler._compile_otf_graph(filename=self.filepath)
 
         self.fst_compiled = True
-        self.fst_cache.add(self.filepath, fst_text)
+        self.fst_cache.add_fst(self.filepath)
         self.fst_cache.save()
 
     def load_fst(self):

@@ -44,8 +44,7 @@ class WFST(object):
         self._arc_table.append([src_state, dst_state, label, olabel, weight])
         self._state_to_num_arcs[src_state] += 1
 
-    @property
-    def fst_text(self, eps2disambig=False):
+    def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
         text = ''.join("%s %s %s %s %s\n" % (src_state, dst_state, str(ilabel) if ilabel != self.eps else eps_replacement, str(olabel), weight)
             for (src_state, dst_state, ilabel, olabel, weight) in self._arc_table)
