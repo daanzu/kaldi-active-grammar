@@ -206,6 +206,7 @@ setup(
         'ush ~= 3.1',
         'requests >= 2',
         'six',
+        'futures; python_version == "2.7"',
     ],  # Optional
 
     # List additional groups of dependencies here (e.g. development

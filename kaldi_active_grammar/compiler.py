@@ -4,8 +4,9 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import base64, collections, logging, os.path, re, shlex, subprocess
+import base64, collections, logging, os, re, shlex, subprocess
 from contextlib import contextmanager
+import concurrent.futures
 
 from six import StringIO
 import pyparsing as pp
@@ -67,12 +68,17 @@ class KaldiRule(object):
     fst_cache = property(lambda self: self.compiler.fst_cache)
     decoder = property(lambda self: self.compiler.decoder)
 
-    def compile_file(self):
+    def compile_file(self, lazy=False):
+        if lazy:
+            if self not in self.compiler.compile_queue:
+                self.compiler.compile_queue.append(self)
+            return
 
         fst_text = self.fst.get_fst_text()
         self.filename = self.fst_cache.fst_filename(fst_text)
         if self.fst_cache.fst_is_current(self.filepath):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
+            self.fst_compiled = True
             return
         else:
             # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(fst_text)))
@@ -80,19 +86,29 @@ class KaldiRule(object):
 
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(fst_text), self.filename))
 
-        if self.compiler.decoding_framework == 'agf':
-            self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=fst_text, filename=self.filepath)
-        elif self.compiler.decoding_framework == 'otf':
-            with open(self.filepath + '.txt', 'wb') as f:
-                # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
-                f.write(fst_text)
-            self.compiler._compile_otf_graph(filename=self.filepath)
+        assert self.compiler.decoding_framework == 'agf'
+        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=fst_text, filename=self.filepath)
+
+        # elif self.compiler.decoding_framework == 'otf':
+        #     with open(self.filepath + '.txt', 'wb') as f:
+        #         # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
+        #         f.write(fst_text)
+        #     self.compiler._compile_otf_graph(filename=self.filepath)
 
         self.fst_compiled = True
         self.fst_cache.add_fst(self.filepath)
         self.fst_cache.save()
 
+    @staticmethod
+    def compile_files(compile_queue):
+        assert all([not kaldi_rule.fst_compiled for kaldi_rule in compile_queue])
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+            executor.map(lambda kaldi_rule: kaldi_rule.compile_file(lazy=False), compile_queue)
+        assert all([kaldi_rule.fst_compiled for kaldi_rule in compile_queue])
+        compile_queue.clear()
+
     def load_fst(self):
+        assert self.fst_compiled
         grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
         assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
 
@@ -140,8 +156,7 @@ class Compiler(object):
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
-
-        self.cloud_dictation = cloud_dictation
+        self.compile_queue = []
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)
@@ -314,7 +329,10 @@ class Compiler(object):
     # Methods for recognition.
 
     def prepare_for_recognition(self):
-        self.fst_cache.save()
+        if self.compile_queue:
+            KaldiRule.compile_files(self.compile_queue)
+        if self.fst_cache.dirty:
+            self.fst_cache.save()
 
     def parse_output_for_rule(self, kaldi_rule, output):
         """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
