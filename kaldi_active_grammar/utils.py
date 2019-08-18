@@ -302,14 +302,14 @@ class FSTFileCache(object):
             json.dump(self.cache, f)
         self.dirty = False
 
-    def invalidate(self, filepath=None):
-        if filepath is None:
+    def invalidate(self, filename=None):
+        if filename is None:
             _log.info("%s: invalidating whole cache", self)
             self.cache.clear()
             self.dirty = True
-        elif filepath in self.cache:
-            _log.info("%s: invalidating cache entry for %r", self, filepath)
-            del self.cache[filepath]
+        elif filename in self.cache:
+            _log.info("%s: invalidating cache entry for %r", self, filename)
+            del self.cache[filename]
             self.dirty = True
 
     def hash_data(self, data):
@@ -319,18 +319,21 @@ class FSTFileCache(object):
         if data is None:
             with open(filepath, 'rb') as f:
                 data = f.read()
-        self.cache[filepath] = unicode(self.hash_data(data))
+        filename = os.path.basename(filepath)
+        self.cache[filename] = unicode(self.hash_data(data))
         self.dirty = True
 
     def add_fst(self, filepath):
-        self.cache[filepath] = unicode(self.cache['dependencies_hash'])
+        filename = os.path.basename(filepath)
+        self.cache[filename] = unicode(self.cache['dependencies_hash'])
         self.dirty = True
 
-    def contains(self, filepath, data):
-        return (filepath in self.cache) and (self.cache[filepath] == self.hash_data(data))
+    def contains(self, filename, data):
+        return (filename in self.cache) and (self.cache[filename] == self.hash_data(data))
 
     def file_is_current(self, filepath, data=None):
         """Returns bool whether generic filepath file exists and the cache contains the given data (or the file's current data if none given)."""
+        filename = os.path.basename(filepath)
         if self.cache_is_new and filepath in self.cache.get('dependencies_dict', dict()).values():
             return False
         if not os.path.isfile(filepath):
@@ -338,11 +341,12 @@ class FSTFileCache(object):
         if data is None:
             with open(filepath, 'rb') as f:
                 data = f.read()
-        return self.contains(filepath, data)
+        return self.contains(filename, data)
 
     def fst_is_current(self, filepath):
         """Returns bool whether FST file for fst_text in directory path exists and matches current dependencies."""
-        return not (filepath not in self.cache or self.cache[filepath] != self.cache['dependencies_hash'] or not os.path.isfile(filepath))
+        filename = os.path.basename(filepath)
+        return not (filename not in self.cache or self.cache[filename] != self.cache['dependencies_hash'] or not os.path.isfile(filepath))
 
     def fst_filename(self, fst_text):
         hash = self.hash_data(fst_text)
