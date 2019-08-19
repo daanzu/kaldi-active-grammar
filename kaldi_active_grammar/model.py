@@ -122,11 +122,14 @@ class Lexicon(object):
                     url = match.group(1)
                     req = requests.get(url)
                     req.raise_for_status()
-                    results = req.text.split()
-                    assert results[0].lower() == word
-                    phones = results[1:]
-                    _log.debug("generated pronunciation with cloud-cmudict for %r: %r" % (word, phones))
-                    return phones
+                    pronunciations = req.text.strip().split('\n')
+                    for pronunciation in pronunciations:
+                        results = pronunciation.strip().split()
+                        assert results[0].lower() == word
+                        phones = results[1:]
+                        _log.debug("generated pronunciation with cloud-cmudict for %r: %r" % (word, phones))
+                        return phones
+                        # FIXME: handle multiple pronunciations!
             except Exception as e:
                 _log.exception("generate_pronunciation exception accessing www.speech.cs.cmu.edu")
 
