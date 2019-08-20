@@ -166,96 +166,13 @@ def is_file_up_to_date(filename, *parent_filenames):
 
 ########################################################################################################################
 
-class FileCache(object):
-
-    def __init__(self, cache_filename, dependencies_dict=None):
-        """
-        Stores mapping filepath -> hash of its contents/data, to detect when recalculaion is necessary.
-        Also stores an entry ``dependencies_dict`` itself mapping filepath -> hash of its contents/data, for detecting changes in our dependencies.
-        """
-
-        self.cache_filename = cache_filename
-        if dependencies_dict is None: dependencies_dict = dict()
-
-        try:
-            self._load()
-        except Exception as e:
-            _log.info("%s: failed to load cache from %r", self, cache_filename)
-            self.cache = None
-
-        if (
-            self.cache is None
-            or
-            # If version changed
-            self.cache.get('version') != __version__
-            or
-            # If list of dependencies has changed
-            sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
-            or
-            # If any of the dependencies files' contents (as stored in cache) has changed
-            any(not self.is_current(path)
-                for (name, path) in dependencies_dict.items()
-                if path and os.path.isfile(path))
-            ):
-            # Then reset cache
-            _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
-            self.cache = dict({ 'version': __version__ })
-            self.cache_is_new = True
-            self.cache.update(dependencies_dict=dependencies_dict)
-            for (name, path) in dependencies_dict.items():
-                if path and os.path.isfile(path):
-                    self.add(path)
-
-    def _load(self):
-        with open(self.cache_filename, 'r') as f:
-            self.cache = json.load(f)
-        self.cache_is_new = False
-
-    def save(self):
-        with open(self.cache_filename, 'w') as f:
-            json.dump(self.cache, f)
-
-    def hash_data(self, data):
-        return hashlib.sha1(data).hexdigest()
-
-    def add(self, filepath, data=None):
-        if data is None:
-            with open(filepath, 'rb') as f:
-                data = f.read()
-        self.cache[filepath] = self.hash_data(data)
-
-    def contains(self, filepath, data):
-        return (filepath in self.cache) and (self.cache[filepath] == self.hash_data(data))
-
-    def is_current(self, filepath, data=None):
-        """Returns bool whether filepath file exists and the cache contains the given data (or the file's current data if none given)."""
-        if self.cache_is_new and filepath in self.cache.get('dependencies_dict', dict()).values():
-            return False
-        if not os.path.isfile(filepath):
-            return False
-        if data is None:
-            with open(filepath, 'rb') as f:
-                data = f.read()
-        return self.contains(filepath, data)
-
-    def invalidate(self, filepath=None):
-        if filepath is None:
-            _log.info("%s: invalidating whole cache", self)
-            self.cache.clear()
-        elif filepath in self.cache:
-            _log.info("%s: invalidating cache entry for %r", self, filepath)
-            del self.cache[filepath]
-
-
-########################################################################################################################
-
 class FSTFileCache(object):
 
     def __init__(self, cache_filename, dependencies_dict=None):
         """
-        Stores mapping filepath -> hash of its contents/data, to detect when recalculaion is necessary.
-        FST files are a special case: filepath -> hash of its dependencies' hashes.
-        Also stores an entry ``dependencies_dict`` itself mapping filepath -> hash of its contents/data, for detecting changes in our dependencies.
+        Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary. Assumes file is in model_dir.
+        FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source. Assumes file is in tmp_dir.
+        Also stores an entry ``dependencies_list`` listing filenames of all dependencies.
         """
 
         self.cache_filename = cache_filename
@@ -274,7 +191,7 @@ class FSTFileCache(object):
             self.cache.get('version') != __version__
             or
             # If list of dependencies has changed
-            sorted(self.cache.get('dependencies_dict', dict()).keys()) != sorted(dependencies_dict.keys())
+            sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys())
             or
             # If any of the dependencies files' contents (as stored in cache) has changed
             any(not self.file_is_current(path)
@@ -288,7 +205,7 @@ class FSTFileCache(object):
             for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add_file(path)
-            self.cache['dependencies_dict'] = dependencies_dict  # FIXME: convert interal strs to unicode?
+            self.cache['dependencies_list'] = list(dependencies_dict.keys())  # FIXME: convert interal strs to unicode?
             self.cache['dependencies_hash'] = unicode(self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
 
     def _load(self):
@@ -334,7 +251,7 @@ class FSTFileCache(object):
     def file_is_current(self, filepath, data=None):
         """Returns bool whether generic filepath file exists and the cache contains the given data (or the file's current data if none given)."""
         filename = os.path.basename(filepath)
-        if self.cache_is_new and filepath in self.cache.get('dependencies_dict', dict()).values():
+        if self.cache_is_new and filename in self.cache.get('dependencies_list', list()):
             return False
         if not os.path.isfile(filepath):
             return False
@@ -346,7 +263,7 @@ class FSTFileCache(object):
     def fst_is_current(self, filepath):
         """Returns bool whether FST file for fst_text in directory path exists and matches current dependencies."""
         filename = os.path.basename(filepath)
-        return not (filename not in self.cache or self.cache[filename] != self.cache['dependencies_hash'] or not os.path.isfile(filepath))
+        return (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash']) and os.path.isfile(filepath)
 
     def fst_filename(self, fst_text):
         hash = self.hash_data(fst_text)

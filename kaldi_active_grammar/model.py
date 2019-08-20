@@ -14,7 +14,7 @@ try:
 except ImportError:
     g2p_en = None
 
-from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR_SUFFIX, REQUIRED_MODEL_VERSION
+from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR_SUFFIX, FILE_CACHE_FILENAME, REQUIRED_MODEL_VERSION
 from .utils import ExternalProcess, find_file, load_symbol_table, symbol_table_lookup
 import utils
 from .kaldi import augment_phones_txt_py2, augment_words_txt_py2
@@ -185,7 +185,7 @@ class Model(object):
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
-        self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, 'fst_cache.json'), dependencies_dict=self.files_dict)
+        self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_phones_offset = self.phone_to_int_dict['#nonterm_bos']
