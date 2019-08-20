@@ -41,8 +41,9 @@ def main():
     if args.command == 'add_word':
         word = unknown[0]
         phones = unknown[1].split() if len(unknown) >= 2 else None
-        phones = Model(args.model_dir).add_word(word, phones)
-        six.print_("Added word %r: %r" % (word, ' '.join(phones)))
+        pronunciations = Model(args.model_dir).add_word(word, phones)
+        for phones in pronunciations:
+            six.print_("Added word %r: %r" % (word, ' '.join(phones)))
 
     if args.command == 'generate_lexicon_files':
         Model(args.model_dir).generate_lexicon_files()

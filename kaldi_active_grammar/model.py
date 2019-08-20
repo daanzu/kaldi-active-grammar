@@ -99,7 +99,7 @@ class Lexicon(object):
     g2p_en = None
 
     @classmethod
-    def generate_pronunciation(cls, word):
+    def generate_pronunciations(cls, word):
         """returns CMU/arpabet phones"""
         if g2p_en:
             try:
@@ -109,7 +109,7 @@ class Lexicon(object):
                 _log.debug("generated pronunciation with g2p_en for %r: %r" % (word, phones))
                 return phones
             except Exception as e:
-                _log.exception("generate_pronunciation exception using g2p_en")
+                _log.exception("generate_pronunciations exception using g2p_en")
 
         if True:
             try:
@@ -122,16 +122,17 @@ class Lexicon(object):
                     url = match.group(1)
                     req = requests.get(url)
                     req.raise_for_status()
-                    pronunciations = req.text.strip().split('\n')
-                    for pronunciation in pronunciations:
-                        results = pronunciation.strip().split()
-                        assert results[0].lower() == word
-                        phones = results[1:]
+                    entries = req.text.strip().split('\n')
+                    pronunciations = []
+                    for entry in entries:
+                        tokens = entry.strip().split()
+                        assert re.match(word + r'(\(\d\))?', tokens[0], re.I)  # 'SEMI-COLON' or 'SEMI-COLON(2)'
+                        phones = tokens[1:]
                         _log.debug("generated pronunciation with cloud-cmudict for %r: %r" % (word, phones))
-                        return phones
-                        # FIXME: handle multiple pronunciations!
+                        pronunciations.append(phones)
+                    return pronunciations
             except Exception as e:
-                _log.exception("generate_pronunciation exception accessing www.speech.cs.cmu.edu")
+                _log.exception("generate_pronunciations exception accessing www.speech.cs.cmu.edu")
 
         raise KaldiError("cannot generate word pronunciation")
 
@@ -220,14 +221,18 @@ class Model(object):
     def add_word(self, word, phones=None, lazy_compilation=False):
         word = word.strip().lower()
         if phones is None:
-            phones = Lexicon.generate_pronunciation(word)
+            pronunciations = Lexicon.generate_pronunciations(word)
+            pronunciations = sum([self.add_word(word, phones, lazy_compilation=True) for phones in pronunciations], [])
+            if not lazy_compilation:
+                self.generate_lexicon_files()
+            return pronunciations
         phones = Lexicon.cmu_to_xsampa(phones)
         new_entry = [word] + phones
 
         entries = self.read_user_lexicon()
         if any(new_entry == entry for entry in entries):
             _log.warning("word & pronunciation already in user_lexicon")
-            return phones
+            return [phones]
         for tokens in entries:
             if word == tokens[0]:
                 _log.warning("word (with different pronunciation) already in user_lexicon: %s" % tokens[1:])
@@ -242,7 +247,7 @@ class Model(object):
         else:
             self.generate_lexicon_files()
 
-        return phones
+        return [phones]
 
     def generate_lexicon_files(self):
         _log.debug("generating lexicon files")
