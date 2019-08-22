@@ -8,6 +8,7 @@ import logging, sys, time
 import fnmatch, os
 import functools
 import hashlib, json
+import threading
 from contextlib import contextmanager
 
 from . import _log, _name, __version__
@@ -177,6 +178,7 @@ class FSTFileCache(object):
 
         self.cache_filename = cache_filename
         if dependencies_dict is None: dependencies_dict = dict()
+        self.lock = threading.Lock()
 
         try:
             self._load()
