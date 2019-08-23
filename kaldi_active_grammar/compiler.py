@@ -8,7 +8,6 @@ import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
 from contextlib import contextmanager
 import concurrent.futures
 
-from six import StringIO
 import pyparsing as pp
 
 from . import _log, KaldiError
@@ -238,8 +237,7 @@ class Compiler(object):
                     args.extend(format('--grammar-append-nonterm={words_nonterm_end}'))
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
-                kwargs = dict() if _log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO())
-                compile_command |= ExternalProcess.compile_graph_agf(*args, **kwargs)
+                compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(_log))
                 # compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
                 # if len(input_data) >= 1000000:
                 #     compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)

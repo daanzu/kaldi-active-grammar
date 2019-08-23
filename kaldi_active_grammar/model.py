@@ -294,7 +294,7 @@ class Model(object):
             '--keep_isymbols=false',
             '--keep_osymbols=false',
         ))
-        command |= ExternalProcess.fstaddselfloops(*format('{wdisambig_phones_int}', '{wdisambig_words_int}'))
+        command |= ExternalProcess.fstaddselfloops(*format('{wdisambig_phones_int}', '{wdisambig_words_int}'), **ExternalProcess.get_debug_stderr_kwargs(_log))
         command |= ExternalProcess.fstarcsort(*format('--sort_type=olabel'))
         command |= self.files_dict['L_disambig.fst']
         command()

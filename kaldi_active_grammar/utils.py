@@ -11,6 +11,8 @@ import hashlib, json
 import threading
 from contextlib import contextmanager
 
+from six import StringIO
+
 from . import _log, _name, __version__
 
 
@@ -76,6 +78,10 @@ class ExternalProcess(object):
     @staticmethod
     def get_formatter(format_kwargs):
         return lambda *args: [arg.format(**format_kwargs) for arg in args]
+
+    @staticmethod
+    def get_debug_stderr_kwargs(log):
+        return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO()))
 
 
 ########################################################################################################################
