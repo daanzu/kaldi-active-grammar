@@ -19,7 +19,11 @@ from . import _log, _name, __version__
 ########################################################################################################################
 
 debug_timer_enabled = True
-_debug_timer_stack = []
+
+class ThreadLocalData(threading.local):
+    def __init__(self):
+        self._debug_timer_stack = []
+thread_local_data = ThreadLocalData()
 
 @contextmanager
 def debug_timer(log, desc, enabled=True, independent=False):
@@ -27,25 +31,18 @@ def debug_timer(log, desc, enabled=True, independent=False):
     Contextmanager that outputs timing to ``log`` with ``desc``.
     :param independent: if True, tracks entire time spent inside context, rather than subtracting time within inner ``debug_timer`` instances
     """
+    _debug_timer_stack = thread_local_data._debug_timer_stack
     start_time = time.clock()
     if not independent: _debug_timer_stack.append(start_time)
     spent_time_func = lambda: time.clock() - start_time
     yield spent_time_func
-    start_time_adjusted = _debug_timer_stack.pop() if not independent else 0
+    if not independent: start_time_adjusted = _debug_timer_stack.pop()
+    else: start_time_adjusted = 0
     if enabled:
         if debug_timer_enabled:
             log("%s %d ms" % (desc, (time.clock() - start_time_adjusted) * 1000))
         if _debug_timer_stack and not independent:
             _debug_timer_stack[-1] += spent_time_func()
-
-class CodeTimer(object):
-    def __init__(self, name=None):
-        self.name = name
-    def __enter__(self):
-        self.start = time.clock()
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.took = (time.clock() - self.start) * 1000.0
-        logging.debug("code spent %s ms in block %s", self.took, self.name)
 
 
 ########################################################################################################################
