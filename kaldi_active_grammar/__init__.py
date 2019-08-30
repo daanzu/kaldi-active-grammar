@@ -5,7 +5,7 @@
 #
 
 _name = 'kaldi_active_grammar'
-__version__ = '0.7.1'
+__version__ = '0.7.2'
 REQUIRED_MODEL_VERSION = '0.5.0'
 DEFAULT_MODEL_DIR = 'kaldi_model_zamia'
 DEFAULT_TMP_DIR_SUFFIX = '.tmp'
