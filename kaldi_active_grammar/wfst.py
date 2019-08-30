@@ -6,8 +6,10 @@
 
 import collections, math
 
+from six import iteritems
+
 class WFST(object):
-    zero = float('inf')
+    zero = float('inf')  # weight of non-final states
     one = 0.0
     eps = '<eps>'
     eps_disambig = '#0'
@@ -20,9 +22,9 @@ class WFST(object):
 
     def clear(self):
         self._arc_table = []  # [src_state, dst_state, label, olabel, weight]
-        self._state_table = []  # [id, weight]
+        self._state_table = dict()  # {id: weight}
         self._state_to_num_arcs = collections.Counter()
-        self._next_state_id = 1
+        self._next_state_id = 0
         self.start_state = self.add_state()
 
     def add_state(self, weight=None, initial=False, final=False):
@@ -32,7 +34,7 @@ class WFST(object):
             weight = self.one if final else self.zero
         else:
             weight = -math.log(weight)
-        self._state_table.append([id, weight])
+        self._state_table[id] = weight
         if initial:
             self.add_arc(self.start_state, id, self.eps)
         return id
@@ -48,7 +50,7 @@ class WFST(object):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
         text = ''.join("%s %s %s %s %s\n" % (src_state, dst_state, str(ilabel) if ilabel != self.eps else eps_replacement, str(olabel), weight)
             for (src_state, dst_state, ilabel, olabel, weight) in self._arc_table)
-        text += ''.join("%s %s\n" % (id, weight) for (id, weight) in self._state_table if weight is not self.zero)
+        text += ''.join("%s %s\n" % (id, weight) for (id, weight) in iteritems(self._state_table) if weight is not self.zero)
         return text
 
     def equalize_weights(self):
