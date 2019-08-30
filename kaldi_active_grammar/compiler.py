@@ -59,6 +59,7 @@ class KaldiRule(object):
         self.matcher = None
         self.active = True
         self.reloading = False
+        self.reloaded = False
 
     def __str__(self):
         return "KaldiRule(%s, %s)" % (self.id, self.name)
@@ -112,18 +113,34 @@ class KaldiRule(object):
             self.compiler.load_queue.add(self)
             return self
         assert self.compiled
-        grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
-        assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
+
+        if self.reloaded:
+            self.decoder.reload_grammar_fst(self.id, self.filepath)
+            self.reloaded = False
+        else:
+            grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
+            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
+
+        self.loaded = True
         return self
 
     @contextmanager
     def reload(self):
         """Used for modifying a rule in place, e.g. ListRef."""
+        was_loaded = self.loaded
         self.reloading = True
         self.fst.clear()
+        self.compiled = False
+        self.loaded = False
+
         yield
-        if self.loaded:
+
+        if self.compiled and was_loaded:
             self.decoder.reload_grammar_fst(self.id, self.filepath)
+            self.loaded = True
+        elif was_loaded:
+            self.reloaded = True
+            self.compiler.load_queue.add(self)
         self.reloading = False
 
     def destroy(self):
@@ -333,7 +350,9 @@ class Compiler(object):
         self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
     def compile_and_load_queue(self):
-        assert all([not kaldi_rule.compiled for kaldi_rule in self.compile_queue])
+        for kaldi_rule in self.compile_queue:
+            if kaldi_rule.compiled:
+                self._log.warning("compile_queue has %s but it is already compiled", kaldi_rule)
         with concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
             results = executor.map(lambda kaldi_rule: kaldi_rule.compile(lazy=False), self.compile_queue)
             # Load pending rules that have already been compiled
