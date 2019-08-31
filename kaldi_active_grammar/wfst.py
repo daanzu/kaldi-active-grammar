@@ -82,22 +82,23 @@ class WFST(object):
             queued.update(next_states)
         return False
 
-    @profile
     def does_match(self, target_words, include_silent=False):
-        num_target_words = len(target_words)
-        non_final_weight = self.zero
+        arc_table_dict = collections.defaultdict(list)  # optimization: maps src_state -> a list of its outgoing arcs
+        for arc in self._arc_table:
+            arc_table_dict[arc[0]].append(arc)
+
         queue = collections.deque()  # entries: (state, path of arcs to state, index of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
             state, path, target_word_index = queue.popleft()
-            if (target_word_index >= num_target_words) and self.state_is_final(state):
+            if (target_word_index >= len(target_words)) and self.state_is_final(state):
                 return tuple(ilabel for (src_state, dst_state, ilabel, olabel, weight) in path
                     if include_silent or (ilabel not in self.silent_labels))
-            for arc in self._arc_table:
+            for arc in arc_table_dict[state]:
                 src_state, dst_state, ilabel, olabel, weight = arc
-                if src_state == state:
-                    if ilabel == target_words[target_word_index]:
-                        queue.append((dst_state, path+(arc,), target_word_index+1))
-                    elif self.label_is_silent(ilabel):
-                        queue.append((dst_state, path+(arc,), target_word_index))
+                assert src_state == state
+                if ilabel == target_words[target_word_index]:
+                    queue.append((dst_state, path+(arc,), target_word_index+1))
+                elif self.label_is_silent(ilabel):
+                    queue.append((dst_state, path+(arc,), target_word_index))
         return False
