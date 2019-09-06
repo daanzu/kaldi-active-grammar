@@ -92,7 +92,7 @@ class KaldiRule(object):
                 _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
 
         if lazy:
-            if not pending_compile:
+            if not self.pending_compile:
                 if not any(self.filename == kaldi_rule.filename for kaldi_rule in self.compiler.compile_queue if self != kaldi_rule):
                     self.compiler.compile_queue.add(self)
                 else:
@@ -394,32 +394,38 @@ class Compiler(object):
         #     if kaldi_rule.loaded:
         #         self._log.warning("load_queue has %s but it is already loaded", kaldi_rule)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-            results = executor.map(lambda kaldi_rule: kaldi_rule.finish_compile(), self.compile_queue)
-            # Load pending rules that have already been compiled
-            # for kaldi_rule in (self.load_queue - self.compile_queue - self.compile_duplicate_filename_queue):
-            #     kaldi_rule.load()
-            #     self.load_queue.remove(kaldi_rule)
-            # Handle rules as they are completed (have been compiled)
-            for kaldi_rule in results:
-                assert kaldi_rule.compiled
-                self.compile_queue.remove(kaldi_rule)
-                # if kaldi_rule in self.load_queue:
+        # Clean out obsolete entries
+        self.compile_queue.difference_update([kaldi_rule for kaldi_rule in self.compile_queue if kaldi_rule.compiled])
+        self.compile_duplicate_filename_queue.difference_update([kaldi_rule for kaldi_rule in self.compile_duplicate_filename_queue if kaldi_rule.compiled])
+        self.load_queue.difference_update([kaldi_rule for kaldi_rule in self.load_queue if kaldi_rule.loaded])
+
+        if self.compile_queue or self.compile_duplicate_filename_queue or self.load_queue:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+                results = executor.map(lambda kaldi_rule: kaldi_rule.finish_compile(), self.compile_queue)
+                # Load pending rules that have already been compiled
+                # for kaldi_rule in (self.load_queue - self.compile_queue - self.compile_duplicate_filename_queue):
                 #     kaldi_rule.load()
                 #     self.load_queue.remove(kaldi_rule)
-            # Handle rules that were pending compile but were duplicate and so compiled by/for another rule
-            for kaldi_rule in list(self.compile_duplicate_filename_queue):
-                kaldi_rule.compile(duplicate=True)
-                assert kaldi_rule.compiled
-                self.compile_duplicate_filename_queue.remove(kaldi_rule)
-                # if kaldi_rule in self.load_queue:
-                #     kaldi_rule.load()
-                #     self.load_queue.remove(kaldi_rule)
-            # Load rules in correct order
-            for kaldi_rule in sorted(self.load_queue, key=lambda kr: kr.id):
-                kaldi_rule.load()
-                assert kaldi_rule.loaded
-                self.load_queue.remove(kaldi_rule)
+                # Handle rules as they are completed (have been compiled)
+                for kaldi_rule in results:
+                    assert kaldi_rule.compiled
+                    self.compile_queue.remove(kaldi_rule)
+                    # if kaldi_rule in self.load_queue:
+                    #     kaldi_rule.load()
+                    #     self.load_queue.remove(kaldi_rule)
+                # Handle rules that were pending compile but were duplicate and so compiled by/for another rule
+                for kaldi_rule in list(self.compile_duplicate_filename_queue):
+                    kaldi_rule.compile(duplicate=True)
+                    assert kaldi_rule.compiled
+                    self.compile_duplicate_filename_queue.remove(kaldi_rule)
+                    # if kaldi_rule in self.load_queue:
+                    #     kaldi_rule.load()
+                    #     self.load_queue.remove(kaldi_rule)
+                # Load rules in correct order
+                for kaldi_rule in sorted(self.load_queue, key=lambda kr: kr.id):
+                    kaldi_rule.load()
+                    assert kaldi_rule.loaded
+                    self.load_queue.remove(kaldi_rule)
 
     ####################################################################################################################
     # Methods for recognition.
