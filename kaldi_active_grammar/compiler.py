@@ -8,7 +8,6 @@ import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
 from contextlib import contextmanager
 import concurrent.futures
 
-from boltons.setutils import IndexedSet
 import pyparsing as pp
 
 from . import _log, KaldiError
@@ -53,7 +52,8 @@ class KaldiRule(object):
         if self.id >= 0:
             self.compiler.kaldi_rule_by_id_dict[self.id] = self
 
-        # Private
+        # Private/protected
+        self._fst_text = None
         self.compiled = False
         self.loaded = False
         self.reloading = False  # KaldiRule is in the process of the reload contextmanager
@@ -76,38 +76,45 @@ class KaldiRule(object):
     pending_compile = property(lambda self: (self in self.compiler.compile_queue) or (self in self.compiler.compile_duplicate_filename_queue))
     pending_load = property(lambda self: self in self.compiler.load_queue)
 
-    def compile(self, lazy=False):
-        # Must be thread-safe!
+    def compile(self, lazy=False, duplicate=None):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
-        fst_text = self.fst.get_fst_text()
-        self.filename = self.fst_cache.fst_filename(fst_text)
-
-        if lazy:
-            if not any(self.filename == kaldi_rule.filename for kaldi_rule in self.compiler.compile_queue):
-                self.compiler.compile_queue.add(self)
-            else:
-                self.compiler.compile_duplicate_filename_queue.add(self)
-            return self
+        if not self._fst_text:
+            self._fst_text = self.fst.get_fst_text()
+            self.filename = self.fst_cache.fst_filename(self._fst_text)
 
         if self.fst_cache.fst_is_current(self.filepath):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             self.compiled = True
             return self
         else:
-            # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(fst_text)))
-            pass
+            # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(self._fst_text)))
+            if duplicate:
+                _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
 
-        _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(fst_text), self.filename))
+        if lazy:
+            if not pending_compile:
+                if not any(self.filename == kaldi_rule.filename for kaldi_rule in self.compiler.compile_queue if self != kaldi_rule):
+                    self.compiler.compile_queue.add(self)
+                else:
+                    self.compiler.compile_duplicate_filename_queue.add(self)
+            return self
 
+        return self.finish_compile()
+
+    def finish_compile(self):
+        # Must be thread-safe!
+        assert self._fst_text
+        _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
         assert self.compiler.decoding_framework == 'agf'
-        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=fst_text, filename=self.filepath)
+        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
 
         # elif self.compiler.decoding_framework == 'otf':
         #     with open(self.filepath + '.txt', 'wb') as f:
         #         # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
-        #         f.write(fst_text)
+        #         f.write(self._fst_text)
         #     self.compiler._compile_otf_graph(filename=self.filepath)
 
+        self._fst_text = None
         self.compiled = True
         with self.fst_cache.lock:
             self.fst_cache.add_fst(self.filepath)
@@ -167,9 +174,9 @@ class KaldiRule(object):
             assert self not in self.compiler.compile_duplicate_filename_queue
             assert self not in self.compiler.load_queue
         else:
-            self.compiler.compile_queue.discard(self)
-            self.compiler.compile_duplicate_filename_queue.discard(self)
-            self.compiler.load_queue.discard(self)
+            if self in self.compiler.compile_queue: self.compiler.compile_queue.remove(self)
+            if self in self.compiler.compile_duplicate_filename_queue: self.compiler.compile_duplicate_filename_queue.remove(self)
+            if self in self.compiler.load_queue: self.compiler.load_queue.remove(self)
 
         # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
         other_kaldi_rules = self.compiler.kaldi_rule_by_id_dict.values()
@@ -204,9 +211,9 @@ class Compiler(object):
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
-        self.compile_queue = IndexedSet()  # KaldiRule
-        self.compile_duplicate_filename_queue = IndexedSet()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
-        self.load_queue = IndexedSet()  # KaldiRule; must maintain same order as order of instantiation!
+        self.compile_queue = set()  # KaldiRule
+        self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
+        self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)
@@ -376,11 +383,19 @@ class Compiler(object):
         self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
     def process_compile_and_load_queues(self):
-        for kaldi_rule in self.compile_queue:
-            if kaldi_rule.compiled:
-                self._log.warning("compile_queue has %s but it is already compiled", kaldi_rule)
+        # Allowing this gives us leeway elsewhere
+        # for kaldi_rule in self.compile_queue:
+        #     if kaldi_rule.compiled:
+        #         self._log.warning("compile_queue has %s but it is already compiled", kaldi_rule)
+        # for kaldi_rule in self.compile_duplicate_filename_queue:
+        #     if kaldi_rule.compiled:
+        #         self._log.warning("compile_duplicate_filename_queue has %s but it is already compiled", kaldi_rule)
+        # for kaldi_rule in self.load_queue:
+        #     if kaldi_rule.loaded:
+        #         self._log.warning("load_queue has %s but it is already loaded", kaldi_rule)
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-            results = executor.map(lambda kaldi_rule: kaldi_rule.compile(lazy=False), self.compile_queue)
+            results = executor.map(lambda kaldi_rule: kaldi_rule.finish_compile(), self.compile_queue)
             # Load pending rules that have already been compiled
             # for kaldi_rule in (self.load_queue - self.compile_queue - self.compile_duplicate_filename_queue):
             #     kaldi_rule.load()
@@ -394,7 +409,7 @@ class Compiler(object):
                 #     self.load_queue.remove(kaldi_rule)
             # Handle rules that were pending compile but were duplicate and so compiled by/for another rule
             for kaldi_rule in list(self.compile_duplicate_filename_queue):
-                kaldi_rule.compile(lazy=False)
+                kaldi_rule.compile(duplicate=True)
                 assert kaldi_rule.compiled
                 self.compile_duplicate_filename_queue.remove(kaldi_rule)
                 # if kaldi_rule in self.load_queue:
@@ -403,6 +418,7 @@ class Compiler(object):
             # Load rules in correct order
             for kaldi_rule in sorted(self.load_queue, key=lambda kr: kr.id):
                 kaldi_rule.load()
+                assert kaldi_rule.loaded
                 self.load_queue.remove(kaldi_rule)
 
     ####################################################################################################################
