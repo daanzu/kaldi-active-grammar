@@ -8,6 +8,7 @@ import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
 from contextlib import contextmanager
 import concurrent.futures
 
+from boltons.setutils import IndexedSet
 import pyparsing as pp
 
 from . import _log, KaldiError
@@ -52,17 +53,21 @@ class KaldiRule(object):
         if self.id >= 0:
             self.compiler.kaldi_rule_by_id_dict[self.id] = self
 
-        self.fst = WFST()
-        self.filename = None
+        # Private
         self.compiled = False
         self.loaded = False
+        self.reloading = False  # KaldiRule is in the process of the reload contextmanager
+        self.reloaded = False  # KaldiRule was loaded, then reload() was called & completed, and now it is not currently loaded, and load() we need to call the decoder's reload
+        self.destroyed = False  # KaldiRule must not be used/referenced anymore
+
+        # Public
+        self.fst = WFST()
+        self.filename = None
         self.matcher = None
         self.active = True
-        self.reloading = False
-        self.reloaded = False
 
-    def __str__(self):
-        return "KaldiRule(%s, %s)" % (self.id, self.name)
+    def __repr__(self):
+        return "%s(%s, %s)" % (self.__class__.__name__, self.id, self.name)
 
     path = property(lambda self: self.compiler.tmp_dir)
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
@@ -73,6 +78,7 @@ class KaldiRule(object):
 
     def compile(self, lazy=False):
         # Must be thread-safe!
+        if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
         fst_text = self.fst.get_fst_text()
         self.filename = self.fst_cache.fst_filename(fst_text)
 
@@ -109,6 +115,7 @@ class KaldiRule(object):
         return self
 
     def load(self):
+        if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
         if self.pending_compile:
             self.compiler.load_queue.add(self)
             return self
@@ -126,7 +133,9 @@ class KaldiRule(object):
 
     @contextmanager
     def reload(self):
-        """Used for modifying a rule in place, e.g. ListRef."""
+        """ Used for modifying a rule in place, e.g. ListRef. """
+        if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+
         was_loaded = self.loaded
         self.reloading = True
         self.fst.clear()
@@ -135,17 +144,32 @@ class KaldiRule(object):
 
         yield
 
+        # Do not allow lazy compiling during reloading
+        if not self.compiled:
+            self.compile()
         if self.compiled and was_loaded:
-            self.decoder.reload_grammar_fst(self.id, self.filepath)
-            self.loaded = True
-        elif was_loaded:
-            self.reloaded = True
-            self.compiler.load_queue.add(self)
+            if not self.loaded:
+                self.decoder.reload_grammar_fst(self.id, self.filepath)
+                self.loaded = True
+        # elif was_loaded:  # must be not self.compiled (i.e. the compile during reloading was lazy)
+        #     self.reloaded = True
+        #     self.compiler.load_queue.add(self)
         self.reloading = False
 
     def destroy(self):
-        """Unloads rule."""
-        self.decoder.remove_grammar_fst(self.id)
+        """ Destructor. Unloads rule. The rule should not be used/referenced anymore after calling! """
+        if self.destroyed:
+            return
+
+        if self.loaded:
+            self.decoder.remove_grammar_fst(self.id)
+            assert self not in self.compiler.compile_queue
+            assert self not in self.compiler.compile_duplicate_filename_queue
+            assert self not in self.compiler.load_queue
+        else:
+            self.compiler.compile_queue.discard(self)
+            self.compiler.compile_duplicate_filename_queue.discard(self)
+            self.compiler.load_queue.discard(self)
 
         # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
         other_kaldi_rules = self.compiler.kaldi_rule_by_id_dict.values()
@@ -156,6 +180,7 @@ class KaldiRule(object):
         self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in other_kaldi_rules }
 
         self.compiler.free_rule_id()
+        self.destroyed = True
 
 
 ########################################################################################################################
@@ -178,9 +203,9 @@ class Compiler(object):
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
-        self.compile_queue = set()  # KaldiRule
-        self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
-        self.load_queue = set()  # KaldiRule
+        self.compile_queue = IndexedSet()  # KaldiRule
+        self.compile_duplicate_filename_queue = IndexedSet()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
+        self.load_queue = IndexedSet()  # KaldiRule; must maintain same order as order of instantiation!
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)
@@ -349,7 +374,7 @@ class Compiler(object):
     def compile_dictation_fst(self, g_filename):
         self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
-    def compile_and_load_queue(self):
+    def process_compile_and_load_queues(self):
         for kaldi_rule in self.compile_queue:
             if kaldi_rule.compiled:
                 self._log.warning("compile_queue has %s but it is already compiled", kaldi_rule)
@@ -367,7 +392,7 @@ class Compiler(object):
                 #     kaldi_rule.load()
                 #     self.load_queue.remove(kaldi_rule)
             # Handle rules that were pending compile but were duplicate and so compiled by/for another rule
-            for kaldi_rule in self.compile_duplicate_filename_queue.copy():
+            for kaldi_rule in list(self.compile_duplicate_filename_queue):
                 kaldi_rule.compile(lazy=False)
                 assert kaldi_rule.compiled
                 self.compile_duplicate_filename_queue.remove(kaldi_rule)
@@ -384,7 +409,7 @@ class Compiler(object):
 
     def prepare_for_recognition(self):
         if self.compile_queue or self.compile_duplicate_filename_queue or self.load_queue:
-            self.compile_and_load_queue()
+            self.process_compile_and_load_queues()
         if self.fst_cache.dirty:
             self.fst_cache.save()
 

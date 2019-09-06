@@ -205,6 +205,7 @@ setup(
         'pyparsing ~= 2.2',
         'ush ~= 3.1',
         'requests >= 2',
+        'boltons >= 19',
         'six',
         'futures; python_version == "2.7"',
     ],  # Optional
