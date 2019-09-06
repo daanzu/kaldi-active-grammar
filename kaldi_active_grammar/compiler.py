@@ -187,7 +187,7 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, cloud_dictation=None):
+    def __init__(self, model_dir=None, tmp_dir=None, cloud_dictation=None, cloud_dictation_lang='en-US'):
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'
@@ -195,6 +195,7 @@ class Compiler(object):
 
         self.model = Model(model_dir, tmp_dir)
         self.cloud_dictation = cloud_dictation
+        self.cloud_dictation_lang = cloud_dictation_lang
         self.decoder = None
 
         self._num_kaldi_rules = 0
@@ -466,14 +467,15 @@ class Compiler(object):
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                    kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'cloud dictation call'):
-                        cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio)
+                        cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, **kwargs)
                         self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
                     # with debug_timer(self._log.debug, 'cloud dictation call'):
-                    #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search')
+                    #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search', **kwargs)
                     #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
                     # with debug_timer(self._log.debug, 'cloud dictation call'):
-                    #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio)
+                    #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio, **kwargs)
                     #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
                     # cloud.write_wav('test.wav', dictation_audio)
                     return (cloud_text or orig_text)
