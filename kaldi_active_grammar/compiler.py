@@ -57,7 +57,7 @@ class KaldiRule(object):
         self.compiled = False
         self.loaded = False
         self.reloading = False  # KaldiRule is in the process of the reload contextmanager
-        self.reloaded = False  # KaldiRule was loaded, then reload() was called & completed, and now it is not currently loaded, and load() we need to call the decoder's reload
+        self.has_been_loaded = False  # KaldiRule was loaded, then reload() was called & completed, and now it is not currently loaded, and load() we need to call the decoder's reload
         self.destroyed = False  # KaldiRule must not be used/referenced anymore
 
         # Public
@@ -128,14 +128,14 @@ class KaldiRule(object):
             return self
         assert self.compiled
 
-        if self.reloaded:
+        if self.has_been_loaded:
             self.decoder.reload_grammar_fst(self.id, self.filepath)
-            self.reloaded = False
         else:
             grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
-            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index"
+            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (self.grammar_fst_index, self)
 
         self.loaded = True
+        self.has_been_loaded = True
         return self
 
     @contextmanager
@@ -151,16 +151,12 @@ class KaldiRule(object):
 
         yield
 
-        # Do not allow lazy compiling during reloading
-        if not self.compiled:
-            self.compile()
         if self.compiled and was_loaded:
             if not self.loaded:
                 self.decoder.reload_grammar_fst(self.id, self.filepath)
                 self.loaded = True
-        # elif was_loaded:  # must be not self.compiled (i.e. the compile during reloading was lazy)
-        #     self.reloaded = True
-        #     self.compiler.load_queue.add(self)
+        elif was_loaded:  # must be not self.compiled (i.e. the compile during reloading was lazy)
+            self.compiler.load_queue.add(self)
         self.reloading = False
 
     def destroy(self):
