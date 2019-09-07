@@ -86,28 +86,25 @@ class WFST(object):
         return False
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
-        """ Returns the ilabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
-        # from IPython import embed; embed()
-        # print(self.get_fst_text())
+        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
         queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
             state, path, target_word_index = queue.popleft()
-            # print(state, path, target_words[target_word_index])
-            # import ipdb; ipdb.set_trace()
             target_word = target_words[target_word_index] if target_word_index < len(target_words) else None
             if (target_word is None) and self.state_is_final(state):
-                return tuple(ilabel for ilabel in path
-                    if include_silent or not self.label_is_silent(ilabel))
+                return tuple(olabel for olabel in path
+                    if include_silent or not self.label_is_silent(olabel))
             for arc in self._arc_table_dict[state]:
                 src_state, dst_state, ilabel, olabel, weight = arc
                 if (target_word is not None) and (ilabel == target_word):
-                    queue.append((dst_state, path+(ilabel,), target_word_index+1))
+                    queue.append((dst_state, path+(olabel,), target_word_index+1))
                 elif ilabel in wildcard_nonterms:
+                    if olabel not in path:
+                        path += (olabel,)
                     if target_word is not None:
                         queue.append((src_state, path+(target_word,), target_word_index+1))  # accept word and stay
-                        # queue.append((dst_state, path+(target_word,), target_word_index+1))  # accept word and transition
-                    queue.append((dst_state, path+(ilabel,), target_word_index))  # epsilon transition
+                    queue.append((dst_state, path, target_word_index))  # epsilon transition; already added olabel above or previously
                 elif self.label_is_silent(ilabel):
-                    queue.append((dst_state, path+(ilabel,), target_word_index))  # epsilon transition
+                    queue.append((dst_state, path+(olabel,), target_word_index))  # epsilon transition
         return False
