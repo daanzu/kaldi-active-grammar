@@ -22,7 +22,7 @@ _log = _log.getChild('cloud')
 class GCloud(object):
 
     @staticmethod
-    def transcribe_data_sync(speech_data, model='default'):
+    def transcribe_data_sync(speech_data, model='default', language_code='en-US'):
         # model in ['video', 'phone_call', 'command_and_search', 'default']
 
         if not gcloud_imported:
@@ -34,7 +34,7 @@ class GCloud(object):
         config = types.RecognitionConfig(
             encoding=enums.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
-            language_code='en-US',
+            language_code=language_code or 'en-US',
             model=model,
         )
 
@@ -48,7 +48,7 @@ class GCloud(object):
             return result.alternatives[0].transcript
 
     @staticmethod
-    def transcribe_data_streaming(speech_data, model=None):
+    def transcribe_data_streaming(speech_data, model=None, language_code='en-US'):
         # model in ['video', 'phone_call', 'command_and_search', 'default']
 
         if not gcloud_imported:
@@ -63,7 +63,7 @@ class GCloud(object):
         config = types.RecognitionConfig(
             encoding=enums.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
-            language_code='en-US',
+            language_code=language_code or 'en-US',
             # model=model,
         )
         streaming_config = types.StreamingRecognitionConfig(
