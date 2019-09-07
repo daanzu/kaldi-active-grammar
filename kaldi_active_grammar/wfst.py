@@ -13,7 +13,7 @@ class WFST(object):
     one = 0.0
     eps = '<eps>'
     eps_disambig = '#0'
-    silent_labels = frozenset((eps, '!SIL'))
+    silent_labels = frozenset((eps, eps_disambig, '!SIL'))
 
     def __init__(self):
         self.clear()
@@ -71,7 +71,7 @@ class WFST(object):
             arc[4] = -math.log(1.0 / self._state_to_num_arcs[arc[0]])
 
     def has_eps_path(self, src_state, dst_state):
-        """Returns True iff there is a epsilon path from src_state to dst_state."""
+        """ Returns True iff there is a epsilon path from src_state to dst_state. """
         eps_like = [self.eps, self.eps_disambig]
         state_queue = collections.deque([src_state])
         queued = set(state_queue)
@@ -86,17 +86,19 @@ class WFST(object):
         return False
 
     def does_match(self, target_words, include_silent=False):
+        """ Returns the ilabels on a matching path if there is one, False if not. Uses BFS. """
         queue = collections.deque()  # entries: (state, path of arcs to state, index of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
             state, path, target_word_index = queue.popleft()
             if (target_word_index >= len(target_words)) and self.state_is_final(state):
-                return tuple(ilabel for (src_state, dst_state, ilabel, olabel, weight) in path
+                return tuple(ilabel
+                    for (src_state, dst_state, ilabel, olabel, weight) in path
                     if include_silent or (ilabel not in self.silent_labels))
+            target_word = target_words[target_word_index] if target_word_index < len(target_words) else None
             for arc in self._arc_table_dict[state]:
                 src_state, dst_state, ilabel, olabel, weight = arc
-                assert src_state == state
-                if ilabel == target_words[target_word_index]:
+                if (target_word is not None) and (ilabel == target_word):
                     queue.append((dst_state, path+(arc,), target_word_index+1))
                 elif self.label_is_silent(ilabel):
                     queue.append((dst_state, path+(arc,), target_word_index))
