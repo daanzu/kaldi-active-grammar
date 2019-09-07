@@ -121,9 +121,9 @@ class KaldiRule(object):
             self.fst_cache.save()
         return self
 
-    def load(self):
+    def load(self, lazy=False):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
-        if self.pending_compile:
+        if lazy or self.pending_compile:
             self.compiler.load_queue.add(self)
             return self
         assert self.compiled
@@ -132,7 +132,7 @@ class KaldiRule(object):
             self.decoder.reload_grammar_fst(self.id, self.filepath)
         else:
             grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
-            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (self.grammar_fst_index, self)
+            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
 
         self.loaded = True
         self.has_been_loaded = True
