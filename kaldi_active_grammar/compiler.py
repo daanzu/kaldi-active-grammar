@@ -432,6 +432,8 @@ class Compiler(object):
         if self.fst_cache.dirty:
             self.fst_cache.save()
 
+    wildcard_nonterms = ('#nonterm:dictation', '#nonterm:dictation_cloud')
+
     def parse_output_for_rule(self, kaldi_rule, output):
         """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
         # try:
@@ -441,7 +443,7 @@ class Compiler(object):
         # parsed_output = ' '.join(parse_results)
         # match = kaldi_rule.matcher.match(output)
         # if not match:
-        labels = kaldi_rule.fst.does_match(output.split())
+        labels = kaldi_rule.fst.does_match(output.split(), wildcard_nonterms=self.wildcard_nonterms)
         self._log.log(5, "parse_output_for_rule(%s, %r) got %r", kaldi_rule, output, labels)
         if labels is False:
             return None
