@@ -8,8 +8,6 @@ import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
 from contextlib import contextmanager
 import concurrent.futures
 
-import pyparsing as pp
-
 from . import _log, KaldiError
 from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
 import utils
