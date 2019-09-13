@@ -29,6 +29,12 @@ This project extends that to allow each grammar/rule to be **independently marke
         * **Better Model**: 50% more training data.
     * Support for KaldiAG **v0.6.0** has been merged as of Dragonfly **v0.16.1**!
         * **Caster**: many big fixes and optimizations to get Caster running.
+    * Support for KaldiAG **v0.7.0** has been merged as of Dragonfly **v0.17.0**!
+        * **Partial Decoding**: support for having **separate Voice Activity Detection timeout values** based on whether the current utterance is complex (dictation) or not.
+        * **Parallel Compilation**: when compiling grammars/rules that are not cached, multiple can be compiled at once (up to your core count).
+            * Example: loading Caster without cache is ~40% faster (in addition to optimizations below).
+        * **Various Optimizations**: loading even while cached sped up 15%.
+        * Refactored temporary/cache file handling
 
 ### **Donations are appreciated to encourage development.**
 
