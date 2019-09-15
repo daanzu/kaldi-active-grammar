@@ -33,6 +33,7 @@ def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=No
 ########################################################################################################################
 
 class KaldiRule(object):
+
     def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
         """
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)

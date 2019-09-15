@@ -190,6 +190,7 @@ class FSTFileCache(object):
             self.cache = None
 
         if (
+            # If could not load cache
             self.cache is None
             or
             # If version changed
@@ -212,6 +213,7 @@ class FSTFileCache(object):
                     self.add_file(path)
             self.cache['dependencies_list'] = list(dependencies_dict.keys())  # FIXME: convert interal strs to unicode?
             self.cache['dependencies_hash'] = unicode(self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
+            self.save()
 
     def _load(self):
         with open(self.cache_filename, 'r') as f:
