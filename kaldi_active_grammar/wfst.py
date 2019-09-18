@@ -70,17 +70,17 @@ class WFST(object):
         for arc in self.iter_arcs():
             arc[4] = -math.log(1.0 / self._state_to_num_arcs[arc[0]])
 
-    def has_eps_path(self, src_state, dst_state, eps_like_labels=frozenset()):
+    def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
         eps_like_labels = frozenset((self.eps, self.eps_disambig)) | frozenset(eps_like_labels)
-        state_queue = collections.deque([src_state])
+        state_queue = collections.deque([path_src_state])
         queued = set(state_queue)
         while state_queue:
             state = state_queue.pop()
-            if state == dst_state:
+            if state == path_dst_state:
                 return True
             next_states = [dst_state
-                for (src_state, dst_state, label, olabel, weight) in self._arc_table_dict[src_state]
+                for (src_state, dst_state, label, olabel, weight) in self._arc_table_dict[state]
                 if (label in eps_like_labels) and (dst_state not in queued)]
             state_queue.extendleft(next_states)
             queued.update(next_states)
