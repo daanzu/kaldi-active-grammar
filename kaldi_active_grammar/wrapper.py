@@ -233,7 +233,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
                 bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
             bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
             bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-            void reset_adaptation_state_agf_nnet3(void* model_vp);
+            bool reset_adaptation_state_agf_nnet3(void* model_vp);
         """)
         self._lib = _ffi.dlopen(self._library_binary)
 
@@ -364,4 +364,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         return zip(words, times, lengths)
 
     def reset_adaptation_state(self):
-        self._lib.reset_adaptation_state_agf_nnet3(self._model)
+        result = self._lib.reset_adaptation_state_agf_nnet3(self._model)
+        if not result:
+            raise KaldiError("reset_adaptation_state error")
