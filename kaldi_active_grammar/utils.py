@@ -172,11 +172,12 @@ def is_file_up_to_date(filename, *parent_filenames):
 
 class FSTFileCache(object):
 
-    def __init__(self, cache_filename, dependencies_dict=None):
+    def __init__(self, cache_filename, dependencies_dict=None, invalidate=False):
         """
         Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary. Assumes file is in model_dir.
         FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source. Assumes file is in tmp_dir.
         Also stores an entry ``dependencies_list`` listing filenames of all dependencies.
+        If ``invalidate``, then initialize a fresh cache.
         """
 
         self.cache_filename = cache_filename
@@ -190,17 +191,14 @@ class FSTFileCache(object):
             self.cache = None
 
         if (
-            # If could not load cache
-            self.cache is None
-            or
+            # If could not load cache, or it should be invalidated
+            self.cache is None or invalidate
             # If version changed
-            self.cache.get('version') != __version__
-            or
+            or self.cache.get('version') != __version__
             # If list of dependencies has changed
-            sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys())
-            or
+            or sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys())
             # If any of the dependencies files' contents (as stored in cache) has changed
-            any(not self.file_is_current(path)
+            or any(not self.file_is_current(path)
                 for (name, path) in dependencies_dict.items()
                 if path and os.path.isfile(path))
             ):
@@ -228,9 +226,11 @@ class FSTFileCache(object):
 
     def invalidate(self, filename=None):
         if filename is None:
-            _log.info("%s: invalidating whole cache", self)
-            self.cache.clear()
-            self.dirty = True
+            _log.info("%s: invalidating all file entries in cache", self)
+            # Does not invalidate dependencies!
+            self.cache = { key: self.cache[key]
+                for key in ['version', 'dependencies_list', 'dependencies_hash'] + self.cache['dependencies_list']
+                if key in self.cache }
         elif filename in self.cache:
             _log.info("%s: invalidating cache entry for %r", self, filename)
             del self.cache[filename]
