@@ -194,6 +194,7 @@ class Compiler(object):
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('text', 'token')
+        self._log = _log
 
         self.model = Model(model_dir, tmp_dir)
         self.cloud_dictation = cloud_dictation
@@ -238,7 +239,7 @@ class Compiler(object):
 
     # def _compile_otf_graph(self, **kwargs):
     #     # FIXME: documentation
-    #     with debug_timer(_log.debug, "otf graph compilation"):
+    #     with debug_timer(self._log.debug, "otf graph compilation"):
     #         format_kwargs = dict(self.files_dict, **kwargs)
     #         run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "otf graph compilation step", **kwargs)
 
@@ -255,8 +256,8 @@ class Compiler(object):
         # Must be thread-safe!
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
-        with debug_timer(_log.debug, "agf graph compilation") as get_time_spent:
-            verbose_level = 5 if _log.isEnabledFor(5) else 0
+        with debug_timer(self._log.debug, "agf graph compilation") as get_time_spent:
+            verbose_level = 5 if self._log.isEnabledFor(5) else 0
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
             format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
@@ -282,7 +283,7 @@ class Compiler(object):
                     args.extend(format('--grammar-append-nonterm={words_nonterm_end}'))
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
-                compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(_log))
+                compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
                 # compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
                 # if len(input_data) >= 1000000:
                 #     compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
@@ -337,8 +338,8 @@ class Compiler(object):
     def _get_dictation_fst_filepath(self):
         if os.path.exists(self._dictation_fst_filepath):
             return self._dictation_fst_filepath
-        _log.error("cannot find dictation fst: %s", self._dictation_fst_filepath)
-        # _log.error("using universal dictation fst")
+        self._log.error("cannot find dictation fst: %s", self._dictation_fst_filepath)
+        # self._log.error("using universal dictation fst")
     dictation_fst_filepath = property(_get_dictation_fst_filepath)
 
     # def _construct_dictation_states(self, fst, src_state, dst_state, number=(1,None), words=None, start_weight=None):
@@ -472,6 +473,7 @@ class Compiler(object):
         if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
             try:
                 audio_data, word_align = dictation_info_func()
+                self._log.log(5, "cloud_dictation word_align: %s", word_align)
                 words, times, lengths = zip(*word_align)
                 # Find start & end word-index & byte-offset of each cloud dictation span
                 dictation_spans = [{
