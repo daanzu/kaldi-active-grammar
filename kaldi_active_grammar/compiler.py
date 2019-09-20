@@ -78,6 +78,7 @@ class KaldiRule(object):
     def compile(self, lazy=False, duplicate=None):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
         if not self._fst_text:
+            self.fst.normalize_weights()
             self._fst_text = self.fst.get_fst_text()
             self.filename = self.fst_cache.fst_filename(self._fst_text)
 
@@ -331,7 +332,6 @@ class Compiler(object):
             # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i))
             fst.add_arc(state_initial, state_return, '#nonterm:rule'+str(i))
         fst.add_arc(state_return, state_final, None, '#nonterm:end')
-        fst.equalize_weights()
         kaldi_rule.compile()
         return kaldi_rule
 

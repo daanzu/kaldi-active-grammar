@@ -9,7 +9,13 @@ import collections, itertools, math
 from six import iteritems, itervalues
 
 class WFST(object):
-    zero = float('inf')  # weight of non-final states
+    """
+    WFST class.
+    Notes:
+        * Weight (arc & state) is stored as raw probability, then normalized and converted to negative log likelihood/probability before export.
+    """
+
+    zero = float('inf')  # Weight of non-final states; a state is final if and only if its weight is not equal to self.zero
     one = 0.0
     eps = '<eps>'
     eps_disambig = '#0'
@@ -19,9 +25,8 @@ class WFST(object):
         self.clear()
 
     def clear(self):
-        self._arc_table_dict = collections.defaultdict(list)  # {src_state: [[src_state, dst_state, label, olabel, weight], ...]}  # list of its outgoing arcs
-        self._state_table = dict()  # {id: weight}
-        self._state_to_num_arcs = collections.Counter()
+        self._arc_table_dict = collections.defaultdict(list)  # { src_state: [[src_state, dst_state, label, olabel, weight], ...] }  # list of its outgoing arcs
+        self._state_table = dict()  # { id: weight }
         self._next_state_id = 0
         self.start_state = self.add_state()
 
@@ -32,29 +37,38 @@ class WFST(object):
         return itertools.chain.from_iterable(itervalues(self._arc_table_dict))
 
     def add_state(self, weight=None, initial=False, final=False):
+        """ Default weight is 1. """
         id = self._next_state_id
         self._next_state_id += 1
         if weight is None:
-            weight = self.one if final else self.zero
+            weight = 1 if final else 0
         else:
-            weight = -math.log(weight)
+            assert final
         self._state_table[id] = weight
         if initial:
             self.add_arc(self.start_state, id, self.eps)
         return id
 
     def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
+        """ Default weight is 1. None label is replaced by eps. Default olabel of None is replaced by label. """
         if label is None: label = self.eps
         if olabel is None: olabel = label
-        weight = self.one if weight is None else -math.log(weight)
+        weight = 1 if weight is None else weight
         self._arc_table_dict[src_state].append([src_state, dst_state, label, olabel, weight])
-        self._state_to_num_arcs[src_state] += 1
 
     def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
-        text = ''.join("%s %s %s %s %s\n" % (src_state, dst_state, str(ilabel) if ilabel != self.eps else eps_replacement, str(olabel), weight)
-            for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
-        text += ''.join("%s %s\n" % (id, weight) for (id, weight) in iteritems(self._state_table) if weight is not self.zero)
+        text = ''.join("%s %s %s %s %s\n" % (
+                src_state,
+                dst_state,
+                str(ilabel) if ilabel != self.eps else eps_replacement,
+                str(olabel),
+                -math.log(weight) if weight != 0 else self.zero,
+            ) for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
+        text += ''.join("%s %s\n" % (
+                id,
+                -math.log(weight) if weight != 0 else self.zero,
+            ) for (id, weight) in iteritems(self._state_table) if weight is not self.zero)
         return text
 
     ####################################################################################################################
@@ -65,10 +79,12 @@ class WFST(object):
     def label_is_silent(self, label):
         return ((label in self.silent_labels) or (label.startswith('#nonterm')))
 
-    def equalize_weights(self):
-        # breakeven 10-13?
-        for arc in self.iter_arcs():
-            arc[4] = -math.log(1.0 / self._state_to_num_arcs[arc[0]])
+    def normalize_weights(self):
+        # Note: breakeven 10-13???
+        for (src_state, arcs) in self._arc_table_dict.items():
+            sum_weights = float(sum(arc[4] for arc in arcs))
+            for arc in arcs:
+                arc[4] = arc[4] / sum_weights
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
