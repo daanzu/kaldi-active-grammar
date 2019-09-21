@@ -10,10 +10,9 @@ import concurrent.futures
 
 from . import _log, KaldiError
 from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
-import utils
 from .wfst import WFST
 from .model import Model
-import cloud
+import kaldi_active_grammar.cloud as cloud
 
 _log = _log.getChild('compiler')
 
