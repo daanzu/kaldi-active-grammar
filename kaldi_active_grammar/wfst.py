@@ -79,12 +79,14 @@ class WFST(object):
     def label_is_silent(self, label):
         return ((label in self.silent_labels) or (label.startswith('#nonterm')))
 
-    def normalize_weights(self):
+    def normalize_weights(self, stochasticity=False):
         # Note: breakeven 10-13???
         for (src_state, arcs) in self._arc_table_dict.items():
-            sum_weights = float(sum(arc[4] for arc in arcs))
+            num_weights = len(arcs)
+            sum_weights = sum(arc[4] for arc in arcs)
+            divisor = float(sum_weights if stochasticity else num_weights)
             for arc in arcs:
-                arc[4] = arc[4] / sum_weights
+                arc[4] = arc[4] / divisor
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
