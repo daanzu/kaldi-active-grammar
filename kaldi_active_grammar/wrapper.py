@@ -211,6 +211,104 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
 
 ########################################################################################################################
 
+class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
+    """docstring for KaldiPlainNNet3Decoder"""
+
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
+            model_file=None, fst_file=None, save_adaptation_state=True):
+        super(KaldiPlainNNet3Decoder, self).__init__()
+        _ffi.cdef("""
+            void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
+                char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+                char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
+                int32_t verbosity);
+            bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state);
+            bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+            bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+            bool reset_adaptation_state_plain_nnet3(void* model_vp);
+        """)
+        self._lib = _ffi.dlopen(self._library_binary)
+
+        if words_file is None: words_file = find_file(model_dir, 'words.txt')
+        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
+        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
+            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
+        if model_file is None: model_file = find_file(model_dir, 'final.mdl')
+        if fst_file is None: fst_file = find_file(model_dir, 'HCLG.fst')
+
+        self.words_file = os.path.normpath(words_file)
+        self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
+        self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
+        self.ie_conf_file = os.path.normpath(ie_conf_file)
+        self.model_file = os.path.normpath(model_file)
+        self.fst_file = os.path.normpath(fst_file)
+        verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
+
+        self._model = self._lib.init_plain_nnet3(
+            # 14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
+            14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
+            mfcc_conf_file, ie_conf_file, model_file,
+            words_file, word_align_lexicon_file or "", fst_file,
+            verbosity)
+        self._saving_adaptation_state = save_adaptation_state
+
+        self.sample_rate = 16000
+        self.num_channels = 1
+        self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
+
+    saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
+    @saving_adaptation_state.setter
+    def saving_adaptation_state(self, value): self._saving_adaptation_state = value
+
+    def decode(self, frames, finalize):
+        """Continue decoding with given new audio data."""
+        if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
+        frames = frames.astype(np.float32)
+        frames_char = _ffi.from_buffer(frames)
+        frames_float = _ffi.cast('float *', frames_char)
+
+        self._start_decode_time(len(frames))
+        result = self._lib.decode_plain_nnet3(self._model, self.sample_rate, len(frames), frames_float, finalize, self._saving_adaptation_state)
+        self._stop_decode_time(finalize)
+
+        if not result:
+            raise KaldiError("decoding error")
+        return finalize
+
+    def get_output(self, output_max_length=4*1024):
+        output_p = _ffi.new('char[]', output_max_length)
+        likelihood_p = _ffi.new('double *')
+        result = self._lib.get_output_plain_nnet3(self._model, output_p, output_max_length, likelihood_p)
+        if not result:
+            raise KaldiError("get_output error")
+        output_str = _ffi.string(output_p)
+        likelihood = likelihood_p[0]
+        # _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
+        return output_str, likelihood
+
+    def get_word_align(self, output):
+        """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
+        words = output.split()
+        num_words = len(words)
+        kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
+        kaldi_frame_lengths_p = _ffi.new('int32_t[]', num_words)
+        result = self._lib.get_word_align_plain_nnet3(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
+        if not result:
+            raise KaldiError("get_word_align error")
+        times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
+        lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
+        return zip(words, times, lengths)
+
+    def reset_adaptation_state(self):
+        result = self._lib.reset_adaptation_state_plain_nnet3(self._model)
+        if not result:
+            raise KaldiError("reset_adaptation_state error")
+
+
+########################################################################################################################
+
 class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
@@ -265,7 +363,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
 
         self._model = self._lib.init_agf_nnet3(
-            14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
+            # 14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
+            14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
             mfcc_conf_file, ie_conf_file, model_file,
             nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
             words_file, word_align_lexicon_file or "",
