@@ -4,18 +4,20 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import collections, itertools, math
+import collections
+import itertools
+import math
 
-from six import iteritems, itervalues
 
-class WFST(object):
+class WFST:
     """
     WFST class.
     Notes:
         * Weight (arc & state) is stored as raw probability, then normalized and converted to negative log likelihood/probability before export.
     """
 
-    zero = float('inf')  # Weight of non-final states; a state is final if and only if its weight is not equal to self.zero
+    zero = float(
+        'inf')  # Weight of non-final states; a state is final if and only if its weight is not equal to self.zero
     one = 0.0
     eps = '<eps>'
     eps_disambig = '#0'
@@ -25,7 +27,8 @@ class WFST(object):
         self.clear()
 
     def clear(self):
-        self._arc_table_dict = collections.defaultdict(list)  # { src_state: [[src_state, dst_state, label, olabel, weight], ...] }  # list of its outgoing arcs
+        self._arc_table_dict = collections.defaultdict(
+            list)  # { src_state: [[src_state, dst_state, label, olabel, weight], ...] }  # list of its outgoing arcs
         self._state_table = dict()  # { id: weight }
         self._next_state_id = 0
         self.start_state = self.add_state()
@@ -59,25 +62,25 @@ class WFST(object):
     def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
         text = ''.join("%s %s %s %s %s\n" % (
-                src_state,
-                dst_state,
-                str(ilabel) if ilabel != self.eps else eps_replacement,
-                str(olabel),
-                -math.log(weight) if weight != 0 else self.zero,
-            ) for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
+            src_state,
+            dst_state,
+            str(ilabel) if ilabel != self.eps else eps_replacement,
+            str(olabel),
+            -math.log(weight) if weight != 0 else self.zero,
+        ) for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
         text += ''.join("%s %s\n" % (
-                id,
-                -math.log(weight) if weight != 0 else self.zero,
-            ) for (id, weight) in iteritems(self._state_table) if weight is not self.zero)
+            id,
+            -math.log(weight) if weight != 0 else self.zero,
+        ) for id, weight in self._state_table.items() if weight is not self.zero)
         return text
 
     ####################################################################################################################
 
     def state_is_final(self, state):
-        return (self._state_table[state] != self.zero)
+        return self._state_table[state] != self.zero
 
     def label_is_silent(self, label):
-        return ((label in self.silent_labels) or (label.startswith('#nonterm')))
+        return (label in self.silent_labels) or (label.startswith('#nonterm'))
 
     def normalize_weights(self, stochasticity=False):
         # Note: breakeven 10-13???
@@ -89,7 +92,9 @@ class WFST(object):
                 arc[4] = arc[4] / divisor
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
-        """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
+        """
+        Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals!
+        """
         eps_like_labels = frozenset((self.eps, self.eps_disambig)) | frozenset(eps_like_labels)
         state_queue = collections.deque([path_src_state])
         queued = set(state_queue)
@@ -98,14 +103,16 @@ class WFST(object):
             if state == path_dst_state:
                 return True
             next_states = [dst_state
-                for (src_state, dst_state, label, olabel, weight) in self._arc_table_dict[state]
-                if (label in eps_like_labels) and (dst_state not in queued)]
+                           for (src_state, dst_state, label, olabel, weight) in self._arc_table_dict[state]
+                           if (label in eps_like_labels) and (dst_state not in queued)]
             state_queue.extendleft(next_states)
             queued.update(next_states)
         return False
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
-        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
+        """
+        Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words.
+        """
         queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
@@ -113,17 +120,18 @@ class WFST(object):
             target_word = target_words[target_word_index] if target_word_index < len(target_words) else None
             if (target_word is None) and self.state_is_final(state):
                 return tuple(olabel for olabel in path
-                    if include_silent or not self.label_is_silent(olabel))
+                             if include_silent or not self.label_is_silent(olabel))
             for arc in self._arc_table_dict[state]:
                 src_state, dst_state, ilabel, olabel, weight = arc
                 if (target_word is not None) and (ilabel == target_word):
-                    queue.append((dst_state, path+(olabel,), target_word_index+1))
+                    queue.append((dst_state, path + (olabel,), target_word_index + 1))
                 elif ilabel in wildcard_nonterms:
                     if olabel not in path:
                         path += (olabel,)
                     if target_word is not None:
-                        queue.append((src_state, path+(target_word,), target_word_index+1))  # accept word and stay
-                    queue.append((dst_state, path, target_word_index))  # epsilon transition; already added olabel above or previously
+                        queue.append((src_state, path + (target_word,), target_word_index + 1))  # accept word and stay
+                    queue.append((dst_state, path,
+                                  target_word_index))  # epsilon transition; already added olabel above or previously
                 elif self.label_is_silent(ilabel):
-                    queue.append((dst_state, path+(olabel,), target_word_index))  # epsilon transition
+                    queue.append((dst_state, path + (olabel,), target_word_index))  # epsilon transition
         return False

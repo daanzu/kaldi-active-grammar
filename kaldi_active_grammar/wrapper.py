@@ -8,7 +8,9 @@
 Wrapper classes for Kaldi
 """
 
-import logging, os.path, time
+import logging
+import os.path
+import time
 
 import numpy as np
 from cffi import FFI
@@ -25,12 +27,15 @@ _ffi = FFI()
 ########################################################################################################################
 
 class KaldiDecoderBase(object):
-    """docstring for KaldiDecoderBase"""
+    """
+    docstring for KaldiDecoderBase
+    """
 
     def __init__(self):
         self._reset_decode_time()
 
-    _library_binary = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
+    _library_binary = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so',
+                                                  macos='libkaldi-dragonfly.dylib')[platform])
 
     def _reset_decode_time(self):
         self._decode_time = 0
@@ -49,7 +54,7 @@ class KaldiDecoderBase(object):
             rtf = 1.0 * self._decode_time / self._decode_real_time
             pct = 100.0 * this / self._decode_time
             _log.debug("decoded at %.2f RTF, for %d ms audio, spending %d ms, of which %d ms (%d%%) in finalization",
-                rtf, self._decode_real_time, self._decode_time, this, pct)
+                       rtf, self._decode_real_time, self._decode_time, this, pct)
             _log.debug("    decode times: %s", ' '.join("%d" % t for t in self._decode_times))
             self._reset_decode_time()
 
@@ -66,7 +71,9 @@ class KaldiDecoderBase(object):
 ########################################################################################################################
 
 class KaldiGmmDecoder(KaldiDecoderBase):
-    """docstring for KaldiGmmDecoder"""
+    """
+    docstring for KaldiGmmDecoder
+    """
 
     def __init__(self, graph_dir=None, words_file=None, graph_file=None, model_conf_file=None):
         super(KaldiGmmDecoder, self).__init__()
@@ -100,7 +107,7 @@ class KaldiGmmDecoder(KaldiDecoderBase):
             raise RuntimeError("decoding error")
         return finalize
 
-    def get_output(self, output_max_length=4*1024):
+    def get_output(self, output_max_length=4 * 1024):
         output_p = _ffi.new('char[]', output_max_length)
         likelihood_p = _ffi.new('double *')
         result = self._lib.get_output_gmm(self._model, output_p, output_max_length, likelihood_p)
@@ -112,9 +119,12 @@ class KaldiGmmDecoder(KaldiDecoderBase):
 ########################################################################################################################
 
 class KaldiOtfGmmDecoder(KaldiDecoderBase):
-    """docstring for KaldiOtfGmmDecoder"""
+    """
+    docstring for KaldiOtfGmmDecoder
+    """
 
-    def __init__(self, graph_dir=None, words_file=None, model_conf_file=None, hcl_fst_file=None, grammar_fst_files=None):
+    def __init__(self, graph_dir=None, words_file=None, model_conf_file=None, hcl_fst_file=None,
+                 grammar_fst_files=None):
         super(KaldiOtfGmmDecoder, self).__init__()
         _ffi.cdef("""
             void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
@@ -136,7 +146,8 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
         grammar_fst_filenames_cps = [_ffi.new('char[]', os.path.normpath(f)) for f in grammar_fst_files]
         grammar_fst_filenames_cp = _ffi.new('char*[]', grammar_fst_filenames_cps)
         self._model = self._lib.init_otf_gmm(7.0, 7000, 200, 8.0, words_file, model_conf_file,
-            hcl_fst_file, _ffi.cast('char**', grammar_fst_filenames_cp), len(grammar_fst_files))
+                                             hcl_fst_file, _ffi.cast('char**', grammar_fst_filenames_cp),
+                                             len(grammar_fst_files))
         self.sample_rate = 16000
         self.num_grammars = len(grammar_fst_files)
 
@@ -151,8 +162,10 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
     def decode(self, frames, finalize, grammars_activity=None):
         # grammars_activity = [True] * self.num_grammars
         # grammars_activity = np.random.choice([True, False], len(grammars_activity)).tolist(); print grammars_activity; time.sleep(5)
-        if grammars_activity is None: grammars_activity = []
-        else: _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
+        if grammars_activity is None:
+            grammars_activity = []
+        else:
+            _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
         # if len(grammars_activity) != self.num_grammars:
         #     raise KaldiError("wrong len(grammars_activity)")
 
@@ -163,14 +176,14 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
 
         self._start_decode_time(len(frames))
         result = self._lib.decode_otf_gmm(self._model, self.sample_rate, len(frames), frames_float, finalize,
-            grammars_activity, len(grammars_activity))
+                                          grammars_activity, len(grammars_activity))
         self._stop_decode_time(finalize)
 
         if not result:
             raise KaldiError("decoding error")
         return finalize
 
-    def get_output(self, output_max_length=4*1024):
+    def get_output(self, output_max_length=4 * 1024):
         output_p = _ffi.new('char[]', output_max_length)
         likelihood_p = _ffi.new('double *')
         result = self._lib.get_output_otf_gmm(self._model, output_p, output_max_length, likelihood_p)
@@ -188,14 +201,16 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         super(KaldiNNet3Decoder, self).__init__()
 
     def _convert_ie_conf_file(self, model_dir, old_filename, new_filename, search=True):
-        """ Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration. """
+        """
+        Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration.
+        """
         options_with_path = {
-            '--splice-config':      'conf/splice.conf',
-            '--cmvn-config':        'conf/online_cmvn.conf',
-            '--lda-matrix':         'ivector_extractor/final.mat',
-            '--global-cmvn-stats':  'ivector_extractor/global_cmvn.stats',
-            '--diag-ubm':           'ivector_extractor/final.dubm',
-            '--ivector-extractor':  'ivector_extractor/final.ie',
+            '--splice-config': 'conf/splice.conf',
+            '--cmvn-config': 'conf/online_cmvn.conf',
+            '--lda-matrix': 'ivector_extractor/final.mat',
+            '--global-cmvn-stats': 'ivector_extractor/global_cmvn.stats',
+            '--diag-ubm': 'ivector_extractor/final.dubm',
+            '--ivector-extractor': 'ivector_extractor/final.ie',
         }
         with open(old_filename, 'r') as old_file, open(new_filename, 'wb') as new_file:
             for line in old_file:
@@ -214,9 +229,10 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
 class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, top_fst_file=None, dictation_fst_file=None,
-            save_adaptation_state=True):
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None,
+                 ie_conf_file=None,
+                 model_file=None, top_fst_file=None, dictation_fst_file=None,
+                 save_adaptation_state=True):
         super(KaldiAgfNNet3Decoder, self).__init__()
         _ffi.cdef("""
             void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
@@ -242,7 +258,10 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
         if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
-            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
+                                                                           find_file(model_dir,
+                                                                                     'ivector_extractor.conf'),
+                                                                           os.path.join(tmp_dir,
+                                                                                        'ivector_extractor.conf'))
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
 
         phones_file = find_file(model_dir, 'phones.txt')
@@ -257,7 +276,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
 
         self.words_file = os.path.normpath(words_file)
-        self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
+        self.word_align_lexicon_file = os.path.normpath(
+            word_align_lexicon_file) if word_align_lexicon_file is not None else None
         self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
         self.ie_conf_file = os.path.normpath(ie_conf_file)
         self.model_file = os.path.normpath(model_file)
@@ -278,12 +298,16 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         self.num_channels = 1
         self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
 
-    saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
+    saving_adaptation_state = property(lambda self: self._saving_adaptation_state,
+                                       doc="Whether currently to save updated adaptation state at end of utterance")
+
     @saving_adaptation_state.setter
-    def saving_adaptation_state(self, value): self._saving_adaptation_state = value
+    def saving_adaptation_state(self, value):
+        self._saving_adaptation_state = value
 
     def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
-        if words_file is None: words_file = self.words_file
+        if words_file is None:
+            words_file = self.words_file
         if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
         result = self._lib.load_lexicon_agf_nnet3(self._model, words_file, word_align_lexicon_file)
         if not result:
@@ -322,7 +346,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             # Start of utterance
             _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
             if len(grammars_activity) != self.num_grammars:
-                _log.warn("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
+                _log.warn("wrong len(grammars_activity) = %d != %d = num_grammars" % (
+                len(grammars_activity), self.num_grammars))
                 # raise KaldiError("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
 
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
@@ -332,14 +357,14 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
         self._start_decode_time(len(frames))
         result = self._lib.decode_agf_nnet3(self._model, self.sample_rate, len(frames), frames_float, finalize,
-            grammars_activity, len(grammars_activity), self._saving_adaptation_state)
+                                            grammars_activity, len(grammars_activity), self._saving_adaptation_state)
         self._stop_decode_time(finalize)
 
         if not result:
             raise KaldiError("decoding error")
         return finalize
 
-    def get_output(self, output_max_length=4*1024):
+    def get_output(self, output_max_length=4 * 1024):
         output_p = _ffi.new('char[]', output_max_length)
         likelihood_p = _ffi.new('double *')
         result = self._lib.get_output_agf_nnet3(self._model, output_p, output_max_length, likelihood_p)
@@ -351,7 +376,10 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         return output_str, likelihood
 
     def get_word_align(self, output):
-        """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
+        """
+        Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's
+        length (in bytes).
+        """
         words = output.split()
         num_words = len(words)
         kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)

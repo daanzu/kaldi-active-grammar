@@ -4,15 +4,21 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
-from contextlib import contextmanager
+import collections
 import concurrent.futures
+import logging
+import multiprocessing
+import os
+import re
+import shlex
+import subprocess
+from contextlib import contextmanager
 
-from . import _log, KaldiError
-from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
-from .wfst import WFST
-from .model import Model
 import kaldi_active_grammar.cloud as cloud
+from . import _log, KaldiError
+from .model import Model
+from .utils import debug_timer, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
+from .wfst import WFST
 
 _log = _log.getChild('compiler')
 
@@ -71,7 +77,8 @@ class KaldiRule(object):
     filepath = property(lambda self: os.path.join(self.compiler.tmp_dir, self.filename))
     fst_cache = property(lambda self: self.compiler.fst_cache)
     decoder = property(lambda self: self.compiler.decoder)
-    pending_compile = property(lambda self: (self in self.compiler.compile_queue) or (self in self.compiler.compile_duplicate_filename_queue))
+    pending_compile = property(
+        lambda self: (self in self.compiler.compile_queue) or (self in self.compiler.compile_duplicate_filename_queue))
     pending_load = property(lambda self: self in self.compiler.load_queue)
 
     def compile(self, lazy=False, duplicate=None):
@@ -92,7 +99,8 @@ class KaldiRule(object):
 
         if lazy:
             if not self.pending_compile:
-                if not any(self.filename == kaldi_rule.filename for kaldi_rule in self.compiler.compile_queue if self != kaldi_rule):
+                if not any(self.filename == kaldi_rule.filename for kaldi_rule in self.compiler.compile_queue if
+                           self != kaldi_rule):
                     self.compiler.compile_queue.add(self)
                 else:
                     self.compiler.compile_duplicate_filename_queue.add(self)
@@ -103,9 +111,11 @@ class KaldiRule(object):
     def finish_compile(self):
         # Must be thread-safe!
         assert self._fst_text
-        _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
+        _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (
+        self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
         assert self.compiler.decoding_framework == 'agf'
-        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
+        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text,
+                                         filename=self.filepath)
 
         # elif self.compiler.decoding_framework == 'otf':
         #     with open(self.filepath + '.txt', 'wb') as f:
@@ -131,7 +141,8 @@ class KaldiRule(object):
             self.decoder.reload_grammar_fst(self.id, self.filepath)
         else:
             grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
-            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
+            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (
+            grammar_fst_index, self)
 
         self.loaded = True
         self.has_been_loaded = True
@@ -170,7 +181,8 @@ class KaldiRule(object):
             assert self not in self.compiler.load_queue
         else:
             if self in self.compiler.compile_queue: self.compiler.compile_queue.remove(self)
-            if self in self.compiler.compile_duplicate_filename_queue: self.compiler.compile_duplicate_filename_queue.remove(self)
+            if self in self.compiler.compile_duplicate_filename_queue: self.compiler.compile_duplicate_filename_queue.remove(
+                self)
             if self in self.compiler.load_queue: self.compiler.load_queue.remove(self)
 
         # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
@@ -179,7 +191,7 @@ class KaldiRule(object):
         for kaldi_rule in other_kaldi_rules:
             if kaldi_rule.id > self.id:
                 kaldi_rule.id -= 1
-        self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in other_kaldi_rules }
+        self.compiler.kaldi_rule_by_id_dict = {kaldi_rule.id: kaldi_rule for kaldi_rule in other_kaldi_rules}
 
         self.compiler.free_rule_id()
         self.destroyed = True
@@ -202,9 +214,11 @@ class Compiler(object):
         self.decoder = None
 
         self._num_kaldi_rules = 0
-        self._max_rule_id = load_symbol_table(self.files_dict['phones.txt'])[-1][1] - symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm:rule0')  # FIXME: inaccuracy
+        self._max_rule_id = load_symbol_table(self.files_dict['phones.txt'])[-1][1] - symbol_table_lookup(
+            self.files_dict['phones.txt'], '#nonterm:rule0')  # FIXME: inaccuracy
         self._max_rule_id = 999
-        self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
+        self.nonterminals = tuple(
+            ['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self.compile_queue = set()  # KaldiRule
@@ -248,7 +262,8 @@ class Compiler(object):
     #         p3 = run("{exec_dir}fstarcsort {filename} {filename}")
     #         # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
 
-    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, **kwargs):
+    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None,
+                           **kwargs):
         """
         :param compile: bool whether to compile FST (False if it has already been compiled, like importing dictation FST)
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
@@ -258,16 +273,22 @@ class Compiler(object):
         # FIXME: documentation
         with debug_timer(self._log.debug, "agf graph compilation") as get_time_spent:
             verbose_level = 5 if self._log.isEnabledFor(5) else 0
-            format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
+            format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename,
+                                 verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
-            format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
+            format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset,
+                                 words_nonterm_end=self.model.nonterm_words_offset + 1)
 
             if 1:
                 # Pipeline-style
-                if input_data and input_filename: raise KaldiError("_compile_agf_graph passed both input_data and input_filename")
-                elif input_data: input = ExternalProcess.shell.echo(input_data)
-                elif input_filename: input = input_filename
-                else: raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
+                if input_data and input_filename:
+                    raise KaldiError("_compile_agf_graph passed both input_data and input_filename")
+                elif input_data:
+                    input = ExternalProcess.shell.echo(input_data)
+                elif input_filename:
+                    input = input_filename
+                else:
+                    raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
                 compile_command = input
                 format = ExternalProcess.get_formatter(format_kwargs)
                 args = []
@@ -276,14 +297,18 @@ class Compiler(object):
                 # if True: (ExternalProcess.shell.echo(input_data) | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | (filename+'-G'))()
 
                 if compile:
-                    compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+                    compile_command |= ExternalProcess.fstcompile(
+                        *format('--isymbols={words_txt}', '--osymbols={words_txt}'))
                     args.extend(['--arcsort-grammar'])
                 if nonterm:
                     args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}'))
                     args.extend(format('--grammar-append-nonterm={words_nonterm_end}'))
-                args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
-                    '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
-                compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
+                args.extend(
+                    format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}',
+                           '--verbose={verbose}',
+                           '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
+                compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(
+                    self._log))
                 # compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
                 # if len(input_data) >= 1000000:
                 #     compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
@@ -295,14 +320,17 @@ class Compiler(object):
 
             else:
                 # CLI-style
-                run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(input_filename=filename), **kwargs)
-                if compile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {filename}")
+                run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step",
+                                                           format_kwargs_update=dict(input_filename=filename), **kwargs)
+                if compile: run(
+                    "{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {filename}")
                 # run("cp {input_filename} {filename}-G")
                 if compile: run("{exec_dir}fstarcsort --sort_type=ilabel {input_filename} {filename}")
                 if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {filename}")
                 if nonterm: run("{exec_dir}fstconcat {input_filename} {tmp_dir}nonterm_end.fst {filename}")
                 # run("cp {input_filename} {filename}-G")
-                run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
+                run(
+                    "{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
                     + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
 
     # def _compile_base_fsts(self):
@@ -329,7 +357,7 @@ class Compiler(object):
         for i in range(self._max_rule_id + 1):
             # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i), olabel=WFST.eps)
             # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i))
-            fst.add_arc(state_initial, state_return, '#nonterm:rule'+str(i))
+            fst.add_arc(state_initial, state_return, '#nonterm:rule' + str(i))
         fst.add_arc(state_return, state_final, None, '#nonterm:end')
         kaldi_rule.compile()
         return kaldi_rule
@@ -339,6 +367,7 @@ class Compiler(object):
             return self._dictation_fst_filepath
         self._log.error("cannot find dictation fst: %s", self._dictation_fst_filepath)
         # self._log.error("using universal dictation fst")
+
     dictation_fst_filepath = property(_get_dictation_fst_filepath)
 
     # def _construct_dictation_states(self, fst, src_state, dst_state, number=(1,None), words=None, start_weight=None):
@@ -391,7 +420,8 @@ class Compiler(object):
 
         # Clean out obsolete entries
         self.compile_queue.difference_update([kaldi_rule for kaldi_rule in self.compile_queue if kaldi_rule.compiled])
-        self.compile_duplicate_filename_queue.difference_update([kaldi_rule for kaldi_rule in self.compile_duplicate_filename_queue if kaldi_rule.compiled])
+        self.compile_duplicate_filename_queue.difference_update(
+            [kaldi_rule for kaldi_rule in self.compile_duplicate_filename_queue if kaldi_rule.compiled])
         self.load_queue.difference_update([kaldi_rule for kaldi_rule in self.load_queue if kaldi_rule.loaded])
 
         if self.compile_queue or self.compile_duplicate_filename_queue or self.load_queue:
@@ -456,7 +486,8 @@ class Compiler(object):
         # words = parsed_output.split()
         return words
 
-    cloud_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
+    cloud_dictation_regex = re.compile(
+        r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
@@ -476,11 +507,11 @@ class Compiler(object):
                 words, times, lengths = zip(*word_align)
                 # Find start & end word-index & byte-offset of each cloud dictation span
                 dictation_spans = [{
-                        'index_start': index,
-                        'offset_start': time,
-                        'index_end': words.index('#nonterm:end', index),
-                        'offset_end': times[words.index('#nonterm:end', index)],
-                    }
+                    'index_start': index,
+                    'offset_start': time,
+                    'index_end': words.index('#nonterm:end', index),
+                    'offset_end': times[words.index('#nonterm:end', index)],
+                }
                     for index, (word, time, length) in zip(range(len(word_align)), word_align)
                     if word.startswith('#nonterm:dictation_cloud')]
 
@@ -495,11 +526,12 @@ class Compiler(object):
                 def replace_dictation(matchobj):
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
-                    dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                    dictation_audio = audio_data[dictation_span['offset_start']: dictation_span['offset_end']]
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'cloud dictation call'):
                         cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, **kwargs)
-                        self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                        self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000),
+                                        cloud_text)
                     # with debug_timer(self._log.debug, 'cloud dictation call'):
                     #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search', **kwargs)
                     #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
@@ -554,11 +586,13 @@ class Compiler(object):
 
         return kaldi_rule, words, words_are_dictation, in_dictation
 
+
 ########################################################################################################################
 # Utility functions.
 
 def remove_nonterms_in_words(words):
     return [word for word in words if not word.startswith('#nonterm:')]
+
 
 def remove_nonterms_in_text(text):
     return ' '.join(word for word in text.split() if not word.startswith('#nonterm:'))

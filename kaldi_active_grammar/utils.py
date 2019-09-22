@@ -4,26 +4,32 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import logging, sys, time
-import fnmatch, os
+import fnmatch
 import functools
-import hashlib, json
+import hashlib
+import json
+import logging
+import os
+import sys
 import threading
+import time
 from contextlib import contextmanager
+from io import StringIO
 
-from six import StringIO
+import ush
 
-from . import _log, _name, __version__
-
-
-########################################################################################################################
+from . import _log, _name, __version__, KaldiError
 
 debug_timer_enabled = True
+
 
 class ThreadLocalData(threading.local):
     def __init__(self):
         self._debug_timer_stack = []
+
+
 thread_local_data = ThreadLocalData()
+
 
 @contextmanager
 def debug_timer(log, desc, enabled=True, independent=False):
@@ -36,8 +42,10 @@ def debug_timer(log, desc, enabled=True, independent=False):
     if not independent: _debug_timer_stack.append(start_time)
     spent_time_func = lambda: time.clock() - start_time
     yield spent_time_func
-    if not independent: start_time_adjusted = _debug_timer_stack.pop()
-    else: start_time_adjusted = 0
+    if not independent:
+        start_time_adjusted = _debug_timer_stack.pop()
+    else:
+        start_time_adjusted = 0
     if enabled:
         if debug_timer_enabled:
             log("%s %d ms" % (desc, (time.clock() - start_time_adjusted) * 1000))
@@ -47,19 +55,21 @@ def debug_timer(log, desc, enabled=True, independent=False):
 
 ########################################################################################################################
 
-if sys.platform.startswith('win'): platform = 'windows'
-elif sys.platform.startswith('linux'): platform = 'linux'
-elif sys.platform.startswith('darwin'): platform = 'macos'
-else: raise KaldiError("unknown sys.platform")
+if sys.platform.startswith('win'):
+    platform = 'windows'
+elif sys.platform.startswith('linux'):
+    platform = 'linux'
+elif sys.platform.startswith('darwin'):
+    platform = 'macos'
+else:
+    raise KaldiError("unknown sys.platform")
 
 exec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exec', platform)
 library_extension = dict(windows='.dll', linux='.so', macos='.dylib')[platform]
 subprocess_seperator = '^&' if platform == 'windows' else ';'
 
-import ush
 
-class ExternalProcess(object):
-
+class ExternalProcess:
     shell = ush.Shell(raise_on_error=True)
 
     fstcompile = shell(os.path.join(exec_dir, 'fstcompile'))
@@ -70,7 +80,8 @@ class ExternalProcess(object):
     compile_graph_agf = shell(os.path.join(exec_dir, 'compile-graph-agf'))
     compile_graph_agf_debug = shell(os.path.join(exec_dir, 'compile-graph-agf-debug'))
 
-    make_lexicon_fst = shell(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst_py2.py')])
+    make_lexicon_fst = shell(
+        ['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst_py2.py')])
 
     @staticmethod
     def get_formatter(format_kwargs):
@@ -78,7 +89,7 @@ class ExternalProcess(object):
 
     @staticmethod
     def get_debug_stderr_kwargs(log):
-        return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO()))
+        return dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO())
 
 
 ########################################################################################################################
@@ -96,11 +107,13 @@ def lazy_readonly_property(func):
 
     return _lazyprop
 
+
 class lazy_settable_property(object):
-    '''
+    """
     meant to be used for lazy evaluation of an object attribute.
     property should represent non-mutable data, as it replaces itself.
-    '''
+    """
+
     # From https://stackoverflow.com/questions/3012421/python-memoising-deferred-lookup-property-decorator
 
     def __init__(self, fget):
@@ -122,7 +135,9 @@ def touch(filename):
     with open(filename, 'a'):
         pass
 
+
 symbol_table_lookup_cache = dict()
+
 
 def symbol_table_lookup(filename, input):
     """
@@ -143,9 +158,11 @@ def symbol_table_lookup(filename, input):
                     return tokens[1]
         return None
 
+
 def load_symbol_table(filename):
     with open(filename) as f:
         return [[int(token) if token.isdigit() else token for token in line.strip().split()] for line in f]
+
 
 def find_file(directory, filename):
     matches = []
@@ -159,6 +176,7 @@ def find_file(directory, filename):
     else:
         _log.debug("%s: find_file cannot find file %r in %r", _name, filename, directory)
         return None
+
 
 def is_file_up_to_date(filename, *parent_filenames):
     if not os.path.exists(filename): return False
@@ -191,26 +209,28 @@ class FSTFileCache(object):
             self.cache = None
 
         if (
-            # If could not load cache, or it should be invalidated
-            self.cache is None or invalidate
-            # If version changed
-            or self.cache.get('version') != __version__
-            # If list of dependencies has changed
-            or sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys())
-            # If any of the dependencies files' contents (as stored in cache) has changed
-            or any(not self.file_is_current(path)
-                for (name, path) in dependencies_dict.items()
-                if path and os.path.isfile(path))
-            ):
+                # If could not load cache, or it should be invalidated
+                self.cache is None or invalidate
+                # If version changed
+                or self.cache.get('version') != __version__
+                # If list of dependencies has changed
+                or sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys())
+                # If any of the dependencies files' contents (as stored in cache) has changed
+                or any(not self.file_is_current(path)
+                       for (name, path) in dependencies_dict.items()
+                       if path and os.path.isfile(path))
+        ):
             # Then reset cache
-            _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
-            self.cache = dict({ 'version': unicode(__version__) })
+            _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self,
+                      cache_filename)
+            self.cache = dict({'version': str(__version__)})
             self.cache_is_new = True
             for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add_file(path)
             self.cache['dependencies_list'] = list(dependencies_dict.keys())  # FIXME: convert interal strs to unicode?
-            self.cache['dependencies_hash'] = unicode(self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
+            self.cache['dependencies_hash'] = str(
+                self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
             self.save()
 
     def _load(self):
@@ -228,9 +248,10 @@ class FSTFileCache(object):
         if filename is None:
             _log.info("%s: invalidating all file entries in cache", self)
             # Does not invalidate dependencies!
-            self.cache = { key: self.cache[key]
-                for key in ['version', 'dependencies_list', 'dependencies_hash'] + self.cache['dependencies_list']
-                if key in self.cache }
+            self.cache = {key: self.cache[key]
+                          for key in
+                          ['version', 'dependencies_list', 'dependencies_hash'] + self.cache['dependencies_list']
+                          if key in self.cache}
         elif filename in self.cache:
             _log.info("%s: invalidating cache entry for %r", self, filename)
             del self.cache[filename]
@@ -244,12 +265,12 @@ class FSTFileCache(object):
             with open(filepath, 'rb') as f:
                 data = f.read()
         filename = os.path.basename(filepath)
-        self.cache[filename] = unicode(self.hash_data(data))
+        self.cache[filename] = str(self.hash_data(data))
         self.dirty = True
 
     def add_fst(self, filepath):
         filename = os.path.basename(filepath)
-        self.cache[filename] = unicode(self.cache['dependencies_hash'])
+        self.cache[filename] = str(self.cache['dependencies_hash'])
         self.dirty = True
 
     def contains(self, filename, data):
@@ -270,7 +291,8 @@ class FSTFileCache(object):
     def fst_is_current(self, filepath):
         """Returns bool whether FST file for fst_text in directory path exists and matches current dependencies."""
         filename = os.path.basename(filepath)
-        return (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash']) and os.path.isfile(filepath)
+        return (filename in self.cache) and (
+                self.cache[filename] == self.cache['dependencies_hash']) and os.path.isfile(filepath)
 
     def fst_filename(self, fst_text):
         hash = self.hash_data(fst_text)

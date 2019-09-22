@@ -4,14 +4,13 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import logging, os.path, shutil
+import logging
 
-import six
-
-from . import _log, _name
-from .utils import debug_timer
+from . import _name
 from .compiler import Compiler
 from .model import Model, convert_generic_model_to_agf
+from .utils import debug_timer
+
 
 def main():
     import argparse
@@ -19,7 +18,13 @@ def main():
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('-m', '--model_dir')
     parser.add_argument('-t', '--tmp_dir')
-    parser.add_argument('command', choices=['compile_dictation_graph', 'convert_generic_model_to_agf', 'add_word', 'generate_lexicon_files', 'reset_user_lexicon'])
+    parser.add_argument('command', choices=[
+        'compile_dictation_graph',
+        'convert_generic_model_to_agf',
+        'add_word',
+        'generate_lexicon_files',
+        'reset_user_lexicon'
+    ])
     # FIXME: helps
     # FIXME: subparsers?
     args, unknown = parser.parse_known_args()
@@ -29,8 +34,8 @@ def main():
     if args.command == 'compile_dictation_graph':
         compiler = Compiler(args.model_dir, args.tmp_dir)
         g_filepath = compiler.default_dictation_g_filepath if not unknown else unknown[0]
-        six.print_("Compiling dictation graph from %r..." % g_filepath)
-        with debug_timer(six.print_, "graph compilation", independent=True):
+        print("Compiling dictation graph from %r..." % g_filepath)
+        with debug_timer(print, "graph compilation", independent=True):
             compiler.compile_dictation_fst(g_filepath)
 
     if args.command == 'convert_generic_model_to_agf':
@@ -43,15 +48,16 @@ def main():
         phones = unknown[1].split() if len(unknown) >= 2 else None
         pronunciations = Model(args.model_dir).add_word(word, phones)
         for phones in pronunciations:
-            six.print_("Added word %r: %r" % (word, ' '.join(phones)))
+            print("Added word %r: %r" % (word, ' '.join(phones)))
 
     if args.command == 'generate_lexicon_files':
         Model(args.model_dir).generate_lexicon_files()
-        six.print_("Generated lexicon files")
+        print("Generated lexicon files")
 
     if args.command == 'reset_user_lexicon':
         Model(args.model_dir).reset_user_lexicon()
-        six.print_("Reset user lexicon")
+        print("Reset user lexicon")
+
 
 if __name__ == '__main__':
     main()

@@ -3,8 +3,7 @@
 
 import argparse
 import re
-import os
-import sys
+
 
 def get_args():
     parser = argparse.ArgumentParser(description="""This script augments a phones.txt
@@ -15,13 +14,11 @@ def get_args():
                         help='Filename of input phones.txt file, to be augmented')
     parser.add_argument('nonterminal_symbols_list', type=str,
                         help='Filename of a file containing a list of nonterminal '
-                        'symbols, one per line.  E.g. #nonterm:contact_list')
+                             'symbols, one per line.  E.g. #nonterm:contact_list')
     parser.add_argument('output_phones_txt', type=str, help='Filename of output '
-                        'phones.txt file.  May be the same as input-phones-txt.')
+                                                            'phones.txt file.  May be the same as input-phones-txt.')
     args = parser.parse_args()
     return args
-
-
 
 
 def read_phones_txt(filename):
@@ -47,7 +44,7 @@ def read_phones_txt(filename):
                     highest_numbered_symbol = i
             except:
                 raise RuntimeError("Could not interpret line '{0}' in file '{1}'".format(
-                line, filename))
+                    line, filename))
             if s[0] == '#nonterm_bos':
                 raise RuntimeError("It looks like the symbol table {0} already has nonterminals "
                                    "in it.".format(filename))
@@ -70,6 +67,7 @@ def read_nonterminals(filename):
         raise RuntimeError("Duplicate nonterminal symbols are present in file {0}".format(filename))
     return ans
 
+
 def write_phones_txt(orig_lines, highest_numbered_symbol, nonterminals, filename):
     """Writes updated phones.txt to 'filename'.  'orig_lines' is the original lines
        in the phones.txt file as a list of strings (without the newlines);
@@ -79,10 +77,9 @@ def write_phones_txt(orig_lines, highest_numbered_symbol, nonterminals, filename
         for l in orig_lines:
             print(l, file=f)
         cur_symbol = highest_numbered_symbol + 1
-        for n in ['#nonterm_bos', '#nonterm_begin', '#nonterm_end', '#nonterm_reenter' ] + nonterminals:
+        for n in ['#nonterm_bos', '#nonterm_begin', '#nonterm_end', '#nonterm_reenter'] + nonterminals:
             print("{0} {1}".format(n, cur_symbol), file=f)
             cur_symbol = cur_symbol + 1
-
 
 
 def main():
@@ -93,4 +90,4 @@ def main():
 
 
 if __name__ == '__main__':
-      main()
+    main()

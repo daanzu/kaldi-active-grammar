@@ -5,10 +5,9 @@
 
 # see get_args() below for usage message.
 import argparse
-import os
-import sys
 import math
 import re
+import sys
 
 # The use of latin-1 encoding does not preclude reading utf-8.  latin-1
 # encoding means "treat words as sequences of bytes", and it is compatible
@@ -17,6 +16,7 @@ import re
 # emulate the behavior of python before python3.
 sys.stdout = open(1, 'w', encoding='latin-1', closefd=False)
 sys.stderr = open(2, 'w', encoding='latin-1', closefd=False)
+
 
 def get_args():
     parser = argparse.ArgumentParser(description="""This script creates the
@@ -97,7 +97,7 @@ def read_lexiconp(filename):
                 sys.exit(1)
             if len(prons) == 0:
                 found_empty_prons = True
-            ans.append( (word, pron_prob, prons) )
+            ans.append((word, pron_prob, prons))
             if pron_prob > 1.0:
                 found_large_pronprobs = True
     if found_empty_prons:
@@ -107,7 +107,6 @@ def read_lexiconp(filename):
     if found_large_pronprobs:
         print("{0}: warning: found at least one word with pron-prob >1.0 "
               "in {1}".format(sys.argv[0], filename), file=sys.stderr)
-
 
     if len(ans) == 0:
         print("{0}: error: found no pronunciations in lexicon file {1}".format(
@@ -167,7 +166,6 @@ def write_nonterminal_arcs(start_state, loop_state, next_state,
     print("{state}\t{final_cost}".format(
         state=final_state, final_cost=0.0))
     return next_state
-
 
 
 def write_fst_no_silence(lexicon, nonterminals=None, left_context_phones=None):
@@ -241,10 +239,9 @@ def write_fst_with_silence(lexicon, sil_prob, sil_phone, sil_disambig,
 
     start_state = 0
     loop_state = 1  # words enter and leave from here
-    sil_state = 2   # words terminate here when followed by silence; this state
-                    # has a silence transition to loop_state.
+    sil_state = 2  # words terminate here when followed by silence; this state
+    # has a silence transition to loop_state.
     next_state = 3  # the next un-allocated state, will be incremented as we go.
-
 
     print('{src}\t{dest}\t{phone}\t{word}\t{cost}'.format(
         src=start_state, dest=loop_state,
@@ -265,7 +262,6 @@ def write_fst_with_silence(lexicon, sil_prob, sil_phone, sil_disambig,
         print('{src}\t{dest}\t{phone}\t{word}\t{cost}'.format(
             src=sil_disambig_state, dest=loop_state,
             phone=sil_disambig, word='<eps>', cost=0.0))
-
 
     for (word, pronprob, pron) in lexicon:
         pron_cost = -math.log(pronprob)
@@ -303,8 +299,6 @@ def write_fst_with_silence(lexicon, sil_prob, sil_phone, sil_disambig,
         final_cost=0.0))
 
 
-
-
 def write_words_txt(orig_lines, highest_numbered_symbol, nonterminals, filename):
     """Writes updated words.txt to 'filename'.  'orig_lines' is the original lines
        in the words.txt file as a list of strings (without the newlines);
@@ -314,7 +308,7 @@ def write_words_txt(orig_lines, highest_numbered_symbol, nonterminals, filename)
         for l in orig_lines:
             print(l, file=f)
         cur_symbol = highest_numbered_symbol + 1
-        for n in [ '#nonterm_begin', '#nonterm_end' ] + nonterminals:
+        for n in ['#nonterm_begin', '#nonterm_end'] + nonterminals:
             print("{0} {1}".format(n, cur_symbol), file=f)
             cur_symbol = cur_symbol + 1
 
@@ -335,6 +329,7 @@ def read_nonterminals(filename):
         raise RuntimeError("Duplicate nonterminal symbols are present in file {0}".format(filename))
     return ans
 
+
 def read_left_context_phones(filename):
     """Reads, checks, and returns a list of left-context phones, in text form, one
        per line.  Returns a list of strings, e.g. ['a', 'ah', ..., '#nonterm_bos' ]"""
@@ -344,7 +339,7 @@ def read_left_context_phones(filename):
     whitespace = re.compile("[ \t]+")
     for s in ans:
         if len(whitespace.split(s)) != 1:
-            raise RuntimeError("The file {0} contains an invalid line '{1}'".format(filename, s)   )
+            raise RuntimeError("The file {0} contains an invalid line '{1}'".format(filename, s))
 
     if len(set(ans)) != len(ans):
         raise RuntimeError("Duplicate nonterminal symbols are present in file {0}".format(filename))
@@ -376,9 +371,9 @@ def main(args=None):
         left_context_phones = read_left_context_phones(args.left_context_phones)
 
     if args.sil_prob == 0.0:
-          write_fst_no_silence(lexicon,
-                               nonterminals=nonterminals,
-                               left_context_phones=left_context_phones)
+        write_fst_no_silence(lexicon,
+                             nonterminals=nonterminals,
+                             left_context_phones=left_context_phones)
     else:
         # Do some checking that the options make sense.
         if args.sil_prob < 0.0 or args.sil_prob >= 1.0:
@@ -401,11 +396,10 @@ def main(args=None):
                                left_context_phones=left_context_phones)
 
 
-
 #    (lines, highest_symbol) = read_words_txt(args.input_words_txt)
 #    nonterminals = read_nonterminals(args.nonterminal_symbols_list)
 #    write_words_txt(lines, highest_symbol, nonterminals, args.output_words_txt)
 
 
 if __name__ == '__main__':
-      main()
+    main()

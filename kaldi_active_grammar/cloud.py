@@ -11,6 +11,7 @@ try:
     from google.cloud import speech
     from google.cloud.speech import enums
     from google.cloud.speech import types
+
     gcloud_imported = True
 except ImportError:
     gcloud_imported = False
@@ -19,7 +20,8 @@ from . import _log
 
 _log = _log.getChild('cloud')
 
-class GCloud(object):
+
+class GCloud:
 
     @staticmethod
     def transcribe_data_sync(speech_data, model='default', language_code='en-US'):
@@ -97,7 +99,8 @@ class GCloud(object):
                     # The alternatives are ordered from most likely to least.
                     for alternative in alternatives:
                         print('Confidence: {}'.format(alternative.confidence))
-                        print(u'Transcript: {}'.format(alternative.transcript))
+                        print('Transcript: {}'.format(alternative.transcript))
+
 
 def write_wav(filename, audio_data, sample_rate=16000):
     wf = wave.open(filename, 'wb')
