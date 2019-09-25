@@ -8,7 +8,7 @@ import logging, os.path, shutil
 
 import six
 
-from . import _log, _name
+from . import _name
 from .utils import debug_timer
 from .compiler import Compiler
 from .model import Model, convert_generic_model_to_agf
@@ -19,7 +19,13 @@ def main():
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('-m', '--model_dir')
     parser.add_argument('-t', '--tmp_dir')
-    parser.add_argument('command', choices=['compile_dictation_graph', 'convert_generic_model_to_agf', 'add_word', 'generate_lexicon_files', 'reset_user_lexicon'])
+    parser.add_argument('command', choices=[
+        'compile_dictation_graph',
+        'convert_generic_model_to_agf',
+        'add_word',
+        'generate_lexicon_files',
+        'reset_user_lexicon',
+    ])
     # FIXME: helps
     # FIXME: subparsers?
     args, unknown = parser.parse_known_args()

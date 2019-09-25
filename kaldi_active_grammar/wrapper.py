@@ -10,8 +10,9 @@ Wrapper classes for Kaldi
 
 import logging, os.path, time
 
-import numpy as np
+from six.moves import zip
 from cffi import FFI
+import numpy as np
 
 from . import _log, KaldiError
 from .utils import exec_dir, find_file, platform, symbol_table_lookup
@@ -299,7 +300,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("get_word_align error")
         times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
         lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
-        return zip(words, times, lengths)
+        return list(zip(words, times, lengths))
 
     def reset_adaptation_state(self):
         result = self._lib.reset_adaptation_state_plain_nnet3(self._model)
@@ -460,7 +461,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("get_word_align error")
         times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
         lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
-        return zip(words, times, lengths)
+        return list(zip(words, times, lengths))
 
     def reset_adaptation_state(self):
         result = self._lib.reset_adaptation_state_agf_nnet3(self._model)

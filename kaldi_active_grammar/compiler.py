@@ -8,6 +8,8 @@ import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
 from contextlib import contextmanager
 import concurrent.futures
 
+from six.moves import range, zip
+
 from . import _log, KaldiError
 from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
 from .wfst import WFST
@@ -174,7 +176,7 @@ class KaldiRule(object):
             if self in self.compiler.load_queue: self.compiler.load_queue.remove(self)
 
         # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
-        other_kaldi_rules = self.compiler.kaldi_rule_by_id_dict.values()
+        other_kaldi_rules = list(self.compiler.kaldi_rule_by_id_dict.values())
         other_kaldi_rules.remove(self)
         for kaldi_rule in other_kaldi_rules:
             if kaldi_rule.id > self.id:
@@ -473,7 +475,7 @@ class Compiler(object):
             try:
                 audio_data, word_align = dictation_info_func()
                 self._log.log(5, "cloud_dictation word_align: %s", word_align)
-                words, times, lengths = zip(*word_align)
+                words, times, lengths = list(zip(*word_align))
                 # Find start & end word-index & byte-offset of each cloud dictation span
                 dictation_spans = [{
                         'index_start': index,

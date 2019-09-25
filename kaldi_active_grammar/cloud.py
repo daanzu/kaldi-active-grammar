@@ -4,6 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
+from __future__ import print_function
 import wave
 
 try:

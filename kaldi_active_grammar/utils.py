@@ -11,7 +11,7 @@ import hashlib, json
 import threading
 from contextlib import contextmanager
 
-from six import StringIO
+from six import text_type, StringIO
 
 from . import _log, _name, __version__
 
@@ -204,13 +204,13 @@ class FSTFileCache(object):
             ):
             # Then reset cache
             _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
-            self.cache = dict({ 'version': unicode(__version__) })
+            self.cache = dict({ 'version': text_type(__version__) })
             self.cache_is_new = True
             for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add_file(path)
             self.cache['dependencies_list'] = list(dependencies_dict.keys())  # FIXME: convert interal strs to unicode?
-            self.cache['dependencies_hash'] = unicode(self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
+            self.cache['dependencies_hash'] = text_type(self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
             self.save()
 
     def _load(self):
@@ -244,12 +244,12 @@ class FSTFileCache(object):
             with open(filepath, 'rb') as f:
                 data = f.read()
         filename = os.path.basename(filepath)
-        self.cache[filename] = unicode(self.hash_data(data))
+        self.cache[filename] = text_type(self.hash_data(data))
         self.dirty = True
 
     def add_fst(self, filepath):
         filename = os.path.basename(filepath)
-        self.cache[filename] = unicode(self.cache['dependencies_hash'])
+        self.cache[filename] = text_type(self.cache['dependencies_hash'])
         self.dirty = True
 
     def contains(self, filename, data):
