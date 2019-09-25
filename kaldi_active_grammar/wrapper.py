@@ -9,6 +9,7 @@ Wrapper classes for Kaldi
 """
 
 import logging, os.path, time
+from io import open
 
 from six.moves import zip
 from cffi import FFI
@@ -198,7 +199,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
             '--diag-ubm':           'ivector_extractor/final.dubm',
             '--ivector-extractor':  'ivector_extractor/final.ie',
         }
-        with open(old_filename, 'r') as old_file, open(new_filename, 'wb') as new_file:
+        with open(old_filename, 'r', encoding='utf-8') as old_file, open(new_filename, 'w', encoding='utf-8', newline='\n') as new_file:
             for line in old_file:
                 key, value = line.strip().split('=', 1)
                 if key in options_with_path:

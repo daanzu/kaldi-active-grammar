@@ -10,6 +10,7 @@ import functools
 import hashlib, json
 import threading
 from contextlib import contextmanager
+from io import open
 
 from six import text_type, StringIO
 
@@ -118,8 +119,12 @@ class lazy_settable_property(object):
 
 ########################################################################################################################
 
-def touch(filename):
-    with open(filename, 'a'):
+def touch_file(filename):
+    with open(filename, 'ab'):
+        pass
+
+def clear_file(filename):
+    with open(filename, 'wb'):
         pass
 
 symbol_table_lookup_cache = dict()
@@ -131,7 +136,7 @@ def symbol_table_lookup(filename, input):
     cached = symbol_table_lookup_cache.get((filename, input))
     if cached is not None:
         return cached
-    with open(filename) as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         for line in f:
             tokens = line.strip().split()
             if len(tokens) >= 2 and input == tokens[0]:
@@ -144,7 +149,7 @@ def symbol_table_lookup(filename, input):
         return None
 
 def load_symbol_table(filename):
-    with open(filename) as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         return [[int(token) if token.isdigit() else token for token in line.strip().split()] for line in f]
 
 def find_file(directory, filename):
@@ -214,13 +219,13 @@ class FSTFileCache(object):
             self.save()
 
     def _load(self):
-        with open(self.cache_filename, 'r') as f:
+        with open(self.cache_filename, 'r', encoding='utf-8') as f:
             self.cache = json.load(f)
         self.cache_is_new = False
         self.dirty = False
 
     def save(self):
-        with open(self.cache_filename, 'w') as f:
+        with open(self.cache_filename, 'w', encoding='utf-8') as f:
             json.dump(self.cache, f)
         self.dirty = False
 

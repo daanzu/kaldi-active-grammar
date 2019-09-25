@@ -5,8 +5,9 @@
 #
 
 import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
-from contextlib import contextmanager
 import concurrent.futures
+from contextlib import contextmanager
+from io import open
 
 from six.moves import range, zip
 
@@ -22,7 +23,7 @@ _log = _log.getChild('compiler')
 ########################################################################################################################
 
 def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=None, **kwargs):
-    with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'w') as devnull:
+    with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'wb') as devnull:
         output = None if _log.isEnabledFor(logging.DEBUG) else devnull
         args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
         _log.log(5, "subprocess.check_call(%r)", args)

@@ -5,6 +5,7 @@
 #
 
 import os, re
+from io import open
 
 import requests
 
@@ -150,19 +151,19 @@ class Model(object):
         if not os.path.exists(self.tmp_dir):
             _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
             os.mkdir(self.tmp_dir)
-            utils.touch(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
+            utils.touch_file(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
         if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
 
         version_file = os.path.join(self.model_dir, 'KAG_VERSION')
         if os.path.isfile(version_file):
-            with open(version_file) as f:
+            with open(version_file, 'r', encoding='utf-8') as f:
                 model_version = f.read().strip()
                 if model_version != REQUIRED_MODEL_VERSION:
                     raise KaldiError("invalid model_dir version! please download a compatible model")
         else:
             _log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
-        utils.touch(os.path.join(self.model_dir, 'user_lexicon.txt'))
+        utils.touch_file(os.path.join(self.model_dir, 'user_lexicon.txt'))
         self.files_dict = {
             'exec_dir': self.exec_dir,
             'model_dir': self.model_dir,
@@ -202,7 +203,7 @@ class Model(object):
         _log.debug("loading words from %r", words_file)
         invalid_words = "<eps> !SIL <UNK> #0 <s> </s>".lower().split()
 
-        with open(words_file, 'r') as file:
+        with open(words_file, 'r', encoding='utf-8') as file:
             word_id_pairs = [line.strip().split() for line in file]
         self.lexicon_words = set([word for word, id in word_id_pairs
             if word.lower() not in invalid_words and not word.startswith('#nonterm')])
@@ -211,7 +212,7 @@ class Model(object):
         return self.lexicon_words
 
     def read_user_lexicon(self):
-        with open(self.files_dict['user_lexicon.txt'], 'rb') as file:
+        with open(self.files_dict['user_lexicon.txt'], 'r', encoding='utf-8') as file:
             entries = [line.split() for line in file if line.split()]
             for tokens in entries:
                 # word lowercase
@@ -239,7 +240,7 @@ class Model(object):
 
         entries.append(new_entry)
         lines = [' '.join(tokens) + '\n' for tokens in entries]
-        with open(self.files_dict['user_lexicon.txt'], 'wb') as file:
+        with open(self.files_dict['user_lexicon.txt'], 'w', encoding='utf-8', newline='\n') as file:
             file.writelines(lines)
 
         if lazy_compilation:
@@ -254,7 +255,7 @@ class Model(object):
         max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
 
         entries = []
-        with open(self.files_dict['user_lexicon.txt'], 'rb') as user_lexicon:
+        with open(self.files_dict['user_lexicon.txt'], 'r', encoding='utf-8') as user_lexicon:
             for line in user_lexicon:
                 tokens = line.split()
                 if len(tokens) >= 2:
@@ -265,9 +266,9 @@ class Model(object):
 
         def generate_file(filename, write_func):
             filepath = self.files_dict[filename]
-            with open(base_filepath(filepath), 'rb') as file:
+            with open(base_filepath(filepath), 'r', encoding='utf-8') as file:
                 base_data = file.read()
-            with open(filepath, 'wb') as file:
+            with open(filepath, 'w', encoding='utf-8', newline='\n') as file:
                 file.write(base_data)
                 for word, word_id, phones in entries:
                     file.write(write_func(word, word_id, phones) + '\n')
@@ -300,8 +301,7 @@ class Model(object):
         command()
 
     def reset_user_lexicon(self):
-        with open(self.files_dict['user_lexicon.txt'], 'wb') as user_lexicon:
-            pass
+        utils.clear_file(self.files_dict['user_lexicon.txt'])
         self.generate_lexicon_files()
 
 
@@ -354,7 +354,7 @@ def convert_generic_model_to_agf(src_dir, model_dir):
     # FIXME: leave space for adding words later
     augment_words_txt.write_words_txt(lines, highest_symbol, nonterminals, os.path.join(model_dir, 'words.txt'))
 
-    with open(os.path.join(model_dir, 'nonterminals.txt'), 'wb') as f:
+    with open(os.path.join(model_dir, 'nonterminals.txt'), 'w', encoding='utf-8', newline='\n') as f:
         f.writelines(nonterm + '\n' for nonterm in nonterminals)
 
     # add nonterminals to align_lexicon.int
