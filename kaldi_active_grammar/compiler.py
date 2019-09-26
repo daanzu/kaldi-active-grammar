@@ -82,7 +82,7 @@ class KaldiRule(object):
         if not self._fst_text:
             self.fst.normalize_weights()
             self._fst_text = self.fst.get_fst_text()
-            self.filename = self.fst_cache.fst_filename(self._fst_text)
+            self.filename = self.fst_cache.get_fst_filename(self._fst_text)
 
         if self.fst_cache.fst_is_current(self.filepath):
             # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
@@ -268,7 +268,7 @@ class Compiler(object):
             if 1:
                 # Pipeline-style
                 if input_data and input_filename: raise KaldiError("_compile_agf_graph passed both input_data and input_filename")
-                elif input_data: input = ExternalProcess.shell.echo(input_data)
+                elif input_data: input = ExternalProcess.shell.echo(input_data.encode('utf-8'))
                 elif input_filename: input = input_filename
                 else: raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
                 compile_command = input

@@ -6,7 +6,7 @@
 
 import collections, itertools, math
 
-from six import iteritems, itervalues
+from six import iteritems, itervalues, text_type
 
 class WFST(object):
     """
@@ -17,9 +17,9 @@ class WFST(object):
 
     zero = float('inf')  # Weight of non-final states; a state is final if and only if its weight is not equal to self.zero
     one = 0.0
-    eps = '<eps>'
-    eps_disambig = '#0'
-    silent_labels = frozenset((eps, eps_disambig, '!SIL'))
+    eps = u'<eps>'
+    eps_disambig = u'#0'
+    silent_labels = frozenset((eps, eps_disambig, u'!SIL'))
 
     def __init__(self):
         self.clear()
@@ -38,15 +38,15 @@ class WFST(object):
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
-        id = self._next_state_id
+        id = int(self._next_state_id)
         self._next_state_id += 1
         if weight is None:
             weight = 1 if final else 0
         else:
             assert final
-        self._state_table[id] = weight
+        self._state_table[id] = float(weight)
         if initial:
-            self.add_arc(self.start_state, id, self.eps)
+            self.add_arc(self.start_state, id, None)
         return id
 
     def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
@@ -54,18 +54,19 @@ class WFST(object):
         if label is None: label = self.eps
         if olabel is None: olabel = label
         weight = 1 if weight is None else weight
-        self._arc_table_dict[src_state].append([src_state, dst_state, label, olabel, weight])
+        self._arc_table_dict[src_state].append(
+            [int(src_state), int(dst_state), text_type(label), text_type(olabel), float(weight)])
 
     def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
-        text = ''.join("%s %s %s %s %s\n" % (
+        text = u''.join("%d %d %s %s %f\n" % (
                 src_state,
                 dst_state,
-                str(ilabel) if ilabel != self.eps else eps_replacement,
-                str(olabel),
+                ilabel if ilabel != self.eps else eps_replacement,
+                olabel,
                 -math.log(weight) if weight != 0 else self.zero,
             ) for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
-        text += ''.join("%s %s\n" % (
+        text += u''.join("%d %f\n" % (
                 id,
                 -math.log(weight) if weight != 0 else self.zero,
             ) for (id, weight) in iteritems(self._state_table) if weight is not self.zero)

@@ -12,7 +12,8 @@ import threading
 from contextlib import contextmanager
 from io import open
 
-from six import text_type, StringIO
+import six
+from six import text_type
 
 from . import _log, _name, __version__
 
@@ -79,7 +80,7 @@ class ExternalProcess(object):
 
     @staticmethod
     def get_debug_stderr_kwargs(log):
-        return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=StringIO()))
+        return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=six.StringIO()))
 
 
 ########################################################################################################################
@@ -215,17 +216,17 @@ class FSTFileCache(object):
                 if path and os.path.isfile(path):
                     self.add_file(path)
             self.cache['dependencies_list'] = list(dependencies_dict.keys())  # FIXME: convert interal strs to unicode?
-            self.cache['dependencies_hash'] = text_type(self.hash_data([self.cache.get(path) for path in sorted(dependencies_dict.values())]))
+            self.cache['dependencies_hash'] = text_type(self.hash_data(text_type([self.cache.get(path) for path in sorted(dependencies_dict.values())])))
             self.save()
 
     def _load(self):
-        with open(self.cache_filename, 'r', encoding='utf-8') as f:
+        with open(self.cache_filename, 'rb') as f:
             self.cache = json.load(f)
         self.cache_is_new = False
         self.dirty = False
 
     def save(self):
-        with open(self.cache_filename, 'w', encoding='utf-8') as f:
+        with open(self.cache_filename, 'wb') as f:
             json.dump(self.cache, f)
         self.dirty = False
 
@@ -242,7 +243,9 @@ class FSTFileCache(object):
             self.dirty = True
 
     def hash_data(self, data):
-        return hashlib.sha1(bytes(data)).hexdigest()
+        if isinstance(data, text_type):
+            data = data.encode('utf-8')
+        return hashlib.sha1(data).hexdigest()
 
     def add_file(self, filepath, data=None):
         if data is None:
@@ -277,6 +280,6 @@ class FSTFileCache(object):
         filename = os.path.basename(filepath)
         return (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash']) and os.path.isfile(filepath)
 
-    def fst_filename(self, fst_text):
+    def get_fst_filename(self, fst_text):
         hash = self.hash_data(fst_text)
         return hash + '.fst'

@@ -7,6 +7,7 @@
 import os, re
 from io import open
 
+from six import text_type
 import requests
 
 try:
@@ -365,7 +366,7 @@ def convert_generic_model_to_agf(src_dir, model_dir):
 ########################################################################################################################
 
 def str_space_join(iterable):
-    return ' '.join(str(elem) for elem in iterable)
+    return u' '.join(text_type(elem) for elem in iterable)
 
 def base_filepath(filepath):
     root, ext = os.path.splitext(filepath)
