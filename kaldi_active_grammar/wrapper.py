@@ -23,6 +23,11 @@ _log_library = _log.getChild('library')
 
 _ffi = FFI()
 
+def e(text):
+    return text.encode('utf-8')
+def d(binary):
+    return binary.decode('utf-8')
+
 
 ########################################################################################################################
 
@@ -249,10 +254,9 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
 
         self._model = self._lib.init_plain_nnet3(
-            # 14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
             14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            mfcc_conf_file, ie_conf_file, model_file,
-            words_file, word_align_lexicon_file or "", fst_file,
+            e(mfcc_conf_file), e(ie_conf_file), e(model_file),
+            e(words_file), e(word_align_lexicon_file or u''), e(fst_file),
             verbosity)
         self._saving_adaptation_state = save_adaptation_state
 
@@ -285,7 +289,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         result = self._lib.get_output_plain_nnet3(self._model, output_p, output_max_length, likelihood_p)
         if not result:
             raise KaldiError("get_output error")
-        output_str = _ffi.string(output_p)
+        output_str = d(_ffi.string(output_p))
         likelihood = likelihood_p[0]
         # _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
         return output_str, likelihood
@@ -365,12 +369,11 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
 
         self._model = self._lib.init_agf_nnet3(
-            # 14.0, 7000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
             14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            mfcc_conf_file, ie_conf_file, model_file,
+            e(mfcc_conf_file), e(ie_conf_file), e(model_file),
             nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
-            words_file, word_align_lexicon_file or "",
-            top_fst_file, dictation_fst_file or "",
+            e(words_file), e(word_align_lexicon_file or u''),
+            e(top_fst_file), e(dictation_fst_file or u''),
             verbosity)
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
@@ -386,14 +389,14 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
         if words_file is None: words_file = self.words_file
         if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
-        result = self._lib.load_lexicon_agf_nnet3(self._model, words_file, word_align_lexicon_file)
+        result = self._lib.load_lexicon_agf_nnet3(self._model, e(words_file), e(word_align_lexicon_file))
         if not result:
             raise KaldiError("error loading lexicon (%r, %r)" % (words_file, word_align_lexicon_file))
 
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
         _log.debug("%s: adding grammar_fst_file: %r", self, grammar_fst_file)
-        grammar_fst_index = self._lib.add_grammar_fst_agf_nnet3(self._model, grammar_fst_file)
+        grammar_fst_index = self._lib.add_grammar_fst_agf_nnet3(self._model, e(grammar_fst_file))
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst_file)
         assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
@@ -402,7 +405,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def reload_grammar_fst(self, grammar_fst_index, grammar_fst_file):
         _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
-        result = self._lib.reload_grammar_fst_agf_nnet3(self._model, grammar_fst_index, grammar_fst_file)
+        result = self._lib.reload_grammar_fst_agf_nnet3(self._model, grammar_fst_index, e(grammar_fst_file))
         if not result:
             raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
 
@@ -446,7 +449,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         result = self._lib.get_output_agf_nnet3(self._model, output_p, output_max_length, likelihood_p)
         if not result:
             raise KaldiError("get_output error")
-        output_str = _ffi.string(output_p)
+        output_str = d(_ffi.string(output_p))
         likelihood = likelihood_p[0]
         # _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
         return output_str, likelihood

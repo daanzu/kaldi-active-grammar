@@ -22,18 +22,6 @@ _log = _log.getChild('compiler')
 
 ########################################################################################################################
 
-def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=None, **kwargs):
-    with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'wb') as devnull:
-        output = None if _log.isEnabledFor(logging.DEBUG) else devnull
-        args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
-        _log.log(5, "subprocess.check_call(%r)", args)
-        subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
-        if format_kwargs_update:
-            format_kwargs.update(format_kwargs_update)
-
-
-########################################################################################################################
-
 class KaldiRule(object):
 
     def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
@@ -438,25 +426,14 @@ class Compiler(object):
 
     def parse_output_for_rule(self, kaldi_rule, output):
         """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
-        # try:
-        #     parse_results = kaldi_rule.matcher.parseString(output, parseAll=True)
-        # except pp.ParseException:
-        #     return None
-        # parsed_output = ' '.join(parse_results)
-        # match = kaldi_rule.matcher.match(output)
-        # if not match:
         labels = kaldi_rule.fst.does_match(output.split(), wildcard_nonterms=self.wildcard_nonterms)
         self._log.log(5, "parse_output_for_rule(%s, %r) got %r", kaldi_rule, output, labels)
         if labels is False:
             return None
-        # parsed_output = match.group()
         words = [label for label in labels if not label.startswith('#nonterm:')]
         parsed_output = ' '.join(words)
         if parsed_output.lower() != output:
             self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
-        # kaldi_rule_name = str(parse_results.getName())
-        # assert kaldi_rule_name == kaldi_rule.name
-        # words = parsed_output.split()
         return words
 
     cloud_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
@@ -565,3 +542,12 @@ def remove_nonterms_in_words(words):
 
 def remove_nonterms_in_text(text):
     return ' '.join(word for word in text.split() if not word.startswith('#nonterm:'))
+
+def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=None, **kwargs):
+    with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'wb') as devnull:
+        output = None if _log.isEnabledFor(logging.DEBUG) else devnull
+        args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
+        _log.log(5, "subprocess.check_call(%r)", args)
+        subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
+        if format_kwargs_update:
+            format_kwargs.update(format_kwargs_update)

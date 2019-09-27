@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from io import open
 
 import six
-from six import text_type
+from six import PY2, binary_type, text_type
 
 from . import _log, _name, __version__
 
@@ -72,7 +72,7 @@ class ExternalProcess(object):
     compile_graph_agf = shell(os.path.join(exec_dir, 'compile-graph-agf'))
     compile_graph_agf_debug = shell(os.path.join(exec_dir, 'compile-graph-agf-debug'))
 
-    make_lexicon_fst = shell(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst_py2.py')])
+    make_lexicon_fst = shell(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst%s.py' % ('_py2' if PY2 else ''))])
 
     @staticmethod
     def get_formatter(format_kwargs):
@@ -80,7 +80,7 @@ class ExternalProcess(object):
 
     @staticmethod
     def get_debug_stderr_kwargs(log):
-        return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=six.StringIO()))
+        return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=six.BytesIO()))
 
 
 ########################################################################################################################
@@ -215,19 +215,20 @@ class FSTFileCache(object):
             for (name, path) in dependencies_dict.items():
                 if path and os.path.isfile(path):
                     self.add_file(path)
-            self.cache['dependencies_list'] = list(dependencies_dict.keys())  # FIXME: convert interal strs to unicode?
-            self.cache['dependencies_hash'] = text_type(self.hash_data(text_type([self.cache.get(path) for path in sorted(dependencies_dict.values())])))
+            self.cache['dependencies_list'] = sorted(dependencies_dict.keys())  # list
+            self.cache['dependencies_hash'] = self.hash_data([self.cache.get(path) for (key, path) in sorted(dependencies_dict.items())])
             self.save()
 
     def _load(self):
-        with open(self.cache_filename, 'rb') as f:
+        with open(self.cache_filename, 'r', encoding='utf-8') as f:
             self.cache = json.load(f)
         self.cache_is_new = False
         self.dirty = False
 
     def save(self):
-        with open(self.cache_filename, 'wb') as f:
-            json.dump(self.cache, f)
+        with open(self.cache_filename, 'w', encoding='utf-8') as f:
+            # https://stackoverflow.com/a/14870531
+            f.write(json.dumps(self.cache, ensure_ascii=False))
         self.dirty = False
 
     def invalidate(self, filename=None):
@@ -243,21 +244,23 @@ class FSTFileCache(object):
             self.dirty = True
 
     def hash_data(self, data):
-        if isinstance(data, text_type):
+        if not isinstance(data, binary_type):
+            if not isinstance(data, text_type):
+                data = text_type(data)
             data = data.encode('utf-8')
-        return hashlib.sha1(data).hexdigest()
+        return text_type(hashlib.sha1(data).hexdigest())
 
     def add_file(self, filepath, data=None):
         if data is None:
             with open(filepath, 'rb') as f:
                 data = f.read()
         filename = os.path.basename(filepath)
-        self.cache[filename] = text_type(self.hash_data(data))
+        self.cache[filename] = self.hash_data(data)
         self.dirty = True
 
     def add_fst(self, filepath):
         filename = os.path.basename(filepath)
-        self.cache[filename] = text_type(self.cache['dependencies_hash'])
+        self.cache[filename] = self.cache['dependencies_hash']
         self.dirty = True
 
     def contains(self, filename, data):
