@@ -180,7 +180,7 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, cloud_dictation=None, cloud_dictation_lang='en-US'):
+    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US'):
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'
@@ -188,7 +188,7 @@ class Compiler(object):
         self._log = _log
 
         self.model = Model(model_dir, tmp_dir)
-        self.cloud_dictation = cloud_dictation
+        self.cloud_dictation = alternative_dictation
         self.cloud_dictation_lang = cloud_dictation_lang
         self.decoder = None
 
