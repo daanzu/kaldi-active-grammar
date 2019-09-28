@@ -75,15 +75,19 @@ class KaldiDecoderBase(object):
 class KaldiGmmDecoder(KaldiDecoderBase):
     """docstring for KaldiGmmDecoder"""
 
-    def __init__(self, graph_dir=None, words_file=None, graph_file=None, model_conf_file=None):
-        super(KaldiGmmDecoder, self).__init__()
+    @classmethod
+    def _init_ffi():
         _ffi.cdef("""
             void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
                 char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
             bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize);
             bool get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
         """)
-        self._lib = _ffi.dlopen(self._library_binary)
+        return _ffi.dlopen(cls._library_binary)
+
+    def __init__(self, graph_dir=None, words_file=None, graph_file=None, model_conf_file=None):
+        super(KaldiGmmDecoder, self).__init__()
+        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None and graph_dir is not None: words_file = graph_dir + r"graph\words.txt"
         if graph_file is None and graph_dir is not None: graph_file = graph_dir + r"graph\HCLG.fst"
@@ -121,8 +125,8 @@ class KaldiGmmDecoder(KaldiDecoderBase):
 class KaldiOtfGmmDecoder(KaldiDecoderBase):
     """docstring for KaldiOtfGmmDecoder"""
 
-    def __init__(self, graph_dir=None, words_file=None, model_conf_file=None, hcl_fst_file=None, grammar_fst_files=None):
-        super(KaldiOtfGmmDecoder, self).__init__()
+    @classmethod
+    def _init_ffi():
         _ffi.cdef("""
             void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
                 char* word_syms_filename_cp, char* config_cp,
@@ -132,7 +136,11 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
                 bool* grammars_activity, int32_t grammars_activity_size);
             bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
         """)
-        self._lib = _ffi.dlopen(self._library_binary)
+        return _ffi.dlopen(cls._library_binary)
+
+    def __init__(self, graph_dir=None, words_file=None, model_conf_file=None, hcl_fst_file=None, grammar_fst_files=None):
+        super(KaldiOtfGmmDecoder, self).__init__()
+        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None and graph_dir is not None: words_file = graph_dir + r"graph\words.txt"
         if hcl_fst_file is None and graph_dir is not None: hcl_fst_file = graph_dir + r"graph\HCLr.fst"
@@ -221,9 +229,8 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
 class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiPlainNNet3Decoder"""
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, fst_file=None, save_adaptation_state=True):
-        super(KaldiPlainNNet3Decoder, self).__init__()
+    @classmethod
+    def _init_ffi():
         _ffi.cdef("""
             void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
@@ -234,7 +241,12 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
             bool reset_adaptation_state_plain_nnet3(void* model_vp);
         """)
-        self._lib = _ffi.dlopen(self._library_binary)
+        return _ffi.dlopen(cls._library_binary)
+
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
+            model_file=None, fst_file=None, save_adaptation_state=True):
+        super(KaldiPlainNNet3Decoder, self).__init__()
+        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
@@ -318,10 +330,8 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, top_fst_file=None, dictation_fst_file=None,
-            save_adaptation_state=True):
-        super(KaldiAgfNNet3Decoder, self).__init__()
+    @classmethod
+    def _init_ffi(cls):
         _ffi.cdef("""
             void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
@@ -339,7 +349,13 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
             bool reset_adaptation_state_agf_nnet3(void* model_vp);
         """)
-        self._lib = _ffi.dlopen(self._library_binary)
+        return _ffi.dlopen(cls._library_binary)
+
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
+            model_file=None, top_fst_file=None, dictation_fst_file=None,
+            save_adaptation_state=True):
+        super(KaldiAgfNNet3Decoder, self).__init__()
+        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
