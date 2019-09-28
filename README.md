@@ -55,7 +55,7 @@ Otherwise...
 ### Setup
 
 **Requirements**:
-* Python 2.7 (3.x support planned); *64-bit required!*
+* Python 2.7 or 3.4+; *64-bit required!*
     * Microphone support provided by [pyaudio](https://pypi.org/project/PyAudio/) package
 * OS: *Linux or Windows*; macOS planned if there is interest
 * Only supports Kaldi left-biphone models, specifically *nnet3 chain* models, with specific modifications
