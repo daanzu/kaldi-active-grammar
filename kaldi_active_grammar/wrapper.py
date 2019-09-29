@@ -76,7 +76,7 @@ class KaldiGmmDecoder(KaldiDecoderBase):
     """docstring for KaldiGmmDecoder"""
 
     @classmethod
-    def _init_ffi():
+    def _init_ffi(cls):
         _ffi.cdef("""
             void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
                 char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
@@ -126,7 +126,7 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
     """docstring for KaldiOtfGmmDecoder"""
 
     @classmethod
-    def _init_ffi():
+    def _init_ffi(cls):
         _ffi.cdef("""
             void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
                 char* word_syms_filename_cp, char* config_cp,
@@ -230,7 +230,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiPlainNNet3Decoder"""
 
     @classmethod
-    def _init_ffi():
+    def _init_ffi(cls):
         _ffi.cdef("""
             void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
