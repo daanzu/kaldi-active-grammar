@@ -72,7 +72,7 @@ class ExternalProcess(object):
     compile_graph_agf = shell(os.path.join(exec_dir, 'compile-graph-agf'))
     compile_graph_agf_debug = shell(os.path.join(exec_dir, 'compile-graph-agf-debug'))
 
-    make_lexicon_fst = shell(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst%s.py' % ('_py2' if PY2 else ''))])
+    make_lexicon_fst = shell([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst%s.py' % ('_py2' if PY2 else ''))])
 
     @staticmethod
     def get_formatter(format_kwargs):
