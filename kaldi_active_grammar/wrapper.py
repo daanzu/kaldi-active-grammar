@@ -25,8 +25,10 @@ _ffi = FFI()
 _c_source_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')
 
 def en(text):
+    """ For C interop: encode unicode text -> binary utf-8. """
     return text.encode('utf-8')
 def de(binary):
+    """ For C interop: decode binary utf-8 -> unicode text. """
     return binary.decode('utf-8')
 
 
@@ -36,13 +38,21 @@ class KaldiDecoderBase(object):
     """docstring for KaldiDecoderBase"""
 
     def __init__(self):
+        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
+
         self.sample_rate = 16000
         self.num_channels = 1
         self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
 
         self._reset_decode_time()
 
-    _library_binary = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
+    _library_binary_path = os.path.join(exec_dir,
+        dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
+
+    @classmethod
+    def _init_ffi(cls):
+        _ffi.cdef(_c_source_regex.sub(' ', cls._library_header_text))
+        return _ffi.dlopen(cls._library_binary_path)
 
     def _reset_decode_time(self):
         self._decode_time = 0
@@ -80,19 +90,15 @@ class KaldiDecoderBase(object):
 class KaldiGmmDecoder(KaldiDecoderBase):
     """docstring for KaldiGmmDecoder"""
 
-    @classmethod
-    def _init_ffi(cls):
-        _ffi.cdef(_c_source_regex.sub(' ', """
-            void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
-                char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
-            bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize);
-            bool get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
-        """))
-        return _ffi.dlopen(cls._library_binary)
+    _library_header_text = """
+        void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
+            char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
+        bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize);
+        bool get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
+    """
 
     def __init__(self, graph_dir=None, words_file=None, graph_file=None, model_conf_file=None):
         super(KaldiGmmDecoder, self).__init__()
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None and graph_dir is not None: words_file = graph_dir + r"graph\words.txt"
         if graph_file is None and graph_dir is not None: graph_file = graph_dir + r"graph\HCLG.fst"
@@ -130,22 +136,18 @@ class KaldiGmmDecoder(KaldiDecoderBase):
 class KaldiOtfGmmDecoder(KaldiDecoderBase):
     """docstring for KaldiOtfGmmDecoder"""
 
-    @classmethod
-    def _init_ffi(cls):
-        _ffi.cdef(_c_source_regex.sub(' ', """
-            void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
-                char* word_syms_filename_cp, char* config_cp,
-                char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_len);
-            bool add_grammar_fst_otf_gmm(void* model_vp, char* grammar_fst_filename_cp);
-            bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-                bool* grammars_activity, int32_t grammars_activity_size);
-            bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
-        """))
-        return _ffi.dlopen(cls._library_binary)
+    _library_header_text = """
+        void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
+            char* word_syms_filename_cp, char* config_cp,
+            char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_len);
+        bool add_grammar_fst_otf_gmm(void* model_vp, char* grammar_fst_filename_cp);
+        bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+            bool* grammars_activity, int32_t grammars_activity_size);
+        bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
+    """
 
     def __init__(self, graph_dir=None, words_file=None, model_conf_file=None, hcl_fst_file=None, grammar_fst_files=None):
         super(KaldiOtfGmmDecoder, self).__init__()
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None and graph_dir is not None: words_file = graph_dir + r"graph\words.txt"
         if hcl_fst_file is None and graph_dir is not None: hcl_fst_file = graph_dir + r"graph\HCLr.fst"
@@ -234,24 +236,20 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
 class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiPlainNNet3Decoder"""
 
-    @classmethod
-    def _init_ffi(cls):
-        _ffi.cdef(_c_source_regex.sub(' ', """
-            void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-                char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
-                char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
-                int32_t verbosity);
-            bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state);
-            bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
-            bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-            bool reset_adaptation_state_plain_nnet3(void* model_vp);
-        """))
-        return _ffi.dlopen(cls._library_binary)
+    _library_header_text = """
+        void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
+            char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+            char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
+            int32_t verbosity);
+        bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state);
+        bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+        bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+        bool reset_adaptation_state_plain_nnet3(void* model_vp);
+    """
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
             model_file=None, fst_file=None, save_adaptation_state=True):
         super(KaldiPlainNNet3Decoder, self).__init__()
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
@@ -331,33 +329,29 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
-    @classmethod
-    def _init_ffi(cls):
-        _ffi.cdef(_c_source_regex.sub(' ', """
-            extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-                char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
-                int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
-                char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
-                char* top_fst_filename_cp, char* dictation_fst_filename_cp,
-                int32_t verbosity);
-            extern "C" DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
-            extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
-            extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
-            extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
-            extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-                bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-            extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
-            extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-            extern "C" DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
-            extern "C" DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
-        """))
-        return _ffi.dlopen(cls._library_binary)
+    _library_header_text = """
+        extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
+            char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+            int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
+            char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
+            char* top_fst_filename_cp, char* dictation_fst_filename_cp,
+            int32_t verbosity);
+        extern "C" DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
+        extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+        extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
+        extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
+        extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+            bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
+        extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+        extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+        extern "C" DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
+        extern "C" DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
+    """
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
             model_file=None, top_fst_file=None, dictation_fst_file=None,
             save_adaptation_state=True):
         super(KaldiAgfNNet3Decoder, self).__init__()
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
