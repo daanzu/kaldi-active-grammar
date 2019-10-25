@@ -64,18 +64,19 @@ If you have trouble downloading, try using `wget --continue`.
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 
 
-v0.7.1: Partial Decoding, Parallel Compilation, & Various Optimizations for 15-50% Speedup
+v1.0.0: Faster Loading, Python3, Grammar/Rule Weights, and more
 
 This should be included the next dragonfly update, or you can try a self-contained distribution available below.
 
 ### Notes
 
-* **Partial Decoding**: support for having **separate Voice Activity Detection timeout values** based on whether the current utterance is complex (dictation) or not.
-* **Parallel Compilation**: when compiling grammars/rules that are not cached, multiple can be compiled at once (up to your core count).
-    * Example: loading Caster without cache is ~40% faster (in addition to optimizations below).
-* **Various Optimizations**: loading even while cached sped up 15%.
-* Refactored temporary/cache file handling
-* Various bug fixes
+* **Direct Parsing**: parse recognitions directly on the FST, removing the (slow) `pyparsing` dependency.
+    * Caster example: Loading is now **~50%** faster when cached, and the Kaldi backend accounts for only ~15% of loading time.
+* **Python3**: both python 2 and 3 should be fully supported now.
+    * **Unicode**: this should also fix unicode issues in various places in both python2/3.
+* **Grammar/Rule Weights**: can specify weight, where grammars/rules with higher weight value are more likely to be recognized, compared to their peers, for an ambiguous recognition.
+* **Generalized Alternative Dictation**: the cloud dictation feature has been generalized to make it easier to add other alternatives in the future.
+* Various bug fixes & optimizations
 
 ### Artifacts
 
