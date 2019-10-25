@@ -475,7 +475,7 @@ class Compiler(object):
                 def replace_dictation(matchobj):
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
-                    dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                    dictation_audio = audio_data[int(dictation_span['offset_start']) : int(dictation_span['offset_end'])]
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'cloud dictation call'):
                         cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, **kwargs)
