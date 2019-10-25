@@ -8,7 +8,7 @@
 Wrapper classes for Kaldi
 """
 
-import logging, os.path, time
+import logging, os.path, re, time
 from io import open
 
 from six.moves import zip
@@ -22,6 +22,7 @@ _log = _log.getChild('wrapper')
 _log_library = _log.getChild('library')
 
 _ffi = FFI()
+_c_source_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')
 
 def en(text):
     return text.encode('utf-8')
@@ -81,12 +82,12 @@ class KaldiGmmDecoder(KaldiDecoderBase):
 
     @classmethod
     def _init_ffi(cls):
-        _ffi.cdef("""
+        _ffi.cdef(_c_source_regex.sub(' ', """
             void* init_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
                 char* word_syms_filename_cp, char* fst_in_str_cp, char* config_cp);
             bool decode_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize);
             bool get_output_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
-        """)
+        """))
         return _ffi.dlopen(cls._library_binary)
 
     def __init__(self, graph_dir=None, words_file=None, graph_file=None, model_conf_file=None):
@@ -131,7 +132,7 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
 
     @classmethod
     def _init_ffi(cls):
-        _ffi.cdef("""
+        _ffi.cdef(_c_source_regex.sub(' ', """
             void* init_otf_gmm(float beam, int32_t max_active, int32_t min_active, float lattice_beam,
                 char* word_syms_filename_cp, char* config_cp,
                 char* hcl_fst_filename_cp, char** grammar_fst_filenames_cp, int32_t grammar_fst_filenames_len);
@@ -139,7 +140,7 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
             bool decode_otf_gmm(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
                 bool* grammars_activity, int32_t grammars_activity_size);
             bool get_output_otf_gmm(void* model_vp, char* output, int32_t output_length, double* likelihood_p);
-        """)
+        """))
         return _ffi.dlopen(cls._library_binary)
 
     def __init__(self, graph_dir=None, words_file=None, model_conf_file=None, hcl_fst_file=None, grammar_fst_files=None):
@@ -235,7 +236,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 
     @classmethod
     def _init_ffi(cls):
-        _ffi.cdef("""
+        _ffi.cdef(_c_source_regex.sub(' ', """
             void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
                 char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
@@ -244,7 +245,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
             bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
             bool reset_adaptation_state_plain_nnet3(void* model_vp);
-        """)
+        """))
         return _ffi.dlopen(cls._library_binary)
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
@@ -332,23 +333,24 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     @classmethod
     def _init_ffi(cls):
-        _ffi.cdef("""
-            void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
+        _ffi.cdef(_c_source_regex.sub(' ', """
+            extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
                 char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
                 int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
                 char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
                 char* top_fst_filename_cp, char* dictation_fst_filename_cp,
                 int32_t verbosity);
-            bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
-            int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
-            bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
-            bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
-            bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+            extern "C" DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
+            extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+            extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
+            extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
+            extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
                 bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-            bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
-            bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-            bool reset_adaptation_state_agf_nnet3(void* model_vp);
-        """)
+            extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+            extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+            extern "C" DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
+            extern "C" DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
+        """))
         return _ffi.dlopen(cls._library_binary)
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
