@@ -461,7 +461,7 @@ class Compiler(object):
                         'index_end': words.index('#nonterm:end', index),
                         'offset_end': times[words.index('#nonterm:end', index)],
                     }
-                    for index, (word, time, length) in zip(range(len(word_align)), word_align)
+                    for index, (word, time, length) in enumerate(word_align)
                     if word.startswith('#nonterm:dictation_cloud')]
 
                 # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
@@ -475,11 +475,11 @@ class Compiler(object):
                 def replace_dictation(matchobj):
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
-                    dictation_audio = audio_data[int(dictation_span['offset_start']) : int(dictation_span['offset_end'])]
+                    dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'cloud dictation call'):
                         cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, **kwargs)
-                        self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
+                        self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)  # FIXME: hardcoded sample_rate!
                     # with debug_timer(self._log.debug, 'cloud dictation call'):
                     #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search', **kwargs)
                     #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)

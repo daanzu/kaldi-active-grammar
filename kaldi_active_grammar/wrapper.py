@@ -35,6 +35,10 @@ class KaldiDecoderBase(object):
     """docstring for KaldiDecoderBase"""
 
     def __init__(self):
+        self.sample_rate = 16000
+        self.num_channels = 1
+        self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
+
         self._reset_decode_time()
 
     _library_binary = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
@@ -63,11 +67,11 @@ class KaldiDecoderBase(object):
     def kaldi_frame_num_to_audio_bytes(self, kaldi_frame_num):
         kaldi_frame_length_ms = 30
         sample_size_bytes = 2 * self.num_channels
-        return kaldi_frame_num * kaldi_frame_length_ms * self.sample_rate / 1000 * sample_size_bytes
+        return int(kaldi_frame_num * kaldi_frame_length_ms * self.sample_rate / 1000 * sample_size_bytes)
 
     def audio_bytes_to_s(self, audio_bytes):
         sample_size_bytes = 2 * self.num_channels
-        return 1.0 * audio_bytes / sample_size_bytes / self.sample_rate
+        return 1.0 * audio_bytes // sample_size_bytes / self.sample_rate
 
 
 ########################################################################################################################
@@ -272,10 +276,6 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             verbosity)
         self._saving_adaptation_state = save_adaptation_state
 
-        self.sample_rate = 16000
-        self.num_channels = 1
-        self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
-
     saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
     @saving_adaptation_state.setter
     def saving_adaptation_state(self, value): self._saving_adaptation_state = value
@@ -393,10 +393,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             verbosity)
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
-
-        self.sample_rate = 16000
-        self.num_channels = 1
-        self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
 
     saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
     @saving_adaptation_state.setter
