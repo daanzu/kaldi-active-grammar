@@ -475,6 +475,11 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
         return list(zip(words, times, lengths))
 
+    def save_adaptation_state(self):
+        result = self._lib.save_adaptation_state_agf_nnet3(self._model)
+        if not result:
+            raise KaldiError("save_adaptation_state error")
+
     def reset_adaptation_state(self):
         result = self._lib.reset_adaptation_state_agf_nnet3(self._model)
         if not result:
