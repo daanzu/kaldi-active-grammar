@@ -95,6 +95,7 @@ class KaldiRule(object):
         # Must be thread-safe!
         assert self._fst_text
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
+        _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
         assert self.compiler.decoding_framework == 'agf'
         self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
 

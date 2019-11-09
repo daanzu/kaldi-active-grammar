@@ -59,18 +59,21 @@ class WFST(object):
 
     def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
-        text = u''.join("%d %d %s %s %f\n" % (
+        states_text = u''.join("%d %d %s %s %f\n" % (
                 src_state,
                 dst_state,
                 ilabel if ilabel != self.eps else eps_replacement,
                 olabel,
                 -math.log(weight) if weight != 0 else self.zero,
-            ) for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
-        text += u''.join("%d %f\n" % (
+            )
+            for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
+        arcs_text = u''.join("%d %f\n" % (
                 id,
                 -math.log(weight) if weight != 0 else self.zero,
-            ) for (id, weight) in iteritems(self._state_table) if weight is not self.zero)
-        return text
+            )
+            for (id, weight) in iteritems(self._state_table)
+            if weight != 0)
+        return states_text + arcs_text
 
     ####################################################################################################################
 
