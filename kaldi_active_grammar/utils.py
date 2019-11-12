@@ -34,15 +34,15 @@ def debug_timer(log, desc, enabled=True, independent=False):
     :param independent: if True, tracks entire time spent inside context, rather than subtracting time within inner ``debug_timer`` instances
     """
     _debug_timer_stack = thread_local_data._debug_timer_stack
-    start_time = time.clock()
+    start_time = time.time()
     if not independent: _debug_timer_stack.append(start_time)
-    spent_time_func = lambda: time.clock() - start_time
+    spent_time_func = lambda: time.time() - start_time
     yield spent_time_func
     if not independent: start_time_adjusted = _debug_timer_stack.pop()
     else: start_time_adjusted = 0
     if enabled:
         if debug_timer_enabled:
-            log("%s %d ms" % (desc, (time.clock() - start_time_adjusted) * 1000))
+            log("%s %d ms" % (desc, (time.time() - start_time_adjusted) * 1000))
         if _debug_timer_stack and not independent:
             _debug_timer_stack[-1] += spent_time_func()
 
