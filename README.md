@@ -26,12 +26,13 @@ This project extends that to allow each grammar/rule to be **independently marke
 ### Features
 
 * The Python package **includes all necessary binaries** for decoding on **Linux or Windows**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
+    * Binaries are generated from my [fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), which is only intended to be used by kaldi-active-grammar directly, and not as a stand-alone library.
 * A compatible **general English Kaldi nnet3 chain model** is trained on ~1200 hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
     * An improved model is under development.
 * A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development in the `kaldi` branch of my fork, and has been merged as of Dragonfly **v0.15.0**.
     * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py) to run all normal dragonfly scripts.
     * You can try it out easily on Windows using a **simple no-install package**: see [Getting Started](#getting-started) below.
-    * [Caster](https://github.com/dictation-toolbox/Caster) is supported as of KaldiAG **v0.6.0**.
+    * [Caster](https://github.com/dictation-toolbox/Caster) is supported as of KaldiAG **v0.6.0** and Dragonfly **v0.16.1**.
     * Support for KaldiAG **v1.0.0** has been merged as of Dragonfly **v0.18.0**! Improvements include **Direct Parsing**, **Python3**, **Unicode**, **Grammar/Rule Weights**, **Generalized Alternative Dictation**, and various bug fixes & optimizations. For details and previous versions' improvements, see [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
 
 ### Donations are appreciated to encourage development.
@@ -101,9 +102,7 @@ Donations are appreciated to encourage development.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3 (AGPL-3.0), with the exception of the associated binaries, whose source is currently unreleased and which are only to be used by this project. See the LICENSE.txt file for details.
-
-If this license is problematic for you, please contact me.
+This project is licensed under the GNU Affero General Public License v3 (AGPL-3.0-or-later). See the LICENSE.txt file for details. If this license is problematic for you, please contact me.
 
 ## Acknowledgments
 
