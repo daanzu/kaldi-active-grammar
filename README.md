@@ -23,26 +23,18 @@ Normally, Kaldi decoding graphs are **monolithic**, require **expensive up-front
 
 This project extends that to allow each grammar/rule to be **independently marked** as active/inactive **dynamically** on a **per-utterance** basis (set at the beginning of each utterance). Dragonfly is then capable of activating **only the appropriate grammars for the current environment**, resulting in increased accuracy due to fewer possible recognitions. Furthermore, the dictation grammar can be **shared** between all the command grammars, which can be **compiled quickly** without needing to include large-vocabulary dictation directly.
 
+### Features
+
 * The Python package **includes all necessary binaries** for decoding on **Linux or Windows**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
 * A compatible **general English Kaldi nnet3 chain model** is trained on ~1200 hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
-* A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development in the `kaldi` branch of my fork.
-    * You can try it out easily on Windows using a simple no-install package: see [Getting Started](#getting-started) below.
-    * A beta version has been merged as of Dragonfly **v0.15.0**!
-        * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py).
-    * Support for KaldiAG **v0.5.0** has been merged as of Dragonfly **v0.16.0**!
-        * **User Lexicon**: you can add new words/pronunciations to the model's lexicon to be recognized & used in grammars, and the pronunciations can be either specified explicitly or inferred automatically.
-        * **Compilation Optimizations**: compilation while loading grammars uses the disk much less, and far fewer passes are made over the graphs, as separate modules have been customized & combined.
-        * **Better Model**: 50% more training data.
-    * Support for KaldiAG **v0.6.0** has been merged as of Dragonfly **v0.16.1**!
-        * **Caster**: many big fixes and optimizations to get Caster running.
-    * Support for KaldiAG **v0.7.0** has been merged as of Dragonfly **v0.17.0**!
-        * **Partial Decoding**: support for having **separate Voice Activity Detection timeout values** based on whether the current utterance is complex (dictation) or not.
-        * **Parallel Compilation**: when compiling grammars/rules that are not cached, multiple can be compiled at once (up to your core count).
-            * Example: loading Caster without cache is ~40% faster (in addition to optimizations below).
-        * **Various Optimizations**: loading even while cached sped up 15%.
-        * Refactored temporary/cache file handling
+    * An improved model is under development.
+* A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development in the `kaldi` branch of my fork, and has been merged as of Dragonfly **v0.15.0**.
+    * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py) to run all normal dragonfly scripts.
+    * You can try it out easily on Windows using a **simple no-install package**: see [Getting Started](#getting-started) below.
+    * [Caster](https://github.com/dictation-toolbox/Caster) is supported as of KaldiAG **v0.6.0**.
+    * Support for KaldiAG **v1.0.0** has been merged as of Dragonfly **v0.18.0**! Improvements include **Direct Parsing**, **Python3**, **Unicode**, **Grammar/Rule Weights**, **Generalized Alternative Dictation**, and various bug fixes & optimizations. For details and previous versions' improvements, see [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
 
-### **Donations are appreciated to encourage development.**
+### Donations are appreciated to encourage development.
 
 [![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu)
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)

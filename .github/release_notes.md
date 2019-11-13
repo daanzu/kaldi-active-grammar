@@ -66,7 +66,7 @@ If you have trouble downloading, try using `wget --continue`.
 
 v1.0.0: Faster Loading, Python3, Grammar/Rule Weights, and more
 
-This should be included the next dragonfly update, or you can try a self-contained distribution available below.
+Support is now included in dragonfly2 v0.18.0! You can try a self-contained distribution available below, of either stable or development versions.
 
 ### Notes
 
@@ -87,7 +87,13 @@ This should be included the next dragonfly update, or you can try a self-contain
 
 If you have trouble downloading, try using `wget --continue`.
 
-### **Donations are appreciated to encourage development.**
+### Donations are appreciated to encourage development.
 
-[![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
-[![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
+[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[**GitHub** is currently matching all my donations $-for-$.]
+
+
+
+
+
+This should be included the next dragonfly update, or you can try a self-contained distribution available below.
