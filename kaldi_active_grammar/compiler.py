@@ -73,7 +73,7 @@ class KaldiRule(object):
             self.filename = self.fst_cache.get_fst_filename(self._fst_text)
 
         if self.fst_cache.fst_is_current(self.filepath):
-            # _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
+            _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
             self.compiled = True
             return self
         else:
@@ -95,7 +95,7 @@ class KaldiRule(object):
         # Must be thread-safe!
         assert self._fst_text
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
-        _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
+        if _log.isEnabledFor(2): _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
         assert self.compiler.decoding_framework == 'agf'
         self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
 
@@ -137,6 +137,7 @@ class KaldiRule(object):
         was_loaded = self.loaded
         self.reloading = True
         self.fst.clear()
+        self._fst_text = None
         self.compiled = False
         self.loaded = False
 
