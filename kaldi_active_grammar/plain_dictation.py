@@ -13,9 +13,9 @@ _log = _log.getChild('plain_dictation')
 
 class PlainDictationRecognizer(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None):
+    def __init__(self, model_dir=None, tmp_dir=None, fst_file=None):
         self.model = Model(model_dir, tmp_dir)
-        self.decoder = KaldiPlainNNet3Decoder(self.model.model_dir, self.model.tmp_dir)
+        self.decoder = KaldiPlainNNet3Decoder(self.model.model_dir, self.model.tmp_dir, fst_file=fst_file)
 
     def decode_utterance(self, frames):
         self.decoder.decode(frames, True)

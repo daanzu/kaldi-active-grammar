@@ -16,8 +16,9 @@ try:
 except ImportError:
     g2p_en = None
 
-from . import _log, KaldiError, DEFAULT_MODEL_DIR, DEFAULT_TMP_DIR_SUFFIX, FILE_CACHE_FILENAME, REQUIRED_MODEL_VERSION
+from . import _log, KaldiError, REQUIRED_MODEL_VERSION
 from .utils import ExternalProcess, find_file, load_symbol_table, symbol_table_lookup
+import kaldi_active_grammar.defaults as defaults
 import kaldi_active_grammar.utils as utils
 
 _log = _log.getChild('model')
@@ -143,8 +144,8 @@ class Lexicon(object):
 class Model(object):
     def __init__(self, model_dir=None, tmp_dir=None):
         self.exec_dir = os.path.join(utils.exec_dir, '')
-        self.model_dir = os.path.join(model_dir or DEFAULT_MODEL_DIR, '')
-        self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + DEFAULT_TMP_DIR_SUFFIX), '')
+        self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
+        self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
 
         if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
         if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
@@ -186,7 +187,7 @@ class Model(object):
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
-        self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
+        self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_phones_offset = self.phone_to_int_dict['#nonterm_bos']

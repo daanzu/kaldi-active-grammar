@@ -153,7 +153,7 @@ def load_symbol_table(filename):
     with open(filename, 'r', encoding='utf-8') as f:
         return [[int(token) if token.isdigit() else token for token in line.strip().split()] for line in f]
 
-def find_file(directory, filename):
+def find_file(directory, filename, required=False):  # FIXME: required=True
     matches = []
     for root, dirnames, filenames in os.walk(directory):
         for filename in fnmatch.filter(filenames, filename):
@@ -163,7 +163,9 @@ def find_file(directory, filename):
         _log.debug("%s: find_file found file %r", _name, matches[0])
         return matches[0]
     else:
-        _log.debug("%s: find_file cannot find file %r in %r", _name, filename, directory)
+        _log.debug("%s: find_file cannot find required file %r in %r (or subdirectories)", _name, filename, directory)
+        if required:
+            raise IOError("cannot find file %r in %r" % (filename, directory))
         return None
 
 def is_file_up_to_date(filename, *parent_filenames):

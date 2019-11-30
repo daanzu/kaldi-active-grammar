@@ -17,6 +17,7 @@ import numpy as np
 
 from . import _log, KaldiError
 from .utils import exec_dir, find_file, platform, symbol_table_lookup
+import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('wrapper')
 _log_library = _log.getChild('library')
@@ -252,13 +253,13 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         super(KaldiPlainNNet3Decoder, self).__init__()
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
-        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
+        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int', required=False)
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
         if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
             find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
-        if fst_file is None: fst_file = find_file(model_dir, 'HCLG.fst')
+        if fst_file is None: fst_file = find_file(model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME, required=True)
 
         self.words_file = os.path.normpath(words_file)
         self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None

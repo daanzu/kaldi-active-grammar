@@ -16,6 +16,7 @@ from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_ta
 from .wfst import WFST
 from .model import Model
 import kaldi_active_grammar.cloud as cloud
+import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('compiler')
 
@@ -214,8 +215,9 @@ class Compiler(object):
     lexicon_words = property(lambda self: self.model.lexicon_words)
     _longest_word = property(lambda self: self.model.longest_word)
 
-    default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, 'G_dictation.fst'))
-    _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, 'Dictation.fst'))
+    _default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_G_FILENAME))
+    _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_FST_FILENAME))
+    _plain_dictation_hclg_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME))
 
     def alloc_rule_id(self):
         id = self._num_kaldi_rules
@@ -277,11 +279,6 @@ class Compiler(object):
                 args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
-                # compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
-                # if len(input_data) >= 1000000:
-                #     compile_command |= ExternalProcess.compile_graph_agf_debug(*args, **kwargs)
-                # else:
-                #     compile_command |= ExternalProcess.compile_graph_agf(*args, **kwargs)
                 compile_command()
 
                 # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_data), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
@@ -297,6 +294,21 @@ class Compiler(object):
                 # run("cp {input_filename} {filename}-G")
                 run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
                     + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {filename}")
+
+    def compile_plain_dictation_fst(self, g_filename=None, output_filename=None):
+        if g_filename is None: g_filename = self._default_dictation_g_filepath
+        if output_filename is None: output_filename = self._plain_dictation_hclg_fst_filepath
+        verbose_level = 5 if self._log.isEnabledFor(5) else 0
+        format_kwargs = dict(self.files_dict, g_filename=g_filename, output_filename=output_filename, verbose=verbose_level)
+        format = ExternalProcess.get_formatter(format_kwargs)
+        args = format('--read-disambig-syms={disambig_int}', '--verbose={verbose}',
+            '{tree}', '{final_mdl}', '{L_disambig_fst}', '{g_filename}', '{output_filename}')
+        compile_command = ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
+        compile_command()
+
+    def compile_agf_dictation_fst(self, g_filename=None):
+        if g_filename is None: g_filename = self._default_dictation_g_filepath
+        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
     # def _compile_base_fsts(self):
     #     filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
@@ -366,9 +378,6 @@ class Compiler(object):
             fst.add_arc(backoff_state, backoff_state, word)
         kaldi_rule.compile()
         return kaldi_rule
-
-    def compile_dictation_fst(self, g_filename):
-        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
 
     def process_compile_and_load_queues(self):
         # Allowing this gives us leeway elsewhere
