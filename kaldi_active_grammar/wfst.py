@@ -36,6 +36,9 @@ class WFST(object):
     def iter_arcs(self):
         return itertools.chain.from_iterable(itervalues(self._arc_table_dict))
 
+    def state_is_final(self, state):
+        return (self._state_table[state] != 0)
+
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
         id = int(self._next_state_id)
@@ -77,9 +80,6 @@ class WFST(object):
 
     ####################################################################################################################
 
-    def state_is_final(self, state):
-        return (self._state_table[state] != self.zero)
-
     def label_is_silent(self, label):
         return ((label in self.silent_labels) or (label.startswith('#nonterm')))
 
@@ -110,7 +110,7 @@ class WFST(object):
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
         """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
-        queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index of remaining words)
+        queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index into target_words of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
             state, path, target_word_index = queue.popleft()
