@@ -339,6 +339,17 @@ class Compiler(object):
         kaldi_rule.compile()
         return kaldi_rule
 
+    def compile_top_fst_dictation_only(self):
+        kaldi_rule = KaldiRule(self, 'top', nonterm=False)
+        fst = kaldi_rule.fst
+        state_initial = fst.add_state(initial=True)
+        state_return = fst.add_state()
+        state_final = fst.add_state(final=True)
+        fst.add_arc(state_initial, state_return, '#nonterm:dictation')
+        fst.add_arc(state_return, state_final, None, '#nonterm:end')
+        kaldi_rule.compile()
+        return kaldi_rule
+
     def _get_dictation_fst_filepath(self):
         if os.path.exists(self._dictation_fst_filepath):
             return self._dictation_fst_filepath
