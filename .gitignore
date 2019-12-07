@@ -1,5 +1,6 @@
 kaldi_active_grammar/exec
-wheelhouse
+wheelhouse/
+portable/
 
 # general things to ignore
 build/
