@@ -12,7 +12,7 @@ from io import open
 from six.moves import range, zip
 
 from . import _log, KaldiError
-from .utils import debug_timer, lazy_readonly_property, platform, load_symbol_table, symbol_table_lookup, ExternalProcess
+from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, symbol_table_lookup, touch_file
 from .wfst import WFST
 from .model import Model
 import kaldi_active_grammar.cloud as cloud
@@ -75,6 +75,7 @@ class KaldiRule(object):
 
         if self.fst_cache.fst_is_current(self.filepath):
             _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
+            touch_file(self.filepath)
             self.compiled = True
             return self
         else:

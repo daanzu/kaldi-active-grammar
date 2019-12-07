@@ -122,7 +122,7 @@ class lazy_settable_property(object):
 
 def touch_file(filename):
     with open(filename, 'ab'):
-        pass
+        os.utime(filename, None)  # Update timestamps
 
 def clear_file(filename):
     with open(filename, 'wb'):
