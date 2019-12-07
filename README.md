@@ -84,6 +84,18 @@ Or use your own model. Standard Kaldi models must be converted to be usable. Con
 
 Documentation is sorely lacking currently. To see example usage, examine the [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi).
 
+### Plain dictation interface
+
+```python
+import sys, wave
+from kaldi_active_grammar import PlainDictationRecognizer
+recognizer = PlainDictationRecognizer()  # Or supply non-default model_dir, tmp_dir, or fst_file
+file = wave.open(sys.argv[1], 'rb')
+data = file.readframes(file.getnframes())
+output_str, likelihood = recognizer.decode_utterance(data)
+print(repr(output_str), likelihood)  # -> 'alpha bravo charlie' 1.1923989057540894
+```
+
 ## Contributing
 
 Issues, suggestions, and feature requests are welcome & encouraged. Pull requests are considered, but project structure is in flux.

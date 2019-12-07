@@ -43,7 +43,7 @@ def main():
         compiler = Compiler(args.model_dir, args.tmp_dir)
         g_filename = unknown.pop(0) if unknown else None
         output_filename = unknown.pop(0) if unknown else None
-        print_("Compiling dictation graph...")
+        print_("Compiling plain dictation graph...")
         compiler.compile_plain_dictation_fst(g_filename=g_filename, output_filename=output_filename)
 
     if args.command == 'convert_generic_model_to_agf':
