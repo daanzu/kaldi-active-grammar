@@ -249,7 +249,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, fst_file=None, save_adaptation_state=True):
+            model_file=None, fst_file=None, save_adaptation_state=False):
         super(KaldiPlainNNet3Decoder, self).__init__()
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
@@ -351,7 +351,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
             model_file=None, top_fst_file=None, dictation_fst_file=None,
-            save_adaptation_state=True):
+            save_adaptation_state=False):
         super(KaldiAgfNNet3Decoder, self).__init__()
 
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
@@ -435,8 +435,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             # Start of utterance
             _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
             if len(grammars_activity) != self.num_grammars:
-                _log.warn("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
-                # raise KaldiError("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
+                _log.error("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
 
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
