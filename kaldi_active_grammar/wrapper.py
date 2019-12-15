@@ -433,7 +433,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             grammars_activity = []
         else:
             # Start of utterance
-            _log.debug("decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
+            _log.log(5, "decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
             if len(grammars_activity) != self.num_grammars:
                 _log.error("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
 
