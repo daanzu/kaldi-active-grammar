@@ -136,7 +136,7 @@ setup(
     # above.
     author_email='daanzu@gmail.com',  # Optional
 
-    license='AGPL-3.0, with exceptions',
+    license='AGPL-3.0',
 
     # Classifiers help users find your project by categorizing it.
     #
