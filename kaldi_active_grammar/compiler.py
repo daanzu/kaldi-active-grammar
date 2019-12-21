@@ -15,7 +15,7 @@ from . import _log, KaldiError
 from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, symbol_table_lookup, touch_file
 from .wfst import WFST
 from .model import Model
-import kaldi_active_grammar.cloud as cloud
+import kaldi_active_grammar.alternative_dictation as alternative_dictation
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('compiler')
@@ -192,7 +192,7 @@ class Compiler(object):
         self._log = _log
 
         self.model = Model(model_dir, tmp_dir)
-        self.cloud_dictation = alternative_dictation
+        self.alternative_dictation = alternative_dictation
         self.cloud_dictation_lang = cloud_dictation_lang
         self.decoder = None
 
@@ -459,7 +459,7 @@ class Compiler(object):
             self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
         return words
 
-    cloud_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
+    alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
@@ -472,12 +472,19 @@ class Compiler(object):
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
-        if self.cloud_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
+        if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
             try:
+                if callable(self.alternative_dictation):
+                    alternative_text_func = self.alternative_dictation
+                elif self.alternative_dictation == 'gcloud':
+                    alternative_text_func = alternative_dictation.GCloud.transcribe_data_sync
+                else:
+                    raise KaldiError("Invalid alternative_dictation value: %r" % self.alternative_dictation)
+
                 audio_data, word_align = dictation_info_func()
-                self._log.log(5, "cloud_dictation word_align: %s", word_align)
+                self._log.log(5, "alternative_dictation word_align: %s", word_align)
                 words, times, lengths = list(zip(*word_align))
-                # Find start & end word-index & byte-offset of each cloud dictation span
+                # Find start & end word-index & byte-offset of each alternative dictation span
                 dictation_spans = [{
                         'index_start': index,
                         'offset_start': time,
@@ -500,21 +507,15 @@ class Compiler(object):
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
                     kwargs = dict(language_code=self.cloud_dictation_lang)
-                    with debug_timer(self._log.debug, 'cloud dictation call'):
-                        cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, **kwargs)
-                        self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)  # FIXME: hardcoded sample_rate!
-                    # with debug_timer(self._log.debug, 'cloud dictation call'):
-                    #     cloud_text = cloud.GCloud.transcribe_data_sync(dictation_audio, model='command_and_search', **kwargs)
-                    #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
-                    # with debug_timer(self._log.debug, 'cloud dictation call'):
-                    #     cloud_text = cloud.GCloud.transcribe_data_streaming(dictation_audio, **kwargs)
-                    #     self._log.debug("cloud_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), cloud_text)
-                    # cloud.write_wav('test.wav', dictation_audio)
-                    return (cloud_text or orig_text)
+                    with debug_timer(self._log.debug, 'alternative_dictation call'):
+                        alternative_text = alternative_text_func(dictation_audio, **kwargs)
+                        self._log.debug("alternative_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), alternative_text)  # FIXME: hardcoded sample_rate!
+                    # alternative_dictation.write_wav('test.wav', dictation_audio)
+                    return (alternative_text or orig_text)
 
-                parsed_output = self.cloud_dictation_regex.sub(replace_dictation, parsed_output)
+                parsed_output = self.alternative_dictation_regex.sub(replace_dictation, parsed_output)
             except Exception as e:
-                self._log.exception("Exception performing cloud dictation")
+                self._log.exception("Exception performing alternative dictation")
 
         words = []
         words_are_dictation = []

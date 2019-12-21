@@ -18,7 +18,17 @@ except ImportError:
 
 from . import _log
 
-_log = _log.getChild('cloud')
+_log = _log.getChild('alternative_dictation')
+
+
+def write_wav(filename, audio_data, sample_rate=16000):
+    wf = wave.open(filename, 'wb')
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(sample_rate)
+    wf.writeframes(audio_data)
+    wf.close()
+
 
 class GCloud(object):
 
@@ -27,7 +37,7 @@ class GCloud(object):
         # model in ['video', 'phone_call', 'command_and_search', 'default']
 
         if not gcloud_imported:
-            _log.error("cloud_dictation failed because cannot find google.cloud package!")
+            _log.error("Cannot find google.cloud package!")
             return None
         client = speech.SpeechClient()
 
@@ -53,7 +63,7 @@ class GCloud(object):
         # model in ['video', 'phone_call', 'command_and_search', 'default']
 
         if not gcloud_imported:
-            _log.error("cloud_dictation failed because cannot find google.cloud package!")
+            _log.error("Cannot find google.cloud package!")
             return None
         client = speech.SpeechClient()
 
@@ -99,11 +109,3 @@ class GCloud(object):
                     for alternative in alternatives:
                         print('Confidence: {}'.format(alternative.confidence))
                         print(u'Transcript: {}'.format(alternative.transcript))
-
-def write_wav(filename, audio_data, sample_rate=16000):
-    wf = wave.open(filename, 'wb')
-    wf.setnchannels(1)
-    wf.setsampwidth(2)
-    wf.setframerate(sample_rate)
-    wf.writeframes(audio_data)
-    wf.close()
