@@ -95,5 +95,33 @@ If you have trouble downloading, try using `wget --continue`.
 
 
 
+v1.1.0: Improved Recognition, Weights on Any Elements, Stand-alone Plain Dictation Interface, and More
+
+This should be included the next dragonfly update, or you can try a self-contained distribution available below.
+
+### Notes
+
+* **Improved Recognition**: better graph construction/compilation should give significantly better overall recognition.
+* **Weights on Any Elements**: you can now easily add weights to any element (including compound elements in `MappingRule`s), in addition to any rule/grammar.
+* **Stand-alone Plain Dictation Interface**: the library now provides a simple interface for recognizing plain dictation without fancy active grammar features.
+* Various bug fixes & optimizations
+
+### Artifacts
+
+* **`kaldi_model_zamia`**: A compatible general English Kaldi nnet3 chain model.
+* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
+
+If you have trouble downloading, try using `wget --continue`.
+
+### Donations are appreciated to encourage development.
+
+[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[**GitHub** is currently matching all my donations $-for-$.]
+
+
+
+
 
 This should be included the next dragonfly update, or you can try a self-contained distribution available below.
