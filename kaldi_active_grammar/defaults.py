@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-DEFAULT_MODEL_DIR = 'kaldi_model_zamia'
+DEFAULT_MODEL_DIR = 'kaldi_model'
 DEFAULT_TMP_DIR_SUFFIX = '.tmp'
 FILE_CACHE_FILENAME = 'file_cache.json'
 
