@@ -191,7 +191,7 @@ class Model(object):
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.nonterm_phones_offset = self.phone_to_int_dict['#nonterm_bos']
-        self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.txt'], '#nonterm_begin')
+        self.nonterm_words_offset = symbol_table_lookup(base_filepath(self.files_dict['words.txt']), '#nonterm_begin')
 
         # Update files if needed, before loading words
         if not self.fst_cache.file_is_current(self.files_dict['user_lexicon.txt']):
@@ -208,6 +208,7 @@ class Model(object):
             word_id_pairs = [line.strip().split() for line in file]
         self.lexicon_words = set([word for word, id in word_id_pairs
             if word.lower() not in invalid_words and not word.startswith('#nonterm')])
+        assert self.lexicon_words, "Empty lexicon from %r" % words_file
         self.longest_word = max(self.lexicon_words, key=len)
 
         return self.lexicon_words
@@ -252,10 +253,11 @@ class Model(object):
         return [phones]
 
     def generate_lexicon_files(self):
+        """ Generates: words.txt, align_lexicon.int, lexiconp_disambig.txt, L_disambig.fst """
         _log.debug("generating lexicon files")
         max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
 
-        entries = []
+        user_lexicon_entries = []
         with open(self.files_dict['user_lexicon.txt'], 'r', encoding='utf-8') as user_lexicon:
             for line in user_lexicon:
                 tokens = line.split()
@@ -263,22 +265,22 @@ class Model(object):
                     word, phones = tokens[0], tokens[1:]
                     phones = Lexicon.make_position_dependent(phones)
                     max_word_id += 1
-                    entries.append((word, max_word_id, phones))
+                    user_lexicon_entries.append((word, max_word_id, phones))
 
-        def generate_file(filename, write_func):
+        def generate_file_from_base(filename, write_func):
             filepath = self.files_dict[filename]
             with open(base_filepath(filepath), 'r', encoding='utf-8') as file:
                 base_data = file.read()
             with open(filepath, 'w', encoding='utf-8', newline='\n') as file:
                 file.write(base_data)
-                for word, word_id, phones in entries:
+                for word, word_id, phones in user_lexicon_entries:
                     file.write(write_func(word, word_id, phones) + '\n')
 
-        generate_file('words.txt', lambda word, word_id, phones:
+        generate_file_from_base('words.txt', lambda word, word_id, phones:
             str_space_join([word, word_id]))
-        generate_file('align_lexicon.int', lambda word, word_id, phones:
+        generate_file_from_base('align_lexicon.int', lambda word, word_id, phones:
             str_space_join([word_id, word_id] + [self.phone_to_int_dict[phone] for phone in phones]))
-        generate_file('lexiconp_disambig.txt', lambda word, word_id, phones:
+        generate_file_from_base('lexiconp_disambig.txt', lambda word, word_id, phones:
             '%s\t1.0 %s' % (word, ' '.join(phones)))
 
         format = ExternalProcess.get_formatter(self.files_dict)
