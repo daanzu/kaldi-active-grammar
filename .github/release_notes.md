@@ -95,7 +95,7 @@ If you have trouble downloading, try using `wget --continue`.
 
 
 
-v1.1.0: Improved Recognition, Weights on Any Elements, Stand-alone Plain Dictation Interface, and More
+v1.2.0: Improved Recognition, Weights on Any Elements, Pluggable Alternative Dictation, Stand-alone Plain Dictation Interface, and More
 
 This should be included the next dragonfly update, or you can try a self-contained distribution available below.
 
@@ -103,11 +103,14 @@ This should be included the next dragonfly update, or you can try a self-contain
 
 * **Improved Recognition**: better graph construction/compilation should give significantly better overall recognition.
 * **Weights on Any Elements**: you can now easily add weights to any element (including compound elements in `MappingRule`s), in addition to any rule/grammar.
+* **Pluggable Alternative Dictation**: you can optionally pass a `callable` as `alternative_dictation` to define your own, external dictation engine.
 * **Stand-alone Plain Dictation Interface**: the library now provides a simple interface for recognizing plain dictation without fancy active grammar features.
+* **NOTE**: the default model directory is now `kaldi_model`.
 * Various bug fixes & optimizations
 
 ### Artifacts
 
+* **`kaldi_model_zamia_daanzu_mediumlm`**: A compatible general English Kaldi nnet3 chain model, with a larger/better dictation language model.
 * **`kaldi_model_zamia`**: A compatible general English Kaldi nnet3 chain model.
 * **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
 * **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
