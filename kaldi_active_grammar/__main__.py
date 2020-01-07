@@ -31,7 +31,7 @@ def main():
     # FIXME: subparsers?
     args, unknown = parser.parse_known_args()
 
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    logging.basicConfig(level=5 if args.verbose else logging.INFO)
 
     if args.command == 'compile_agf_dictation_graph':
         compiler = Compiler(args.model_dir, args.tmp_dir)

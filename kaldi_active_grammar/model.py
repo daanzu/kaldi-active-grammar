@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import os, re
+import os, re, shutil
 from io import open
 
 from six import text_type
@@ -164,38 +164,44 @@ class Model(object):
         else:
             _log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
-        utils.touch_file(os.path.join(self.model_dir, 'user_lexicon.txt'))
+        self.create_missing_files()
+
         self.files_dict = {
             'exec_dir': self.exec_dir,
             'model_dir': self.model_dir,
             'tmp_dir': self.tmp_dir,
-            'words.txt': find_file(self.model_dir, 'words.txt'),
-            'phones.txt': find_file(self.model_dir, 'phones.txt'),
-            'align_lexicon.int': find_file(self.model_dir, 'align_lexicon.int'),
-            'disambig.int': find_file(self.model_dir, 'disambig.int'),
-            'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst'),
-            'tree': find_file(self.model_dir, 'tree'),
-            '1.mdl': find_file(self.model_dir, '1.mdl'),
-            'final.mdl': find_file(self.model_dir, 'final.mdl'),
-            'g.irelabel': find_file(self.model_dir, 'g.irelabel'),  # otf
-            'user_lexicon.txt': find_file(self.model_dir, 'user_lexicon.txt'),
-            'left_context_phones.txt': find_file(self.model_dir, 'left_context_phones.txt'),
-            'nonterminals.txt': find_file(self.model_dir, 'nonterminals.txt'),
-            'wdisambig_phones.int': find_file(self.model_dir, 'wdisambig_phones.int'),
-            'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int'),
-            'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt'),
+            'words.txt': find_file(self.model_dir, 'words.txt', default=True),
+            'words.base.txt': find_file(self.model_dir, 'words.base.txt', default=True),
+            'phones.txt': find_file(self.model_dir, 'phones.txt', default=True),
+            'align_lexicon.int': find_file(self.model_dir, 'align_lexicon.int', default=True),
+            'disambig.int': find_file(self.model_dir, 'disambig.int', default=True),
+            'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst', default=True),
+            'tree': find_file(self.model_dir, 'tree', default=True),
+            'final.mdl': find_file(self.model_dir, 'final.mdl', default=True),
+            # 'g.irelabel': find_file(self.model_dir, 'g.irelabel', default=True),  # otf
+            'user_lexicon.txt': find_file(self.model_dir, 'user_lexicon.txt', default=True),
+            'left_context_phones.txt': find_file(self.model_dir, 'left_context_phones.txt', default=True),
+            'nonterminals.txt': find_file(self.model_dir, 'nonterminals.txt', default=True),
+            'wdisambig_phones.int': find_file(self.model_dir, 'wdisambig_phones.int', default=True),
+            'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int', default=True),
+            'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt', default=True),
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
         self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
-        self.nonterm_phones_offset = self.phone_to_int_dict['#nonterm_bos']
-        self.nonterm_words_offset = symbol_table_lookup(base_filepath(self.files_dict['words.txt']), '#nonterm_begin')
+        self.nonterm_phones_offset = self.phone_to_int_dict.get('#nonterm_bos')
+        if self.nonterm_phones_offset is None: raise KaldiError("missing nonterms in 'phones.txt'")
+        self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.base.txt'], '#nonterm_begin')
+        if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
 
         # Update files if needed, before loading words
-        if not self.fst_cache.file_is_current(self.files_dict['user_lexicon.txt']):
+        files = ['user_lexicon.txt', 'words.txt', 'align_lexicon.int', 'lexiconp_disambig.txt', 'L_disambig.fst',]
+        if self.fst_cache.cache_is_new or not all(self.fst_cache.file_is_current(self.files_dict[file]) for file in files):
             self.generate_lexicon_files()
+            self.fst_cache.update_dependencies()
+            self.fst_cache.save()
 
         self.load_words(self.files_dict['words.txt'])  # sets self.lexicon_words, self.longest_word
 
@@ -252,9 +258,22 @@ class Model(object):
 
         return [phones]
 
+    def create_missing_files(self):
+        _log.debug("creating missing files")
+        utils.touch_file(os.path.join(self.model_dir, 'user_lexicon.txt'))
+        def check_file(filename, src_filename):
+            # Create missing file from its base file
+            if not find_file(self.model_dir, filename):
+                src = find_file(self.model_dir, src_filename)
+                dst = src.replace(src_filename, filename)
+                shutil.copyfile(src, dst)
+        check_file('words.txt', 'words.base.txt')
+        check_file('align_lexicon.int', 'align_lexicon.base.int')
+        check_file('lexiconp_disambig.txt', 'lexiconp_disambig.base.txt')
+
     def generate_lexicon_files(self):
         """ Generates: words.txt, align_lexicon.int, lexiconp_disambig.txt, L_disambig.fst """
-        _log.debug("generating lexicon files")
+        _log.info("generating lexicon files")
         max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
 
         user_lexicon_entries = []
@@ -289,7 +308,7 @@ class Model(object):
             '--nonterminals={nonterminals_txt}',
             '--sil-prob=0.5',
             '--sil-phone=SIL',
-            '--sil-disambig=#14',  # FIXME
+            '--sil-disambig=#14',  # FIXME: lookup correct value
             '{lexiconp_disambig_txt}',
         ))
         command |= ExternalProcess.fstcompile(*format(

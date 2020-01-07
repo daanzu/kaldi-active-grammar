@@ -153,7 +153,7 @@ def load_symbol_table(filename):
     with open(filename, 'r', encoding='utf-8') as f:
         return [[int(token) if token.isdigit() else token for token in line.strip().split()] for line in f]
 
-def find_file(directory, filename, required=False):  # FIXME: required=True
+def find_file(directory, filename, required=False, default=False):
     matches = []
     for root, dirnames, filenames in os.walk(directory):
         for filename in fnmatch.filter(filenames, filename):
@@ -163,9 +163,11 @@ def find_file(directory, filename, required=False):  # FIXME: required=True
         _log.debug("%s: find_file found file %r", _name, matches[0])
         return matches[0]
     else:
-        _log.debug("%s: find_file cannot find required file %r in %r (or subdirectories)", _name, filename, directory)
+        _log.debug("%s: find_file cannot find file %r in %r (or subdirectories)", _name, filename, directory)
         if required:
             raise IOError("cannot find file %r in %r" % (filename, directory))
+        if default == True:
+            return os.path.join(directory, filename)
         return None
 
 def is_file_up_to_date(filename, *parent_filenames):
@@ -190,6 +192,7 @@ class FSTFileCache(object):
 
         self.cache_filename = cache_filename
         if dependencies_dict is None: dependencies_dict = dict()
+        self.dependencies_dict = dependencies_dict
         self.lock = threading.Lock()
 
         try:
@@ -214,11 +217,7 @@ class FSTFileCache(object):
             _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
             self.cache = dict({ 'version': text_type(__version__) })
             self.cache_is_new = True
-            for (name, path) in dependencies_dict.items():
-                if path and os.path.isfile(path):
-                    self.add_file(path)
-            self.cache['dependencies_list'] = sorted(dependencies_dict.keys())  # list
-            self.cache['dependencies_hash'] = self.hash_data([self.cache.get(path) for (key, path) in sorted(dependencies_dict.items())])
+            self.update_dependencies()
             self.save()
 
     def _load(self):
@@ -232,6 +231,14 @@ class FSTFileCache(object):
             # https://stackoverflow.com/a/14870531
             f.write(json.dumps(self.cache, ensure_ascii=False))
         self.dirty = False
+
+    def update_dependencies(self):
+        dependencies_dict = self.dependencies_dict
+        for (name, path) in dependencies_dict.items():
+            if path and os.path.isfile(path):
+                self.add_file(path)
+        self.cache['dependencies_list'] = sorted(dependencies_dict.keys())  # list
+        self.cache['dependencies_hash'] = self.hash_data([self.cache.get(path) for (key, path) in sorted(dependencies_dict.items())])
 
     def invalidate(self, filename=None):
         if filename is None:

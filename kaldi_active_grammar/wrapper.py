@@ -227,7 +227,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
                     if not search:
                         value = os.path.join(model_dir, options_with_path[key])
                     else:
-                        value = find_file(model_dir, os.path.basename(options_with_path[key]))
+                        value = find_file(model_dir, os.path.basename(options_with_path[key]), required=True)
                 new_file.write("%s=%s\n" % (key, value))
         return new_filename
 
