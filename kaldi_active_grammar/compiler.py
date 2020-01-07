@@ -355,7 +355,7 @@ class Compiler(object):
         if os.path.exists(self._dictation_fst_filepath):
             return self._dictation_fst_filepath
         self._log.error("cannot find dictation fst: %s", self._dictation_fst_filepath)
-        # self._log.error("using universal dictation fst")
+        # FIXME: Fall back to universal dictation?
     dictation_fst_filepath = property(_get_dictation_fst_filepath)
 
     # def _construct_dictation_states(self, fst, src_state, dst_state, number=(1,None), words=None, start_weight=None):

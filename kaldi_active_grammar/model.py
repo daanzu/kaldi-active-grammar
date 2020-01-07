@@ -147,8 +147,11 @@ class Model(object):
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
         self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
 
-        if not os.path.isdir(self.exec_dir): raise KaldiError("cannot find exec_dir: %r" % self.exec_dir)
-        if not os.path.isdir(self.model_dir): raise KaldiError("cannot find model_dir: %r" % self.model_dir)
+        if not os.path.isdir(self.exec_dir):
+            raise KaldiError("cannot find exec_dir: %r" % self.exec_dir,
+                "are you sure you installed kaldi-active-grammar correctly?")
+        if not os.path.isdir(self.model_dir):
+            raise KaldiError("cannot find model_dir: %r" % self.model_dir)
         if not os.path.exists(self.tmp_dir):
             _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
             os.mkdir(self.tmp_dir)
@@ -235,6 +238,8 @@ class Model(object):
             if not lazy_compilation:
                 self.generate_lexicon_files()
             return pronunciations
+            # FIXME: refactor this function
+
         phones = Lexicon.cmu_to_xsampa(phones)
         new_entry = [word] + phones
 
