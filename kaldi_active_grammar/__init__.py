@@ -5,7 +5,7 @@
 #
 
 _name = 'kaldi_active_grammar'
-__version__ = '1.2.1'
+__version__ = '1.2.1.dev1'
 REQUIRED_MODEL_VERSION = '0.5.0'
 
 import logging

@@ -28,6 +28,10 @@ _log = _log.getChild('model')
 
 class Lexicon(object):
 
+    def __init__(self, phones):
+        self.phone_set = set(self.make_position_independent(phones))
+
+    # XSAMPA phones are 1-letter each, so 2-letter below represent 2 separate phones.
     CMU_to_XSAMPA_dict = {
         "'"   : "'",
         'AA'  : 'A',
@@ -75,7 +79,7 @@ class Lexicon(object):
     XSAMPA_to_CMU_dict = { v: k for k,v in CMU_to_XSAMPA_dict.items() }  # FIXME: handle double-entries
 
     @classmethod
-    def cmu_to_xsampa(cls, phones):
+    def cmu_to_xsampa_generic(cls, phones, lexicon_phones=None):
         new_phones = []
         for phone in phones:
             stress = False
@@ -86,17 +90,30 @@ class Lexicon(object):
                 phone = phone[:-1]
             phone = cls.CMU_to_XSAMPA_dict[phone]
             assert 1 <= len(phone) <= 2
-            while len(phone):
-                new_phones.append(("'" if stress else '') + phone[:1])
-                stress = False
-                phone = phone[1:]
+
+            new_phone = ("'" if stress else '') + phone
+            if (lexicon_phones is not None) and (new_phone in lexicon_phones):
+                # Add entire possibly-2-letter phone
+                new_phones.append(new_phone)
+            else:
+                # Add each individual 1-letter phone
+                for match in re.finditer(r"('?).", new_phone):
+                    new_phones.append(match.group(0))
+
         return new_phones
+
+    def cmu_to_xsampa(self, phones):
+        return self.cmu_to_xsampa_generic(phones, self.phone_set)
 
     @classmethod
     def make_position_dependent(cls, phones):
         if len(phones) == 0: return []
         elif len(phones) == 1: return [phones[0]+'_S']
         else: return [phones[0]+'_B'] + [phone+'_I' for phone in phones[1:-1]] + [phones[-1]+'_E']
+
+    @classmethod
+    def make_position_independent(cls, phones):
+        return [re.sub(r'_[SBIE]', '', phone) for phone in phones]
 
     g2p_en = None
 
@@ -130,7 +147,7 @@ class Lexicon(object):
                         tokens = entry.strip().split()
                         assert re.match(word + r'(\(\d\))?', tokens[0], re.I)  # 'SEMI-COLON' or 'SEMI-COLON(2)'
                         phones = tokens[1:]
-                        _log.debug("generated pronunciation with cloud-cmudict for %r: %r" % (word, phones))
+                        _log.debug("generated pronunciation with cloud-cmudict for %r: CMU phones are %r" % (word, phones))
                         pronunciations.append(phones)
                     return pronunciations
             except Exception as e:
@@ -194,6 +211,7 @@ class Model(object):
         self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
+        self.lexicon = Lexicon(self.phone_to_int_dict.keys())
         self.nonterm_phones_offset = self.phone_to_int_dict.get('#nonterm_bos')
         if self.nonterm_phones_offset is None: raise KaldiError("missing nonterms in 'phones.txt'")
         self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.base.txt'], '#nonterm_begin')
@@ -240,7 +258,7 @@ class Model(object):
             return pronunciations
             # FIXME: refactor this function
 
-        phones = Lexicon.cmu_to_xsampa(phones)
+        phones = self.lexicon.cmu_to_xsampa(phones)
         new_entry = [word] + phones
 
         entries = self.read_user_lexicon()
