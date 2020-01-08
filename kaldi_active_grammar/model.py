@@ -194,6 +194,7 @@ class Model(object):
             'words.base.txt': find_file(self.model_dir, 'words.base.txt', default=True),
             'phones.txt': find_file(self.model_dir, 'phones.txt', default=True),
             'align_lexicon.int': find_file(self.model_dir, 'align_lexicon.int', default=True),
+            'align_lexicon.base.int': find_file(self.model_dir, 'align_lexicon.base.int', default=True),
             'disambig.int': find_file(self.model_dir, 'disambig.int', default=True),
             'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst', default=True),
             'tree': find_file(self.model_dir, 'tree', default=True),
@@ -205,6 +206,7 @@ class Model(object):
             'wdisambig_phones.int': find_file(self.model_dir, 'wdisambig_phones.int', default=True),
             'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int', default=True),
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt', default=True),
+            'lexiconp_disambig.base.txt': find_file(self.model_dir, 'lexiconp_disambig.base.txt', default=True),
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
