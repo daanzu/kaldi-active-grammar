@@ -328,6 +328,12 @@ class Model(object):
                 if len(tokens) >= 2:
                     word, phones = tokens[0], tokens[1:]
                     phones = Lexicon.make_position_dependent(phones)
+                    unknown_phones = [phone for phone in phones if phone not in self.phone_to_int_dict]
+                    if unknown_phones:
+                        raise KaldiError("word %r has unknown phone(s) %r" % (word, unknown_phones))
+                        # _log.critical("word %r has unknown phone(s) %r so using junk phones!!!", word, unknown_phones)
+                        # phones = [phone if phone not in self.phone_to_int_dict else self.noise_phone for phone in phones]
+                        # continue
                     max_word_id += 1
                     user_lexicon_entries.append((word, max_word_id, phones))
 
