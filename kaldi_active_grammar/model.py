@@ -187,6 +187,7 @@ class Model(object):
             _log.warning("model_dir has no version information; errors below may indicate an incompatible model")
 
         self.create_missing_files()
+        self.check_user_lexicon()
 
         self.files_dict = {
             'exec_dir': self.exec_dir,
@@ -244,13 +245,21 @@ class Model(object):
 
         return self.lexicon_words
 
-    def read_user_lexicon(self):
-        with open(self.files_dict['user_lexicon.txt'], 'r', encoding='utf-8') as file:
+    def read_user_lexicon(self, filename=None):
+        if filename is None: filename = self.files_dict['user_lexicon.txt']
+        with open(filename, 'r', encoding='utf-8') as file:
             entries = [line.split() for line in file if line.split()]
             for tokens in entries:
                 # word lowercase
                 tokens[0] = tokens[0].lower()
         return entries
+
+    def write_user_lexicon(self, entries, filename=None):
+        if filename is None: filename = self.files_dict['user_lexicon.txt']
+        lines = [' '.join(tokens) + '\n' for tokens in entries]
+        lines.sort()
+        with open(filename, 'w', encoding='utf-8', newline='\n') as file:
+            file.writelines(lines)
 
     def add_word(self, word, phones=None, lazy_compilation=False):
         word = word.strip().lower()
@@ -274,9 +283,7 @@ class Model(object):
                 _log.warning("word (with different pronunciation) already in user_lexicon: %s" % tokens[1:])
 
         entries.append(new_entry)
-        lines = [' '.join(tokens) + '\n' for tokens in entries]
-        with open(self.files_dict['user_lexicon.txt'], 'w', encoding='utf-8', newline='\n') as file:
-            file.writelines(lines)
+        self.write_user_lexicon(entries)
 
         if lazy_compilation:
             self.lexicon_words.add(word)
@@ -286,7 +293,6 @@ class Model(object):
         return [phones]
 
     def create_missing_files(self):
-        _log.debug("creating missing files")
         utils.touch_file(os.path.join(self.model_dir, 'user_lexicon.txt'))
         def check_file(filename, src_filename):
             # Create missing file from its base file
@@ -297,6 +303,18 @@ class Model(object):
         check_file('words.txt', 'words.base.txt')
         check_file('align_lexicon.int', 'align_lexicon.base.int')
         check_file('lexiconp_disambig.txt', 'lexiconp_disambig.base.txt')
+
+    def check_user_lexicon(self):
+        cwd_user_lexicon_filename = os.path.abspath('user_lexicon.txt')
+        model_user_lexicon_filename = os.path.abspath(os.path.join(self.model_dir, 'user_lexicon.txt'))
+        if (cwd_user_lexicon_filename != model_user_lexicon_filename) and os.path.isfile(cwd_user_lexicon_filename):
+            model_user_lexicon_entries = set(tuple(tokens) for tokens in self.read_user_lexicon(filename=model_user_lexicon_filename))
+            cwd_user_lexicon_entries = set(tuple(tokens) for tokens in self.read_user_lexicon(filename=cwd_user_lexicon_filename))
+            new_user_lexicon_entries = cwd_user_lexicon_entries - model_user_lexicon_entries
+            if new_user_lexicon_entries:
+                _log.info("adding new user lexicon entries from %r", cwd_user_lexicon_filename)
+                entries = model_user_lexicon_entries | cwd_user_lexicon_entries
+                self.write_user_lexicon(entries, filename=model_user_lexicon_filename)
 
     def generate_lexicon_files(self):
         """ Generates: words.txt, align_lexicon.int, lexiconp_disambig.txt, L_disambig.fst """
