@@ -219,18 +219,26 @@ class FSTFileCache(object):
             _log.info("%s: failed to load cache from %r", self, cache_filename)
             self.cache = None
 
-        if (
-            # If could not load cache, or it should be invalidated
-            self.cache is None or invalidate
-            # If version changed
-            or self.cache.get('version') != __version__
-            # If list of dependencies has changed
-            or sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys())
-            # If any of the dependencies files' contents (as stored in cache) has changed
-            or any(not self.file_is_current(path)
+        must_reset_cache = False
+        if invalidate:
+            _log.debug("%s: forced invalidate", self)
+            must_reset_cache = True
+        elif self.cache is None:
+            _log.debug("%s: could not load cache", self)
+            must_reset_cache = True
+        elif self.cache.get('version') != __version__:
+            _log.debug("%s: version changed", self)
+            must_reset_cache = True
+        elif sorted(self.cache.get('dependencies_list', list())) != sorted(dependencies_dict.keys()):
+            _log.debug("%s: list of dependencies has changed", self)
+            must_reset_cache = True
+        elif any(not self.file_is_current(path)
                 for (name, path) in dependencies_dict.items()
-                if path and os.path.isfile(path))
-            ):
+                if path and os.path.isfile(path)):
+            _log.debug("%s: any of the dependencies files' contents (as stored in cache) has changed", self)
+            must_reset_cache = True
+
+        if must_reset_cache:
             # Then reset cache
             _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
             self.cache = dict({ 'version': text_type(__version__) })
