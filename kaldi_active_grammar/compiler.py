@@ -12,7 +12,7 @@ from io import open
 from six.moves import range, zip
 
 from . import _log, KaldiError
-from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, symbol_table_lookup, touch_file
+from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
 from .wfst import WFST
 from .model import Model
 import kaldi_active_grammar.alternative_dictation as alternative_dictation
@@ -185,6 +185,8 @@ class KaldiRule(object):
 class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US'):
+        show_donation_message()
+
         self.decoding_framework = 'agf'
         assert self.decoding_framework in ('otf', 'agf')
         self.parsing_framework = 'token'

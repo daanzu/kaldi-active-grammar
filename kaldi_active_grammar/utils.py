@@ -13,9 +13,26 @@ from contextlib import contextmanager
 from io import open
 
 import six
-from six import PY2, binary_type, text_type
+from six import PY2, binary_type, text_type, print_
 
 from . import _log, _name, __version__
+
+
+########################################################################################################################
+
+_donation_log = _log.getChild('donation')
+_donation_message = ("KALDI-ACTIVE-GRAMMAR v%s: If this is valuable to you, please consider donating at \n"
+    "https://github.com/daanzu/kaldi-active-grammar \n"
+    "Disable this message by calling `kaldi_active_grammar.disable_donation_message()`") % __version__
+
+def show_donation_message():
+    if PY2 and _donation_log.isEnabledFor(99) and not logging.getLogger().handlers:
+        print_(_donation_message)
+    else:
+        _donation_log.log(99, _donation_message)
+
+def disable_donation_message():
+    _donation_log.setLevel(100)
 
 
 ########################################################################################################################

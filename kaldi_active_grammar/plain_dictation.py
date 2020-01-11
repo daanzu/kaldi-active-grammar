@@ -8,6 +8,7 @@ from . import _log, KaldiError
 from .model import Model
 from .compiler import Compiler, remove_nonterms_in_text
 from .wrapper import KaldiPlainNNet3Decoder, KaldiAgfNNet3Decoder
+from .utils import show_donation_message
 
 _log = _log.getChild('plain_dictation')
 
@@ -24,6 +25,8 @@ class PlainDictationRecognizer(object):
             tmp_dir (str): optional path to temporary directory
             fst_file (str): optional path to model's HCLG.fst file to use
         """
+        show_donation_message()
+
         if fst_file:
             self._model = Model(model_dir, tmp_dir)
             self.decoder = KaldiPlainNNet3Decoder(self._model.model_dir, self._model.tmp_dir, fst_file=fst_file)

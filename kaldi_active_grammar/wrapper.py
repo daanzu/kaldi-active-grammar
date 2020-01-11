@@ -16,7 +16,7 @@ from cffi import FFI
 import numpy as np
 
 from . import _log, KaldiError
-from .utils import exec_dir, find_file, platform, symbol_table_lookup
+from .utils import exec_dir, find_file, platform, show_donation_message, symbol_table_lookup
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('wrapper')
@@ -39,6 +39,8 @@ class KaldiDecoderBase(object):
     """docstring for KaldiDecoderBase"""
 
     def __init__(self):
+        show_donation_message()
+
         self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
 
         self.sample_rate = 16000

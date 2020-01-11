@@ -17,7 +17,7 @@ except ImportError:
     g2p_en = None
 
 from . import _log, KaldiError, REQUIRED_MODEL_VERSION
-from .utils import ExternalProcess, find_file, load_symbol_table, symbol_table_lookup
+from .utils import ExternalProcess, find_file, load_symbol_table, show_donation_message, symbol_table_lookup
 import kaldi_active_grammar.defaults as defaults
 import kaldi_active_grammar.utils as utils
 
@@ -160,6 +160,8 @@ class Lexicon(object):
 
 class Model(object):
     def __init__(self, model_dir=None, tmp_dir=None):
+        show_donation_message()
+
         self.exec_dir = os.path.join(utils.exec_dir, '')
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
         self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')

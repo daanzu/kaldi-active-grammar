@@ -10,6 +10,8 @@ REQUIRED_MODEL_VERSION = '0.5.0'
 
 import logging
 _log = logging.getLogger('kaldi')
+# _handler = logging.NullHandler()
+# _log.addHandler(_handler)
 
 class KaldiError(Exception):
     pass
@@ -19,3 +21,4 @@ from .model import Model
 from .wrapper import KaldiAgfNNet3Decoder, KaldiPlainNNet3Decoder
 from .wfst import WFST
 from .plain_dictation import PlainDictationRecognizer
+from .utils import disable_donation_message
