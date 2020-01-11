@@ -110,7 +110,8 @@ This should be included the next dragonfly update, or you can try a self-contain
 
 ### Artifacts
 
-* **`kaldi_model_zamia_daanzu_mediumlm`**: A compatible general English Kaldi nnet3 chain model, with a larger/better dictation language model.
+* **`kaldi_model_daanzu`**: A better overall compatible general English Kaldi nnet3 chain model than below.
+* **`kaldi_model_zamia_daanzu_mediumlm`**: A compatible general English Kaldi nnet3 chain model, with a larger/better dictation language model than below.
 * **`kaldi_model_zamia`**: A compatible general English Kaldi nnet3 chain model.
 * **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
 * **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
