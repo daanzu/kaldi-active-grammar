@@ -32,7 +32,7 @@ This project extends that to allow each grammar/rule to be **independently marke
     * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py) to run all normal dragonfly scripts.
     * You can try it out easily on Windows using a **simple no-install package**: see [Getting Started](#getting-started) below.
     * [Caster](https://github.com/dictation-toolbox/Caster) is supported as of KaldiAG **v0.6.0** and Dragonfly **v0.16.1**.
-    * Support for KaldiAG **v1.0.0** has been merged as of Dragonfly **v0.18.0**! Improvements include **Direct Parsing**, **Python3**, **Unicode**, **Grammar/Rule Weights**, **Generalized Alternative Dictation**, and various bug fixes & optimizations. For details and previous versions' improvements, see [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
+    * Support for KaldiAG **v1.2.0** has been merged as of Dragonfly **v0.20.0**! Improvements include **Improved Recognition**, **Weights on Any Elements**, **Pluggable Alternative Dictation**, **Stand-alone Plain Dictation Interface**, and various bug fixes & optimizations. For details and previous versions' improvements, see [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
 
 ### Donations are appreciated to encourage development.
 
@@ -47,6 +47,10 @@ This project extends that to allow each grammar/rule to be **independently marke
 * [daanzu/kaldi-grammar-simple](https://github.com/daanzu/kaldi-grammar-simple)
 * [daanzu/speech-training-recorder](https://github.com/daanzu/speech-training-recorder)
 * [daanzu/dragonfly_daanzu_tools](https://github.com/daanzu/dragonfly_daanzu_tools)
+
+### Demo Video
+
+[![Demo Video](docs/demo_video.png)](https://youtu.be/Qk1mGbIJx3s)
 
 ## Getting Started
 
