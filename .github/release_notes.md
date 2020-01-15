@@ -150,7 +150,7 @@ If you have trouble downloading, try using `wget --continue`.
 ### Donations are appreciated to encourage development.
 
 [![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
-[**GitHub** is currently matching all my donations $-for-$.]
+[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
 
 
 
