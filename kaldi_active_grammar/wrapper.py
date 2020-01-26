@@ -11,6 +11,7 @@ Wrapper classes for Kaldi
 import logging, os.path, re, time
 from io import open
 
+from six import PY3
 from six.moves import zip
 from cffi import FFI
 import numpy as np
@@ -31,6 +32,13 @@ def en(text):
 def de(binary):
     """ For C interop: decode binary utf-8 -> unicode text. """
     return binary.decode('utf-8')
+
+if PY3:
+    def clock():
+        return time.perf_counter()
+else:
+    def clock():
+        return time.clock()
 
 
 ########################################################################################################################
@@ -63,19 +71,19 @@ class KaldiDecoderBase(object):
         self._decode_times = []
 
     def _start_decode_time(self, num_frames):
-        self.decode_start_time = time.clock()
+        self.decode_start_time = clock()
         self._decode_real_time += 1000.0 * num_frames / self.sample_rate
 
     def _stop_decode_time(self, finalize=False):
-        this = (time.clock() - self.decode_start_time) * 1000.0
+        this = (clock() - self.decode_start_time) * 1000.0
         self._decode_time += this
         self._decode_times.append(this)
         if finalize:
-            rtf = 1.0 * self._decode_time / self._decode_real_time
-            pct = 100.0 * this / self._decode_time
-            _log.debug("decoded at %.2f RTF, for %d ms audio, spending %d ms, of which %d ms (%d%%) in finalization",
+            rtf = 1.0 * self._decode_time / self._decode_real_time if self._decode_real_time != 0 else float('nan')
+            pct = 100.0 * this / self._decode_time if self._decode_time != 0 else 100
+            _log.log(15, "decoded at %.2f RTF, for %d ms audio, spending %d ms, of which %d ms (%.0f%%) in finalization",
                 rtf, self._decode_real_time, self._decode_time, this, pct)
-            _log.debug("    decode times: %s", ' '.join("%d" % t for t in self._decode_times))
+            _log.log(13, "    decode times: %s", ' '.join("%d" % t for t in self._decode_times))
             self._reset_decode_time()
 
     def kaldi_frame_num_to_audio_bytes(self, kaldi_frame_num):
