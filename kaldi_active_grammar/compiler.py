@@ -520,7 +520,7 @@ class Compiler(object):
                 self._log.exception("Exception performing alternative dictation")
 
         words = []
-        words_are_dictation = []
+        words_are_dictation_mask = []
         in_dictation = False
         for word in parsed_output.split():
             if word.startswith('#nonterm:'):
@@ -530,9 +530,9 @@ class Compiler(object):
                     in_dictation = False
             else:
                 words.append(word)
-                words_are_dictation.append(in_dictation)
+                words_are_dictation_mask.append(in_dictation)
 
-        return kaldi_rule, words, words_are_dictation
+        return kaldi_rule, words, words_are_dictation_mask
 
     def parse_partial_output(self, output):
         assert self.parsing_framework == 'token'
@@ -546,7 +546,7 @@ class Compiler(object):
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
         words = []
-        words_are_dictation = []
+        words_are_dictation_mask = []
         in_dictation = False
         for word in parsed_output.split():
             if word.startswith('#nonterm:'):
@@ -556,9 +556,9 @@ class Compiler(object):
                     in_dictation = False
             else:
                 words.append(word)
-                words_are_dictation.append(in_dictation)
+                words_are_dictation_mask.append(in_dictation)
 
-        return kaldi_rule, words, words_are_dictation, in_dictation
+        return kaldi_rule, words, words_are_dictation_mask, in_dictation
 
 ########################################################################################################################
 # Utility functions.
