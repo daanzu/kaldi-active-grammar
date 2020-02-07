@@ -6,7 +6,8 @@ https://github.com/pypa/sampleproject
 """
 
 # Always prefer setuptools over distutils
-from setuptools import setup, find_packages
+from setuptools import find_packages
+from skbuild import setup
 import os.path, re
 # io.open is needed for projects that support Python 2.7
 # It ensures open() defaults to text mode with universal newlines,
