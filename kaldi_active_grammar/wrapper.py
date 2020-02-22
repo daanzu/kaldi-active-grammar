@@ -392,7 +392,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
 
         self._model = self._lib.init_agf_nnet3(
-            14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
+            # 7.0, 7000, 200, 8.0, 1.0, 3,
+            14.0, 14000, 200, 8.0, 1.0, 3,
             en(mfcc_conf_file), en(ie_conf_file), en(model_file),
             nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
             en(words_file), en(word_align_lexicon_file or u''),

@@ -171,7 +171,7 @@ setup(
     # project page. What does your project relate to?
     #
     # Note that this is a string of words separated by whitespace, not a list.
-    keywords='kaldi speech recognition grammar',  # Optional
+    keywords='kaldi speech recognition grammar dragonfly',  # Optional
 
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
@@ -266,9 +266,9 @@ setup(
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
     project_urls={  # Optional
-        # 'Bug Reports': 'https://github.com/pypa/sampleproject/issues',
-        # 'Funding': 'https://donate.pypi.org',
+        'Bug Reports': 'https://github.com/daanzu/kaldi-active-grammar/issues',
+        'Funding': 'https://github.com/sponsors/daanzu',
         # 'Say Thanks!': 'http://saythanks.io/to/example',
-        # 'Source': 'https://github.com/pypa/sampleproject/',
+        'Source': 'https://github.com/daanzu/kaldi-active-grammar/',
     },
 )
