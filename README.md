@@ -26,7 +26,8 @@ This project extends that to allow each grammar/rule to be **independently marke
 * **Binaries:** The Python package **includes all necessary binaries** for decoding on **Linux or Windows**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
     * Binaries are generated from my [fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), which is only intended to be used by kaldi-active-grammar directly, and not as a stand-alone library.
 * **Pre-trained model:** A compatible **general English Kaldi nnet3 chain model** is trained on **~3000** hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
-    * An improved model is under development.
+    * [**Comparison of models**](docs/models.md)
+    * Improved models are under development.
 * **Plain dictation:** Do you just want to recognize plain dictation? Seems kind of boring, but okay! There is an [**interface for plain dictation** (see below)](#plain-dictation-interface), using either your specified `HCLG.fst` file, or KaldiAG's included pre-trained dictation model.
 * **Dragonfly/Caster:** A compatible [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi) is under development in the `kaldi` branch of my fork, and has been merged as of Dragonfly **v0.15.0**.
     * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py) to run all normal dragonfly scripts.
