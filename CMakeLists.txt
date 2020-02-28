@@ -47,6 +47,8 @@ set(LIBRARIES
   src/lib/libkaldi-tree${CMAKE_SHARED_LIBRARY_SUFFIX}
   src/lib/libkaldi-util${CMAKE_SHARED_LIBRARY_SUFFIX})
 
+set(KALDI_CONFIG_FLAGS --shared --static-math)
+
 find_program(MAKE_EXE NAMES make gmake nmake)
 
 message("   MAKE_EXE              = ${MAKE_EXE}")
@@ -57,15 +59,20 @@ message("   PYTHON_VERSION_STRING = ${PYTHON_VERSION_STRING}")
 message("   SKBUILD               = ${SKBUILD}")
 
 if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
-ExternalProject_Add(kaldi
-  GIT_CONFIG        advice.detachedHead=false
-  GIT_REPOSITORY    git@github.com:daanzu/kaldi-fork-active-grammar.git
-  GIT_TAG           origin/dragonfly
-  CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh
-  BUILD_IN_SOURCE   TRUE
-  BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd ../src && ./configure --shared ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS}
-  LIST_SEPARATOR    " "
-  INSTALL_COMMAND   mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST})
+  if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
+    set(STRIP_COMMAND find ${DST} -type f | xargs strip -x)
+  else()
+    set(STRIP_COMMAND find ${DST} -type f | xargs strip)
+  endif()
+  ExternalProject_Add(kaldi
+    GIT_CONFIG        advice.detachedHead=false
+    GIT_REPOSITORY    git@github.com:daanzu/kaldi-fork-active-grammar.git
+    GIT_TAG           origin/dragonfly
+    CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh && cd tools/openfst && autoreconf
+    BUILD_IN_SOURCE   TRUE
+    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd ../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin
+    LIST_SEPARATOR    " "
+    INSTALL_COMMAND   mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST} && ${STRIP_COMMAND})
 endif()
 
 # Fix dynamic libraries loading paths on macOS.  The libraries and

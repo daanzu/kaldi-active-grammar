@@ -1,10 +1,13 @@
 kaldi_active_grammar/exec
-wheelhouse/
 portable/
+*/kaldi_model*/
 
 # general things to ignore
+venv*/
 build/
+_skbuild/
 dist/
+wheelhouse/
 *.egg-info/
 *.egg
 *.py[cod]
