@@ -23,7 +23,7 @@ This project extends that to allow each grammar/rule to be **independently marke
 
 ### Features
 
-* **Binaries:** The Python package **includes all necessary binaries** for decoding on **Linux or Windows**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
+* **Binaries:** The Python package **includes all necessary binaries** for decoding on **Windows/Linux/MacOS**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
     * Binaries are generated from my [fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), which is only intended to be used by kaldi-active-grammar directly, and not as a stand-alone library.
 * **Pre-trained model:** A compatible **general English Kaldi nnet3 chain model** is trained on **~3000** hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
     * [**Comparison of models**](docs/models.md)
@@ -67,12 +67,11 @@ Otherwise...
 ### Setup
 
 **Requirements**:
-* Python 2.7 or 3.4+; *64-bit required!*
-    * Microphone support provided by [pyaudio](https://pypi.org/project/PyAudio/) package
-* OS: *Linux or Windows*; macOS planned if there is interest
+* Python 2.7 or 3.6+; *64-bit required!*
+* OS: *Windows/Linux/MacOS*
 * Only supports Kaldi left-biphone models, specifically *nnet3 chain* models, with specific modifications
 * ~1GB+ disk space for model plus temporary storage and cache, depending on your grammar complexity
-* ~500MB+ RAM for model and grammars, depending on your model and grammar complexity
+* ~1GB+ RAM for model and grammars, depending on your model and grammar complexity
 
 Install Python package, which includes necessary Kaldi binaries:
 
@@ -103,15 +102,21 @@ Documentation is sorely lacking currently. To see example usage, examine the [**
 import sys, wave
 from kaldi_active_grammar import PlainDictationRecognizer
 recognizer = PlainDictationRecognizer()  # Or supply non-default model_dir, tmp_dir, or fst_file
-wave_file = wave.open(sys.argv[1], 'rb')
+filename = sys.argv[1] if len(sys.argv) > 1 else 'test.wav'
+wave_file = wave.open(filename, 'rb')
 data = wave_file.readframes(wave_file.getnframes())
 output_str, likelihood = recognizer.decode_utterance(data)
-print(repr(output_str), likelihood)  # -> 'alpha bravo charlie' 1.1923989057540894
+print(repr(output_str), likelihood)  # -> 'it depends on the context' 2.1386399269104004
 ```
 
 ## Contributing
 
 Issues, suggestions, and feature requests are welcome & encouraged. Pull requests are considered, but project structure is in flux.
+
+Building:
+
+* Linux/MacOS: `python setup.py bdist_wheel` (see `CMakeLists.txt` for details)
+* Windows: currently quite complicated (see [my fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), then similar to Linux/MacOS)
 
 Donations are appreciated to encourage development.
 
