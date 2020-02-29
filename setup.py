@@ -7,13 +7,19 @@ https://github.com/pypa/sampleproject
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages
-from skbuild import setup
 import os.path, re
 # io.open is needed for projects that support Python 2.7
 # It ensures open() defaults to text mode with universal newlines,
 # and accepts an argument to specify the text encoding
 # Python 3 only projects can skip this import
 from io import open
+
+import sys
+if sys.argv[1] == '--raw':
+    sys.argv.pop(1)
+    from setuptools import setup
+else:
+    from skbuild import setup
 
 
 # https://stackoverflow.com/questions/45150304/how-to-force-a-python-wheel-to-be-platform-specific-when-building-it

@@ -47,7 +47,19 @@ set(LIBRARIES
   src/lib/libkaldi-tree${CMAKE_SHARED_LIBRARY_SUFFIX}
   src/lib/libkaldi-util${CMAKE_SHARED_LIBRARY_SUFFIX})
 
-set(KALDI_CONFIG_FLAGS --shared --static-math)
+if(DEFINED ENV{INTEL_MKL_DIR})
+  set(INTEL_MKL_DIR $ENV{INTEL_MKL_DIR})
+else()
+  set(INTEL_MKL_DIR "/opt/intel/mkl/")
+endif()
+if(EXISTS "${INTEL_MKL_DIR}")
+  set(KALDI_CONFIG_FLAGS --shared --static-math --mkl-root=${INTEL_MKL_DIR})
+else()
+  message("WARNING: cannot find INTEL_MKL_DIR: ${INTEL_MKL_DIR}")
+  set(KALDI_CONFIG_FLAGS --shared --static-math)
+endif()
+
+set(ENV{CXXFLAGS} -O2)
 
 find_program(MAKE_EXE NAMES make gmake nmake)
 
@@ -57,6 +69,10 @@ message("   PYTHON_INCLUDE_DIR    = ${PYTHON_INCLUDE_DIR}")
 message("   PYTHON_LIBRARY        = ${PYTHON_LIBRARY}")
 message("   PYTHON_VERSION_STRING = ${PYTHON_VERSION_STRING}")
 message("   SKBUILD               = ${SKBUILD}")
+
+if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
+  message(FATAL_ERROR "CMake build not supported on Windows")
+endif()
 
 if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
@@ -70,7 +86,7 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
     GIT_TAG           origin/dragonfly
     CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh && cd tools/openfst && autoreconf
     BUILD_IN_SOURCE   TRUE
-    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd ../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin
+    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd ../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
     LIST_SEPARATOR    " "
     INSTALL_COMMAND   mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST} && ${STRIP_COMMAND})
 endif()
