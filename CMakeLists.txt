@@ -84,9 +84,9 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
     GIT_CONFIG        advice.detachedHead=false
     GIT_REPOSITORY    git@github.com:daanzu/kaldi-fork-active-grammar.git
     GIT_TAG           origin/dragonfly
-    CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh && cd tools/openfst && autoreconf
+    CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh
     BUILD_IN_SOURCE   TRUE
-    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd ../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
+    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
     LIST_SEPARATOR    " "
     INSTALL_COMMAND   mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST} && ${STRIP_COMMAND})
 endif()
