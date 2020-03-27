@@ -5,7 +5,9 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/kaldi-active-grammar.svg?logo=python)](https://pypi.python.org/pypi/kaldi-active-grammar/)
+[![GitHub - Downloads](https://img.shields.io/github/downloads/daanzu/kaldi-active-grammar/total?logo=github)](https://github.com/daanzu/kaldi-active-grammar/releases)
+<!-- [![GitHub - Downloads](https://img.shields.io/github/downloads/daanzu/kaldi-active-grammar/latest/total?logo=github)](https://github.com/daanzu/kaldi-active-grammar/releases/latest) -->
 [![Batteries-Included](https://img.shields.io/badge/batteries-included-green.svg)](https://github.com/daanzu/kaldi-active-grammar/releases)
 [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community)
 
@@ -95,6 +97,8 @@ Or use your own model. Standard Kaldi models must be converted to be usable. Con
 ## Documentation
 
 Documentation is sorely lacking currently. To see example usage, examine the [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi).
+
+The KaldiAG API is pretty low level, but basically: you define a set of rules, and send in audio data, along with a bit mask of which rules are active at the beginning of each utterance, and receive back the recognized rule and text. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
 
 ### Plain dictation interface
 

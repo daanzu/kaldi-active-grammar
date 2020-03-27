@@ -157,4 +157,35 @@ If you have trouble downloading, try using `wget --continue`.
 
 
 
+v1.4.0: Preparation and Fixes for Next Generation of Models
+
+This should be included the next dragonfly version, or you can try a self-contained distribution available below.
+
+You can subscribe to announcements on Gitter: see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements). [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community)
+
+### Notes
+
+* **Next Generation of Models**: support for a new generation of models, trained on more data, and with hopefully better accuracy.
+* **User Lexicon**: if there is a ``user_lexicon.txt`` file in the current working directory of your initial loader script, its contents will be automatically added to the ``user_lexicon.txt`` in the active model when it is loaded.
+* Various bug fixes & optimizations
+
+### Artifacts
+
+* **`kaldi_model_daanzu*`**: A better acoustic model, and varying levels of language model for dictation (bigger is generally better).
+* **`kaldi_model_zamia`**: A compatible general English Kaldi nnet3 chain model.
+* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-dragonfly-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
+
+If you have trouble downloading, try using `wget --continue`.
+
+### Donations are appreciated to encourage development.
+
+[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
+
+
+
+
+
 This should be included the next dragonfly version, or you can try a self-contained distribution available below.
