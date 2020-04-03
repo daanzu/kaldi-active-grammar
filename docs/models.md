@@ -1,6 +1,10 @@
 # Speech Recognition Models
 
-## Comparison
+## Basic info for KaldiAG models
+
+* **Latency**: I have yet to do formal latency testing, but for command grammars, the latency between the end of the utterance (as determined by the Voice Activity Detector) and receiving the final recognition results is in the range of 10-20ms.
+
+## General Comparison
 
 * Metric: [Word Error Rate (WER)](https://en.wikipedia.org/wiki/Word_error_rate)
 * Data sets:
@@ -32,6 +36,8 @@ Fine tuning a generic model for an individual speaker can greatly increase accur
 
 ### David
 
+* Very difficult speech.
+
 | Model | David Commands (test set) | David Dictation (test set)
 :---:|:---:|:---:
 KaldiAG dgesr-f-1ep generic | 84.94 | 70.59
@@ -40,11 +46,16 @@ Custom model trained only on ~34hr of mixed commands + dictation | 10.04 | 10.29
 
 ### Shervin
 
-* Shervin Commands: ~1 hour, ~4000 utterances
-* Shervin Dictation: ~30 minutes, ~500 utterances
+* Accented speech.
+* Shervin Commands: ~1 hour, ~4000 utterances.
+* Shervin Dictation: ~20 minutes, ~250 utterances.
 
 | Model | Shervin Commands | Shervin Dictation
 :---:|:---:|:---:
-KaldiAG dgesr-f-1ep generic | 59.30 | 50.77
-KaldiAG dgesr-f-1ep fine tuned on Shervin Commands + Dictation | 7.19 | 46.74
+KaldiAG dgesr2-f-1ep generic | 46.98 | 9.21
+KaldiAG dgesr2-f-1ep fine tuned on Shervin Commands + Dictation | 9.76 | 2.40
+
+
+
+
 
