@@ -113,14 +113,14 @@ output_str, likelihood = recognizer.decode_utterance(data)
 print(repr(output_str), likelihood)  # -> 'it depends on the context' 2.1386399269104004
 ```
 
+### Building
+
+* Linux/MacOS: `python3 setup.py bdist_wheel` (see `CMakeLists.txt` for details)
+* Windows: currently complicated (see [my fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), then similar to Linux/MacOS)
+
 ## Contributing
 
 Issues, suggestions, and feature requests are welcome & encouraged. Pull requests are considered, but project structure is in flux.
-
-Building:
-
-* Linux/MacOS: `python setup.py bdist_wheel` (see `CMakeLists.txt` for details)
-* Windows: currently quite complicated (see [my fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), then similar to Linux/MacOS)
 
 Donations are appreciated to encourage development.
 
