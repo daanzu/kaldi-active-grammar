@@ -72,6 +72,7 @@ class KaldiRule(object):
             # self.fst.normalize_weights()
             self._fst_text = self.fst.get_fst_text()
             self.filename = self.fst_cache.get_fst_filename(self._fst_text)
+        # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
 
         if self.fst_cache.fst_is_current(self.filepath):
             _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
@@ -246,10 +247,11 @@ class Compiler(object):
     #         p3 = run("{exec_dir}fstarcsort {filename} {filename}")
     #         # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
 
-    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, **kwargs):
+    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, disambiguate_lg=True, **kwargs):
         """
         :param compile: bool whether to compile FST (False if it has already been compiled, like importing dictation FST)
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
+        :param disambiguate: bool whether to disambiguate LG (do for command grammars, but not for dictation graph!)
         """
         # Must be thread-safe!
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
@@ -259,6 +261,7 @@ class Compiler(object):
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
             format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
+            format_kwargs.update(disambiguate_lg=str(bool(disambiguate_lg)).lower())
 
             if 1:
                 # Pipeline-style
@@ -279,7 +282,7 @@ class Compiler(object):
                 if nonterm:
                     args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}'))
                     args.extend(format('--grammar-append-nonterm={words_nonterm_end}'))
-                args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--verbose={verbose}',
+                args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--disambiguate-lg={disambiguate_lg}', '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
                 compile_command()
@@ -311,7 +314,7 @@ class Compiler(object):
 
     def compile_agf_dictation_fst(self, g_filename=None):
         if g_filename is None: g_filename = self._default_dictation_g_filepath
-        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True)
+        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True, disambiguate_lg=False)
 
     # def _compile_base_fsts(self):
     #     filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
