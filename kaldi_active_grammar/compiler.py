@@ -307,7 +307,7 @@ class Compiler(object):
         verbose_level = 5 if self._log.isEnabledFor(5) else 0
         format_kwargs = dict(self.files_dict, g_filename=g_filename, output_filename=output_filename, verbose=verbose_level)
         format = ExternalProcess.get_formatter(format_kwargs)
-        args = format('--read-disambig-syms={disambig_int}', '--verbose={verbose}',
+        args = format('--read-disambig-syms={disambig_int}', '--disambiguate-lg=false', '--verbose={verbose}',
             '{tree}', '{final_mdl}', '{L_disambig_fst}', '{g_filename}', '{output_filename}')
         compile_command = ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
         compile_command()
