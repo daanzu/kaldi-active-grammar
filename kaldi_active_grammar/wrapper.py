@@ -277,7 +277,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         self.ie_conf_file = os.path.normpath(ie_conf_file)
         self.model_file = os.path.normpath(model_file)
         self.fst_file = os.path.normpath(fst_file)
-        verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
+        verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else -1
 
         self._model = self._lib.init_plain_nnet3(
             14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
@@ -389,7 +389,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         self.ie_conf_file = os.path.normpath(ie_conf_file)
         self.model_file = os.path.normpath(model_file)
         self.top_fst_file = os.path.normpath(top_fst_file)
-        verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else 1
+        verbosity = 2 if _log_library.isEnabledFor(logging.DEBUG) else -1
 
         self._model = self._lib.init_agf_nnet3(
             # 7.0, 7000, 200, 8.0, 1.0, 3,
