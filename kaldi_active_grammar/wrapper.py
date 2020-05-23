@@ -249,7 +249,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 
     _library_header_text = """
         void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-            char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+            char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
             char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
             int32_t verbosity);
         bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state);
@@ -262,6 +262,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             model_file=None, fst_file=None, save_adaptation_state=False):
         super(KaldiPlainNNet3Decoder, self).__init__()
 
+        model_dir = os.path.normpath(model_dir)
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int', required=False)
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
@@ -271,6 +272,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
         if fst_file is None: fst_file = find_file(model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME, required=True)
 
+        self.model_dir = model_dir
         self.words_file = os.path.normpath(words_file)
         self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
         self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
@@ -281,7 +283,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 
         self._model = self._lib.init_plain_nnet3(
             14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            en(mfcc_conf_file), en(ie_conf_file), en(model_file),
+            en(model_dir), en(mfcc_conf_file), en(ie_conf_file), en(model_file),
             en(words_file), en(word_align_lexicon_file or u''), en(fst_file),
             verbosity)
         self._saving_adaptation_state = save_adaptation_state
@@ -342,7 +344,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     _library_header_text = """
         extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-            char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
+            char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
             int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
             char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
             char* top_fst_filename_cp, char* dictation_fst_filename_cp,
@@ -364,6 +366,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             save_adaptation_state=False):
         super(KaldiAgfNNet3Decoder, self).__init__()
 
+        model_dir = os.path.normpath(model_dir)
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
@@ -383,6 +386,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if dictation_nonterm_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
 
+        self.model_dir = model_dir
+        # FIXME
         self.words_file = os.path.normpath(words_file)
         self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
         self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
@@ -394,7 +399,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         self._model = self._lib.init_agf_nnet3(
             # 7.0, 7000, 200, 8.0, 1.0, 3,
             14.0, 14000, 200, 8.0, 1.0, 3,
-            en(mfcc_conf_file), en(ie_conf_file), en(model_file),
+            en(model_dir), en(mfcc_conf_file), en(ie_conf_file), en(model_file),
             nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
             en(words_file), en(word_align_lexicon_file or u''),
             en(top_fst_file), en(dictation_fst_file or u''),
