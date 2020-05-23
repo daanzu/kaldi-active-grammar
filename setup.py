@@ -7,17 +7,17 @@ https://github.com/pypa/sampleproject
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages
-import os.path, re
+import os, re
 # io.open is needed for projects that support Python 2.7
 # It ensures open() defaults to text mode with universal newlines,
 # and accepts an argument to specify the text encoding
 # Python 3 only projects can skip this import
 from io import open
 
-import sys
-if sys.argv[1] == '--raw':
-    sys.argv.pop(1)
+if os.environ.get('KALDIAG_SETUP_RAW'):
     from setuptools import setup
+    import site
+    site.ENABLE_USER_SITE = True  # Fix stupid pip https://github.com/pypa/pip/issues/7953
 else:
     from skbuild import setup
 

@@ -1,6 +1,8 @@
 kaldi_active_grammar/exec
 portable/
+tmp/
 */kaldi_model*/
+*/kaldi_tmp*/
 
 # general things to ignore
 venv*/
