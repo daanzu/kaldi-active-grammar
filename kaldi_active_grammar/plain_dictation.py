@@ -46,6 +46,6 @@ class PlainDictationRecognizer(object):
         and returning a tuple of (output (*text*), likelihood (*float*)).
         """
         self.decoder.decode(samples_data, True)
-        output_str, likelihood = self.decoder.get_output()
+        output_str, info = self.decoder.get_output()
         output_str = remove_nonterms_in_text(output_str)
-        return (output_str, likelihood)
+        return (output_str, info)

@@ -138,8 +138,10 @@ class KaldiGmmDecoder(KaldiDecoderBase):
         likelihood_p = _ffi.new('double *')
         result = self._lib.get_output_gmm(self._model, output_p, output_max_length, likelihood_p)
         output_str = _ffi.string(output_p)
-        likelihood = likelihood_p[0]
-        return output_str, likelihood
+        info = {
+            'likelihood': likelihood_p[0],
+        }
+        return output_str, info
 
 
 ########################################################################################################################
@@ -208,8 +210,10 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
         likelihood_p = _ffi.new('double *')
         result = self._lib.get_output_otf_gmm(self._model, output_p, output_max_length, likelihood_p)
         output_str = _ffi.string(output_p)
-        likelihood = likelihood_p[0]
-        return output_str, likelihood
+        info = {
+            'likelihood': likelihood_p[0],
+        }
+        return output_str, info
 
 
 ########################################################################################################################
@@ -314,9 +318,10 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         if not result:
             raise KaldiError("get_output error")
         output_str = de(_ffi.string(output_p))
-        likelihood = likelihood_p[0]
-        # _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
-        return output_str, likelihood
+        info = {
+            'likelihood': likelihood_p[0],
+        }
+        return output_str, info
 
     def get_word_align(self, output):
         """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
@@ -355,7 +360,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
         extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
             bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-        extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
+        extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
+            float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
         extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
         extern "C" DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
         extern "C" DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
@@ -469,14 +475,23 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def get_output(self, output_max_length=4*1024):
         output_p = _ffi.new('char[]', output_max_length)
-        likelihood_p = _ffi.new('double *')
-        result = self._lib.get_output_agf_nnet3(self._model, output_p, output_max_length, likelihood_p)
+        likelihood_p = _ffi.new('float *')
+        am_score_p = _ffi.new('float *')
+        lm_score_p = _ffi.new('float *')
+        confidence_p = _ffi.new('float *')
+        expected_error_rate_p = _ffi.new('float *')
+        result = self._lib.get_output_agf_nnet3(self._model, output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
         if not result:
             raise KaldiError("get_output error")
         output_str = de(_ffi.string(output_p))
-        likelihood = likelihood_p[0]
-        # _log.debug("get_output: likelihood %f, %r", likelihood, output_str)
-        return output_str, likelihood
+        info = {
+            'likelihood': likelihood_p[0],
+            'am_score': am_score_p[0],
+            'lm_score': lm_score_p[0],
+            'confidence': confidence_p[0],
+            'expected_error_rate': expected_error_rate_p[0],
+        }
+        return output_str, info
 
     def get_word_align(self, output):
         """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
