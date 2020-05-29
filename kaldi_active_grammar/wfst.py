@@ -56,7 +56,7 @@ class WFST(object):
         """ Default weight is 1. None label is replaced by eps. Default olabel of None is replaced by label. """
         if label is None: label = self.eps
         if olabel is None: olabel = label
-        weight = 1 if weight is None else weight
+        if weight is None: weight = 1
         self._arc_table_dict[src_state].append(
             [int(src_state), int(dst_state), text_type(label), text_type(olabel), float(weight)])
 
@@ -83,9 +83,14 @@ class WFST(object):
     def label_is_silent(self, label):
         return ((label in self.silent_labels) or (label.startswith('#nonterm')))
 
+    def scale_weights(self, factor):
+        factor = float(factor)
+        for arcs in itervalues(self._arc_table_dict):
+            for arc in arcs:
+                arc[4] = arc[4] * factor
+
     def normalize_weights(self, stochasticity=False):
-        # Note: breakeven 10-13???
-        for (src_state, arcs) in self._arc_table_dict.items():
+        for arcs in itervalues(self._arc_table_dict):
             num_weights = len(arcs)
             sum_weights = sum(arc[4] for arc in arcs)
             divisor = float(sum_weights if stochasticity else num_weights)
