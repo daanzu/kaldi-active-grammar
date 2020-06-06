@@ -2,6 +2,8 @@
 
 > **Python Kaldi speech recognition with grammars that can be set active/inactive dynamically at decode-time**
 
+> Python package developed to enable context-based command & control of computer applications, as in the [Dragonfly](https://github.com/dictation-toolbox/dragonfly) speech recognition framework, using the [Kaldi](https://github.com/kaldi-asr/kaldi) automatic speech recognition engine.
+
 [![PyPI - Version](https://img.shields.io/pypi/v/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![PyPI - Wheel](https://img.shields.io/pypi/wheel/kaldi-active-grammar.svg)](https://pypi.python.org/pypi/kaldi-active-grammar/)
@@ -16,8 +18,6 @@
 [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
 [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
 [**GitHub** is matching (only) my **GitHub Sponsors** donations.]
-
-> Python package developed to enable context-based command & control of computer applications, as in the [Dragonfly](https://github.com/dictation-toolbox/dragonfly) speech recognition framework, using the [Kaldi](https://github.com/kaldi-asr/kaldi) automatic speech recognition engine.
 
 Normally, Kaldi decoding graphs are **monolithic**, require **expensive up-front off-line** compilation, and are **static during decoding**. Kaldi's new grammar framework allows **multiple independent** grammars with nonterminals, to be compiled separately and **stitched together dynamically** at decode-time, but all the grammars are **always active** and capable of being recognized.
 
@@ -35,11 +35,15 @@ This project extends that to allow each grammar/rule to be **independently marke
     * See its [documentation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html), try out a [demo](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_demo.py), or use the [loader](https://github.com/dictation-toolbox/dragonfly/blob/master/dragonfly/examples/kaldi_module_loader_plus.py) to run all normal dragonfly scripts.
     * You can try it out easily on Windows using a **simple no-install package**: see [Getting Started](#getting-started) below.
     * [Caster](https://github.com/dictation-toolbox/Caster) is supported as of KaldiAG **v0.6.0** and Dragonfly **v0.16.1**.
-    * Support for KaldiAG **v1.2.0** has been merged as of Dragonfly **v0.20.0**! Improvements include **Improved Recognition**, **Weights on Any Elements**, **Pluggable Alternative Dictation**, **Stand-alone Plain Dictation Interface**, and various bug fixes & optimizations. For details and previous versions' improvements, see [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
+* **Bootstrapped** since v0.2: development of KaldiAG is done entirely using KaldiAG.
 
 ### Demo Video
 
+<div align="center">
+
 [![Demo Video](docs/demo_video.png)](https://youtu.be/Qk1mGbIJx3s)
+
+</div>
 
 ### Donations are appreciated to encourage development.
 
