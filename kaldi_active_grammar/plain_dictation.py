@@ -39,13 +39,15 @@ class PlainDictationRecognizer(object):
                 top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file)
 
 
-    def decode_utterance(self, samples_data):
+    def decode_utterance(self, samples_data, chunk_size=1600):
         """
         Decodes an entire utterance at once,
         taking as input *samples_data* (*bytes-like* in `int16` format),
         and returning a tuple of (output (*text*), likelihood (*float*)).
         """
-        self.decoder.decode(samples_data, True)
+        for i in range(0, len(samples_data), chunk_size):
+            self.decoder.decode(samples_data[i : i + chunk_size], False)
+        self.decoder.decode(bytes(), True)
         output_str, info = self.decoder.get_output()
         output_str = remove_nonterms_in_text(output_str)
         return (output_str, info)
