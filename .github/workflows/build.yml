@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ build ]
+  pull_request:
+    branches: [ build ]
+
+jobs:
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Dependencies
+        run: |
+          python3 -m pip install --upgrade setuptools wheel scikit-build cmake ninja
+          brew install automake
+          brew install autoconf
+          brew install sox
+          brew install libtool
+      - run: |
+          wget --no-verbose http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16525/m_mkl_2020.1.216.dmg
+          hdiutil attach m_mkl_2020.1.216.dmg
+          cp /Volumes/m_mkl_2020.1.216/m_mkl_2020.1.216.app/Contents/MacOS/silent.cfg .
+          sed -i.bak -e 's/decline/accept/g' silent.cfg
+          sudo /Volumes/m_mkl_2020.1.216/m_mkl_2020.1.216.app/Contents/MacOS/install.sh --silent silent.cfg
+      - run: |
+          df -h
+      - run: |
+          python3 setup.py bdist_wheel
+      # - run: |
+      #     cmake --build . --target install --config Release --
+      #   continue-on-error: true
+      - uses: actions/upload-artifact@v2
+        with:
+          name: wheel-macos
+          path: dist/*
+
+# build-linux:
+#   runs-on: ubuntu-latest
+#   steps:
+#   - uses: actions/checkout@v2
+#   - name: Setup just
+#     uses: extractions/setup-just@v1
+#   - run: |
+#       just build-wheels

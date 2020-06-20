@@ -82,8 +82,9 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   endif()
   ExternalProject_Add(kaldi
     GIT_CONFIG        advice.detachedHead=false
-    GIT_REPOSITORY    git@github.com:daanzu/kaldi-fork-active-grammar.git
+    GIT_REPOSITORY    https://github.com/daanzu/kaldi-fork-active-grammar.git
     GIT_TAG           cded07367cfe66cc176468c219e1dcac5d544e6b
+    GIT_SHALLOW       TRUE
     CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh
     BUILD_IN_SOURCE   TRUE
     BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
