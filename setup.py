@@ -16,8 +16,8 @@ from io import open
 
 if os.environ.get('KALDIAG_SETUP_RAW'):
     from setuptools import setup
-    import site
-    site.ENABLE_USER_SITE = True  # Fix stupid pip https://github.com/pypa/pip/issues/7953
+    import site, sys
+    site.ENABLE_USER_SITE = ("--user" in sys.argv[1:])  # Fix stupid pip https://github.com/pypa/pip/issues/7953
 else:
     from skbuild import setup
 
