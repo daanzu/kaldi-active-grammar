@@ -364,7 +364,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
             model_file=None, top_fst_file=None, dictation_fst_file=None,
-            save_adaptation_state=False):
+            save_adaptation_state=False, config=None):
         super(KaldiAgfNNet3Decoder, self).__init__()
 
         model_dir = os.path.normpath(model_dir)
@@ -397,7 +397,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         self.top_fst_file = os.path.normpath(top_fst_file)
         verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
 
-        config_json = json.dumps({
+        config_dict = {
             'model_dir': model_dir,
             'mfcc_config_filename': mfcc_conf_file,
             'ie_config_filename': ie_conf_file,
@@ -409,7 +409,9 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             'word_align_lexicon_filename': word_align_lexicon_file or '',
             'top_fst_filename': top_fst_file,
             'dictation_fst_filename': dictation_fst_file or '',
-            })
+            }
+        if config: config_dict.update(config)
+        config_json = json.dumps(config_dict)
 
         self._model = self._lib.init_agf_nnet3(en(model_dir), en(config_json), verbosity)
         self.num_grammars = 0

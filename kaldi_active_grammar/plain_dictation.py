@@ -15,7 +15,7 @@ _log = _log.getChild('plain_dictation')
 
 class PlainDictationRecognizer(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, fst_file=None):
+    def __init__(self, model_dir=None, tmp_dir=None, fst_file=None, config=None):
         """
         Recognizes plain dictation only. If `fst_file` is specified, uses that
         HCLG.fst file; otherwise, uses KaldiAG but dictation only.
@@ -28,6 +28,7 @@ class PlainDictationRecognizer(object):
         show_donation_message()
 
         if fst_file:
+            assert not config, "specifying config not supported for KaldiPlainNNet3Decoder yet"
             self._model = Model(model_dir, tmp_dir)
             self.decoder = KaldiPlainNNet3Decoder(self._model.model_dir, self._model.tmp_dir, fst_file=fst_file)
 
@@ -35,6 +36,8 @@ class PlainDictationRecognizer(object):
             self._compiler = Compiler(model_dir, tmp_dir)
             top_fst = self._compiler.compile_top_fst_dictation_only()
             dictation_fst_file = self._compiler.dictation_fst_filepath
+            kwargs = {}
+            if config: kwargs['config'] = dict(config)
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
                 top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, **kwargs)
 
@@ -48,9 +51,9 @@ class PlainDictationRecognizer(object):
         """
         if chunk_size:
             chunk_size *= 2  # Compensate for int16 format
-        for i in range(0, len(samples_data), chunk_size):
-            self.decoder.decode(samples_data[i : i + chunk_size], False)
-        self.decoder.decode(bytes(), True)
+            for i in range(0, len(samples_data), chunk_size):
+                self.decoder.decode(samples_data[i : i + chunk_size], False)
+            self.decoder.decode(bytes(), True)
         else:
             self.decoder.decode(samples_data, True)
         output_str, info = self.decoder.get_output()
