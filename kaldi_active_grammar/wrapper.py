@@ -8,7 +8,7 @@
 Wrapper classes for Kaldi
 """
 
-import logging, os.path, re, time
+import json, logging, os.path, re, time
 from io import open
 
 from six import PY3
@@ -177,7 +177,7 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
 
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
-        _log.debug("%s: adding grammar_fst_file: %s", self, grammar_fst_file)
+        _log.log(8, "%s: adding grammar_fst_file: %s", self, grammar_fst_file)
         result = self._lib.add_grammar_fst_otf_gmm(self._model, grammar_fst_file)
         if not result:
             raise KaldiError("error adding grammar")
@@ -348,12 +348,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
     _library_header_text = """
-        extern "C" DRAGONFLY_API void* init_agf_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-            char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
-            int32_t nonterm_phones_offset, int32_t rules_nonterm_offset, int32_t dictation_nonterm_offset,
-            char* word_syms_filename_cp, char* word_align_lexicon_filename_cp,
-            char* top_fst_filename_cp, char* dictation_fst_filename_cp,
-            int32_t verbosity);
+        extern "C" DRAGONFLY_API void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         extern "C" DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
         extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
         extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
@@ -369,7 +364,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
             model_file=None, top_fst_file=None, dictation_fst_file=None,
-            save_adaptation_state=False):
+            save_adaptation_state=False, config=None):
         super(KaldiAgfNNet3Decoder, self).__init__()
 
         model_dir = os.path.normpath(model_dir)
@@ -385,11 +380,11 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         nonterm_phones_offset = symbol_table_lookup(phones_file, '#nonterm_bos')
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
-        rules_nonterm_offset = symbol_table_lookup(phones_file, '#nonterm:rule0') - nonterm_phones_offset
-        if rules_nonterm_offset is None:
+        rules_phones_offset = symbol_table_lookup(phones_file, '#nonterm:rule0')
+        if rules_phones_offset is None:
             raise KaldiError("cannot find #nonterm:rule0 symbol in phones.txt")
-        dictation_nonterm_offset = symbol_table_lookup(phones_file, '#nonterm:dictation') - nonterm_phones_offset
-        if dictation_nonterm_offset is None:
+        dictation_phones_offset = symbol_table_lookup(phones_file, '#nonterm:dictation')
+        if dictation_phones_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
 
         self.model_dir = model_dir
@@ -402,14 +397,23 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         self.top_fst_file = os.path.normpath(top_fst_file)
         verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
 
-        self._model = self._lib.init_agf_nnet3(
-            # 7.0, 7000, 200, 8.0, 1.0, 3,
-            14.0, 14000, 200, 8.0, 1.0, 3,
-            en(model_dir), en(mfcc_conf_file), en(ie_conf_file), en(model_file),
-            nonterm_phones_offset, rules_nonterm_offset, dictation_nonterm_offset,
-            en(words_file), en(word_align_lexicon_file or u''),
-            en(top_fst_file), en(dictation_fst_file or u''),
-            verbosity)
+        config_dict = {
+            'model_dir': model_dir,
+            'mfcc_config_filename': mfcc_conf_file,
+            'ie_config_filename': ie_conf_file,
+            'model_filename': model_file,
+            'nonterm_phones_offset': nonterm_phones_offset,
+            'rules_phones_offset': rules_phones_offset,
+            'dictation_phones_offset': dictation_phones_offset,
+            'word_syms_filename': words_file,
+            'word_align_lexicon_filename': word_align_lexicon_file or '',
+            'top_fst_filename': top_fst_file,
+            'dictation_fst_filename': dictation_fst_file or '',
+            }
+        if config: config_dict.update(config)
+        config_json = json.dumps(config_dict)
+
+        self._model = self._lib.init_agf_nnet3(en(model_dir), en(config_json), verbosity)
         self.num_grammars = 0
         self._saving_adaptation_state = save_adaptation_state
 
@@ -426,7 +430,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
-        _log.debug("%s: adding grammar_fst_file: %r", self, grammar_fst_file)
+        _log.log(8, "%s: adding grammar_fst_file: %r", self, grammar_fst_file)
         grammar_fst_index = self._lib.add_grammar_fst_agf_nnet3(self._model, en(grammar_fst_file))
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst_file)
