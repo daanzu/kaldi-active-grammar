@@ -36,18 +36,23 @@ class PlainDictationRecognizer(object):
             top_fst = self._compiler.compile_top_fst_dictation_only()
             dictation_fst_file = self._compiler.dictation_fst_filepath
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
-                top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file)
+                top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, **kwargs)
 
 
-    def decode_utterance(self, samples_data, chunk_size=1600):
+    def decode_utterance(self, samples_data, chunk_size=None):
         """
         Decodes an entire utterance at once,
         taking as input *samples_data* (*bytes-like* in `int16` format),
         and returning a tuple of (output (*text*), likelihood (*float*)).
+        Optionally takes *chunk_size* (*int* in number of samples) for decoding.
         """
+        if chunk_size:
+            chunk_size *= 2  # Compensate for int16 format
         for i in range(0, len(samples_data), chunk_size):
             self.decoder.decode(samples_data[i : i + chunk_size], False)
         self.decoder.decode(bytes(), True)
+        else:
+            self.decoder.decode(samples_data, True)
         output_str, info = self.decoder.get_output()
         output_str = remove_nonterms_in_text(output_str)
         return (output_str, info)
