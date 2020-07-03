@@ -1,4 +1,4 @@
-name: CI
+name: Continuous Integration
 
 on:
   push:
@@ -10,6 +10,7 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    if: false
     steps:
       - uses: actions/checkout@v2
       - name: Dependencies
@@ -26,22 +27,25 @@ jobs:
           sed -i.bak -e 's/decline/accept/g' silent.cfg
           sudo /Volumes/m_mkl_2020.1.216/m_mkl_2020.1.216.app/Contents/MacOS/install.sh --silent silent.cfg
       - run: |
-          df -h
-      - run: |
           python3 setup.py bdist_wheel
-      # - run: |
-      #     cmake --build . --target install --config Release --
-      #   continue-on-error: true
       - uses: actions/upload-artifact@v2
         with:
-          name: wheel-macos
+          name: wheels
           path: dist/*
-
-# build-linux:
-#   runs-on: ubuntu-latest
-#   steps:
-#   - uses: actions/checkout@v2
-#   - name: Setup just
-#     uses: extractions/setup-just@v1
-#   - run: |
-#       just build-wheels
+          
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup just
+        run: |
+          ls -al $HOME
+          mkdir $HOME/bin
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to $HOME/bin/
+          echo "::add-path::$HOME/bin"
+      - run: |
+          just build-dockcross
+      - uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: wheelhouse/*

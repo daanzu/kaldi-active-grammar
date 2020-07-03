@@ -22,6 +22,7 @@ else:
     from skbuild import setup
 
 
+# Force wheel to be platform specific
 # https://stackoverflow.com/questions/45150304/how-to-force-a-python-wheel-to-be-platform-specific-when-building-it
 # https://github.com/Yelp/dumb-init/blob/48db0c0d0ecb4598d1a6400710445b85d67616bf/setup.py#L11-L27
 # https://github.com/google/or-tools/issues/616#issuecomment-371480314
@@ -65,6 +66,11 @@ def find_version(*file_paths):
         return version_match.group(1)
     raise RuntimeError("Unable to find version string.")
 
+version = find_version('kaldi_active_grammar', '__init__.py')
+
+# Set branch for Kaldi source repository (maybe we should use commits instead?)
+os.environ['KALDI_BRANCH'] = ('origin/kag-v' + version) if ('dev' not in version) else 'origin/master'
+
 # Get the long description from the README file
 with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
@@ -100,7 +106,7 @@ setup(
     # https://packaging.python.org/en/latest/single_source_version.html
     # version='0.2.0',  # Required
     # version=open('VERSION').read().strip(),
-    version=find_version('kaldi_active_grammar', '__init__.py'),
+    version=version,
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
