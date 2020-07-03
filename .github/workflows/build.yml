@@ -10,7 +10,7 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
-    if: false
+    if: true
     steps:
       - uses: actions/checkout@v2
       - name: Dependencies
@@ -35,6 +35,7 @@ jobs:
           
   build-linux:
     runs-on: ubuntu-latest
+    if: true
     steps:
       - uses: actions/checkout@v2
       - name: Setup just
@@ -49,3 +50,97 @@ jobs:
         with:
           name: wheels
           path: wheelhouse/*
+
+  build-windows:
+    runs-on: windows-2019
+    if: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: main
+      - uses: actions/checkout@v2
+        with:
+          repository: daanzu/openfst
+          path: openfst
+      - uses: actions/checkout@v2
+        with:
+          repository: daanzu/kaldi-fork-active-grammar
+          path: kaldi
+      # - name: wget
+      #   uses: wei/wget@v1
+      #   with:
+      #     args: -qO- http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16543/w_mkl_2020.1.216.exe
+      - name: Setup Kaldi build configuration
+        run: |
+          echo $GITHUB_WORKSPACE
+          df -h
+          cd kaldi/windows
+          cp kaldiwin_mkl.props kaldiwin.props
+          cp variables.props.dev variables.props
+          # sed -i.bak \
+          #   -e 's%<OPENFST>.*</OPENFST>%<OPENFST>${{ github.workspace }}/openfst</OPENFST>%g' \
+          #   -e 's%<OPENFSTLIB>.*</OPENFSTLIB>%<OPENFSTLIB>${{ github.workspace }}/openfst/build64</OPENFSTLIB>%g' \
+          #   variables.props
+          perl -pi -e 's/<OPENFST>.*<\/OPENFST>/<OPENFST>$ENV{GITHUB_WORKSPACE}\\openfst<\/OPENFST>/g' variables.props
+          perl -pi -e 's/<OPENFSTLIB>.*<\/OPENFSTLIB>/<OPENFSTLIB>$ENV{GITHUB_WORKSPACE}\\openfst\\build_output<\/OPENFSTLIB>/g' variables.props
+          cat variables.props
+          perl generate_solution.pl --vsver vs2019 --enable-mkl --noportaudio
+          perl get_version.pl
+          cd ../..
+        # find /c -name 'MSBuild.exe'
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v1.0.0
+      # - run: |
+      #     setx VCTargetsPath "C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\v140" /M
+      #   shell: cmd
+      - name: Install MKL
+        run: |
+          mkdir -p mkl
+          cd mkl
+          curl -s http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16543/w_mkl_2020.1.216.exe > mkl.exe
+          ls -al
+          ./mkl.exe --s --a install --output=$GITHUB_WORKSPACE/mkl/output.txt --eula=accept
+          cat output.txt
+        # continue-on-error: true
+        # installdir=
+      - run: df -h
+      - name: Build OpenFST
+        run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v142 -maxCpuCount -verbosity:minimal openfst/openfst.sln
+        shell: cmd
+      - run: df -h
+      - name: Build Kaldi
+        run: |
+          msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v142 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
+          msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v142 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/compile-graph-agf/compile-graph-agf.vcxproj
+          msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v142 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/fstaddselfloops/fstaddselfloops.vcxproj
+        shell: cmd
+        # msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v142 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin_vs2019.sln
+        # set
+        # call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
+        # which msbuild.exe
+        # set VCTargetsPath=C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\v140
+        # set
+        # "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\amd64\MSBuild.exe"
+        # dotenv openfst/openfst.sln /build "Release|x64"
+        # dotenv kaldi/kaldiwin_vs2017_MKL/kaldiwin_vs2017.sln /build "Release|x64"
+      - run: df -h
+      - name: Build Python wheel
+        run: |
+          cd main
+          python -m pip -V
+          python -m pip install --upgrade setuptools wheel scikit-build cmake ninja
+          mkdir -p kaldi_active_grammar/exec/windows
+          ls -alR ../
+          cp ../openfst/build_output/x64/Release/bin/{fstarcsort,fstcompile,fstinfo}.exe \
+            ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll \
+            ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/compile-graph-agf/x64/Release/compile-graph-agf.exe \
+            ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/fstaddselfloops/x64/Release/fstaddselfloops.exe \
+            kaldi_active_grammar/exec/windows/
+          env KALDIAG_SETUP_RAW=1 python setup.py bdist_wheel
+      - uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: main/dist/*

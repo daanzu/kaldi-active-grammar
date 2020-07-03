@@ -18,10 +18,6 @@ else()
   set(DST ${DST}/windows/)
 endif()
 
-if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
-  message(FATAL_ERROR "CMake build not supported on Windows")
-endif()
-
 set(BINARIES
   tools/openfst/bin/fstarcsort${CMAKE_EXECUTABLE_SUFFIX}
   tools/openfst/bin/fstcompile${CMAKE_EXECUTABLE_SUFFIX}
@@ -57,6 +53,10 @@ if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
     src/lib/libkaldi-tree${CMAKE_SHARED_LIBRARY_SUFFIX}
     src/lib/libkaldi-util${CMAKE_SHARED_LIBRARY_SUFFIX}
   )
+endif()
+
+if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
+  message(FATAL_ERROR "CMake build not supported on Windows")
 endif()
 
 if(DEFINED ENV{INTEL_MKL_DIR})
