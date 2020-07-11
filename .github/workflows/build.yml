@@ -11,6 +11,8 @@ jobs:
   build-macos:
     runs-on: macos-latest
     if: true
+    env:
+      MACOSX_DEPLOYMENT_TARGET: 10.9
     steps:
       - uses: actions/checkout@v2
       - name: Dependencies

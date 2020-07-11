@@ -57,6 +57,9 @@ endif()
 
 if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   message(FATAL_ERROR "CMake build not supported on Windows")
+  # FIXME: copy files?
+  # https://cmake.org/cmake/help/latest/command/foreach.html
+  # https://stackoverflow.com/questions/34799916/copy-file-from-source-directory-to-binary-directory-using-cmake
 endif()
 
 if(DEFINED ENV{INTEL_MKL_DIR})
