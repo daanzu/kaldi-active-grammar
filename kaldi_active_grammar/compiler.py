@@ -505,7 +505,7 @@ class Compiler(object):
                     dictation_span['offset_end'] = len(audio_data)
                 else:
                     next_word_time = times[dictation_span['index_end'] + 1]
-                    dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) / 2
+                    dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) // 2
 
                 def replace_dictation(matchobj):
                     orig_text = matchobj.group(1)
