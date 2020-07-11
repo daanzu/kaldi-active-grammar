@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 * Refactor of passing configuration to initialization.
 * `PlainDictationRecognizer.decode_utterance` can take `chunk_size` parameter.
-* Smaller binaries: Windows 23MB -> 2MB, MacOS 11MB -> 7.6MB, Linux 21MB -> 18MB.
+* Smaller binaries: MacOS 11MB -> 7.6MB, Linux 21MB -> 18MB.
 
 ### Fixed
 * Python3 int division bug for cloud dictation.

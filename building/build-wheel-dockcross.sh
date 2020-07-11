@@ -14,6 +14,9 @@ if [ -z "$WHEEL_PLAT" ] || [ -z "$PYTHON_EXE" ]; then
 fi
 
 mkdir -p _skbuild
+rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
+rm -rf kaldi_active_grammar/exec
+
 pushd _skbuild
 wget --no-verbose --no-clobber $MKL_URL
 mkdir -p /tmp/mkl
@@ -23,8 +26,6 @@ sudo /tmp/mkl/install.sh --silent /tmp/mkl/silent.cfg
 rm -rf /tmp/mkl
 popd
 
-rm -rf kaldi_active_grammar/exec
-rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
 # $PYTHON_EXE -m pip install --upgrade setuptools wheel scikit-build cmake ninja
 $PYTHON_EXE setup.py bdist_wheel
 

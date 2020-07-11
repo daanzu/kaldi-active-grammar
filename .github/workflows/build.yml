@@ -84,6 +84,7 @@ jobs:
           df -h
           cd kaldi/windows
           cp kaldiwin_mkl.props kaldiwin.props
+          perl -pi -e 's/<AdditionalDependencies>.*<\/AdditionalDependencies>/<AdditionalDependencies>mkl_sequential.lib;mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)<\/AdditionalDependencies>/g' kaldiwin.props
           cp variables.props.dev variables.props
           # sed -i.bak \
           #   -e 's%<OPENFST>.*</OPENFST>%<OPENFST>${{ github.workspace }}/openfst</OPENFST>%g' \
@@ -91,7 +92,7 @@ jobs:
           #   variables.props
           perl -pi -e 's/<OPENFST>.*<\/OPENFST>/<OPENFST>$ENV{GITHUB_WORKSPACE}\\openfst<\/OPENFST>/g' variables.props
           perl -pi -e 's/<OPENFSTLIB>.*<\/OPENFSTLIB>/<OPENFSTLIB>$ENV{GITHUB_WORKSPACE}\\openfst\\build_output<\/OPENFSTLIB>/g' variables.props
-          cat variables.props
+          # cat variables.props
           perl generate_solution.pl --vsver vs2019 --enable-mkl --noportaudio
           perl get_version.pl
           cd ../..

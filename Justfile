@@ -10,6 +10,12 @@ build-docker:
 	docker run --rm -e KAG_BRANCH=master -e WHEEL_PLAT=manylinux2010_x86_64 -v $(pwd):/io {{docker_repo}} bash /io/building/build-wheel-manylinux.sh
 	# docker run --rm -e PLAT=manylinux2010_x86_64 -v .:/io {{docker_repo}} cp ../kaldi/tools/openfst/bin/{fstarcsort,fstcompile,fstinfo} ../kaldi/src/fstbin/fstaddselfloops ../kaldi/src/dragonfly/libkaldi-dragonfly.so ../kaldi/src/dragonflybin/compile-graph-agf /io/kaldi_active_grammar/exec/linux
 
+build-linux python='python3':
+	mkdir -p _skbuild
+	rm -rf kaldi_active_grammar/exec
+	rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
+	{{python}} setup.py bdist_wheel
+
 build-dockcross:
 	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64
 
