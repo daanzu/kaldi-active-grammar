@@ -23,29 +23,44 @@ set(BINARIES
   tools/openfst/bin/fstcompile${CMAKE_EXECUTABLE_SUFFIX}
   tools/openfst/bin/fstinfo${CMAKE_EXECUTABLE_SUFFIX}
   src/fstbin/fstaddselfloops${CMAKE_EXECUTABLE_SUFFIX}
-  src/dragonflybin/compile-graph-agf${CMAKE_EXECUTABLE_SUFFIX})
+  src/dragonflybin/compile-graph-agf${CMAKE_EXECUTABLE_SUFFIX}
+  )
 set(LIBRARIES
-  tools/openfst/lib/libfst${CMAKE_SHARED_LIBRARY_SUFFIX}
-  tools/openfst/lib/libfstscript${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-base${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-chain${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-cudamatrix${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-decoder${CMAKE_SHARED_LIBRARY_SUFFIX}
   src/lib/libkaldi-dragonfly${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-feat${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-fstext${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-gmm${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-hmm${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-ivector${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-lat${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-lm${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-matrix${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-nnet2${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-nnet3${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-online2${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-transform${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-tree${CMAKE_SHARED_LIBRARY_SUFFIX}
-  src/lib/libkaldi-util${CMAKE_SHARED_LIBRARY_SUFFIX})
+  )
+
+# For MacOS, we handle all the "indirect" shared libraries manually.
+if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
+  list(APPEND LIBRARIES
+    tools/openfst/lib/libfst${CMAKE_SHARED_LIBRARY_SUFFIX}
+    tools/openfst/lib/libfstscript${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-base${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-chain${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-cudamatrix${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-decoder${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-feat${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-fstext${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-gmm${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-hmm${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-ivector${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-lat${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-lm${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-matrix${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-nnet2${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-nnet3${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-online2${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-transform${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-tree${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-util${CMAKE_SHARED_LIBRARY_SUFFIX}
+  )
+endif()
+
+if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
+  message(FATAL_ERROR "CMake build not supported on Windows")
+  # FIXME: copy files?
+  # https://cmake.org/cmake/help/latest/command/foreach.html
+  # https://stackoverflow.com/questions/34799916/copy-file-from-source-directory-to-binary-directory-using-cmake
+endif()
 
 if(DEFINED ENV{INTEL_MKL_DIR})
   set(INTEL_MKL_DIR $ENV{INTEL_MKL_DIR})
@@ -53,15 +68,22 @@ else()
   set(INTEL_MKL_DIR "/opt/intel/mkl/")
 endif()
 if(EXISTS "${INTEL_MKL_DIR}")
-  set(KALDI_CONFIG_FLAGS --shared --static-math --mkl-root=${INTEL_MKL_DIR})
+  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mkl-root=${INTEL_MKL_DIR})
 else()
-  message("WARNING: cannot find INTEL_MKL_DIR: ${INTEL_MKL_DIR}")
-  set(KALDI_CONFIG_FLAGS --shared --static-math)
+  message(WARNING "cannot find INTEL_MKL_DIR: ${INTEL_MKL_DIR}")
+  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no)
 endif()
 
-set(ENV{CXXFLAGS} -O2)
+# set(KALDI_CXXFLAGS -O2 -g0)
 
 find_program(MAKE_EXE NAMES make gmake nmake)
+
+if(DEFINED ENV{KALDI_BRANCH})
+  set(KALDI_BRANCH $ENV{KALDI_BRANCH})
+else()
+  message(FATAL_ERROR "KALDI_BRANCH not set! Use 'origin/master'?")
+  # set(KALDI_BRANCH "origin/master")
+endif()
 
 message("   MAKE_EXE              = ${MAKE_EXE}")
 message("   PYTHON_EXECUTABLE     = ${PYTHON_EXECUTABLE}")
@@ -69,27 +91,26 @@ message("   PYTHON_INCLUDE_DIR    = ${PYTHON_INCLUDE_DIR}")
 message("   PYTHON_LIBRARY        = ${PYTHON_LIBRARY}")
 message("   PYTHON_VERSION_STRING = ${PYTHON_VERSION_STRING}")
 message("   SKBUILD               = ${SKBUILD}")
-
-if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
-  message(FATAL_ERROR "CMake build not supported on Windows")
-endif()
+message("   KALDI_BRANCH          = ${KALDI_BRANCH}")
 
 if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
+  set(STRIP_LIBS_COMMAND find src/lib tools/openfst/lib -name *${CMAKE_SHARED_LIBRARY_SUFFIX} | xargs strip)
+  set(STRIP_DST_COMMAND find ${DST} | xargs strip)
   if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
-    set(STRIP_COMMAND find ${DST} -type f | xargs strip -x)
-  else()
-    set(STRIP_COMMAND find ${DST} -type f | xargs strip)
+    list(APPEND STRIP_LIBS_COMMAND -x)
+    list(APPEND STRIP_DST_COMMAND -x)
   endif()
   ExternalProject_Add(kaldi
     GIT_CONFIG        advice.detachedHead=false
     GIT_REPOSITORY    https://github.com/daanzu/kaldi-fork-active-grammar.git
-    GIT_TAG           cded07367cfe66cc176468c219e1dcac5d544e6b
+    GIT_TAG           ${KALDI_BRANCH}
     GIT_SHALLOW       TRUE
-    CONFIGURE_COMMAND mkdir -p python && touch python/.use_default_python && tools/extras/check_dependencies.sh
+    CONFIGURE_COMMAND sed -i.bak -e "s/status=0/exit 0/g" tools/extras/check_dependencies.sh && cp ${PROJECT_SOURCE_DIR}/building/kaldi-configure-wrapper.sh src/
     BUILD_IN_SOURCE   TRUE
-    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
+    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
     LIST_SEPARATOR    " "
-    INSTALL_COMMAND   mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST} && ${STRIP_COMMAND})
+    INSTALL_COMMAND   ${STRIP_LIBS_COMMAND} && mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST}
+    )
 endif()
 
 # Fix dynamic libraries loading paths on macOS.  The libraries and

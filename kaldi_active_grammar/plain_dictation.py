@@ -24,6 +24,7 @@ class PlainDictationRecognizer(object):
             model_dir (str): optional path to model directory
             tmp_dir (str): optional path to temporary directory
             fst_file (str): optional path to model's HCLG.fst file to use
+            config (dict): optional configuration for initialization of decoder
         """
         show_donation_message()
 

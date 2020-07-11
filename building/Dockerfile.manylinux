@@ -1,0 +1,47 @@
+FROM quay.io/pypa/manylinux2010_x86_64
+
+LABEL description="A docker image for building portable Python linux binary wheels with Kaldi for kaldi-active-grammar"
+LABEL maintainer="daanzu@gmail.com"
+
+RUN yum -y update && yum -y install \
+    wget \
+    && yum clean all
+# Kaldi default suggested dependencies: zlib-devel wget sox subversion python27 python34 centos-release-scl
+
+RUN cd /opt \
+    && wget --no-verbose http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16533/l_mkl_2020.1.217.tgz \
+    && tar zxf l_mkl_2020.1.217.tgz \
+    && cd l_mkl_2020.1.217 \
+    && sed -i.bak -e 's/ACCEPT_EULA=decline/ACCEPT_EULA=accept/g' -e 's/ARCH_SELECTED=ALL/ARCH_SELECTED=INTEL64/g' silent.cfg \
+    && ./install.sh --silent silent.cfg \
+    && cd .. \
+    && rm -rf l_mkl_2020.1.217*
+
+ARG NCPU=10
+ARG KFAG_BRANCH=master
+
+RUN cd /opt \
+    && export OPENFST_CONFIGURE="--enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
+    && git clone --depth 1 --branch ${KFAG_BRANCH} https://github.com/daanzu/kaldi-fork-active-grammar kaldi \
+    && cd kaldi/tools \
+    && sed -i 's/status=0/exit 0/g' extras/check_dependencies.sh \
+    && make -j ${NCPU} openfst \
+    && cd ../src \
+    && export CXXFLAGS="-O2" \
+    && ./configure --shared --static-math --mathlib=MKL --mkl-root=/opt/intel/mkl/ --use-cuda=no \
+    && make -j ${NCPU} depend \
+    && make -j ${NCPU} dragonfly dragonflybin bin fstbin lmbin \
+    && cat kaldi.mk \
+    && find /opt/kaldi -name "*.o" -exec rm {} \; \
+    && find /opt/kaldi -name "*.so" | xargs strip
+
+# OPENFST_CONFIGURE=--disable-bin
+
+# RUN cd /opt \
+#     && git clone --depth 1 --branch ${KAG_BRANCH} https://github.com/daanzu/kaldi-active-grammar kaldi-active-grammar \
+#     && cd kaldi-active-grammar \
+#     && mkdir -p kaldi_active_grammar/exec/linux \
+#     && cp ../kaldi/tools/openfst/bin/{fstarcsort,fstcompile,fstinfo} ../kaldi/src/fstbin/fstaddselfloops ../kaldi/src/dragonfly/libkaldi-dragonfly.so ../kaldi/src/dragonflybin/compile-graph-agf kaldi_active_grammar/exec/linux \
+#     && find kaldi_active_grammar/exec/linux/ -type f | xargs strip \
+#     && env KALDIAG_SETUP_RAW=1 python3 setup.py bdist_wheel \
+#     && for whl in dist/*.whl; do auditwheel repair "" --plat ${WHEEL_PLAT} -w /io/wheelhouse/; done \
