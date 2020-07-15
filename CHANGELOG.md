@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Smaller binaries: MacOS 11MB -> 7.6MB, Linux 21MB -> 18MB.
 
 ### Fixed
+* Confidence measurement in the presence of multiple, redundant rules.
 * Python3 int division bug for cloud dictation.
 
 ## Earlier versions
