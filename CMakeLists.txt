@@ -49,6 +49,7 @@ if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
     src/lib/libkaldi-nnet2${CMAKE_SHARED_LIBRARY_SUFFIX}
     src/lib/libkaldi-nnet3${CMAKE_SHARED_LIBRARY_SUFFIX}
     src/lib/libkaldi-online2${CMAKE_SHARED_LIBRARY_SUFFIX}
+    src/lib/libkaldi-rnnlm${CMAKE_SHARED_LIBRARY_SUFFIX}
     src/lib/libkaldi-transform${CMAKE_SHARED_LIBRARY_SUFFIX}
     src/lib/libkaldi-tree${CMAKE_SHARED_LIBRARY_SUFFIX}
     src/lib/libkaldi-util${CMAKE_SHARED_LIBRARY_SUFFIX}
