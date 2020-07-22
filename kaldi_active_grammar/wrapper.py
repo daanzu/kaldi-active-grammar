@@ -24,7 +24,7 @@ _log = _log.getChild('wrapper')
 _log_library = _log.getChild('library')
 
 _ffi = FFI()
-_c_source_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')
+_c_source_ignore_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')
 
 def en(text):
     """ For C interop: encode unicode text -> binary utf-8. """
@@ -62,7 +62,7 @@ class KaldiDecoderBase(object):
 
     @classmethod
     def _init_ffi(cls):
-        _ffi.cdef(_c_source_regex.sub(' ', cls._library_header_text))
+        _ffi.cdef(_c_source_ignore_regex.sub(' ', cls._library_header_text))
         return _ffi.dlopen(cls._library_binary_path)
 
     def _reset_decode_time(self):
@@ -252,18 +252,19 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiPlainNNet3Decoder"""
 
     _library_header_text = """
-        void* init_plain_nnet3(float beam, int32_t max_active, int32_t min_active, float lattice_beam, float acoustic_scale, int32_t frame_subsampling_factor,
-            char* model_dir_cp, char* mfcc_config_filename_cp, char* ie_config_filename_cp, char* model_filename_cp,
-            char* word_syms_filename_cp, char* word_align_lexicon_filename_cp, char* fst_filename_cp,
-            int32_t verbosity);
-        bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize, bool save_adaptation_state);
-        bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length, double* likelihood_p);
-        bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-        bool reset_adaptation_state_plain_nnet3(void* model_vp);
+        DRAGONFLY_API void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API bool load_lexicon_plain_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
+        DRAGONFLY_API bool save_adaptation_state_plain_nnet3(void* model_vp);
+        DRAGONFLY_API bool reset_adaptation_state_plain_nnet3(void* model_vp);
+        DRAGONFLY_API bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+        DRAGONFLY_API bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
+        DRAGONFLY_API bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length,
+                float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
     """
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, fst_file=None, save_adaptation_state=False):
+            model_file=None, fst_file=None,
+            save_adaptation_state=False, config=None):
         super(KaldiPlainNNet3Decoder, self).__init__()
 
         model_dir = os.path.normpath(model_dir)
@@ -285,11 +286,19 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         self.fst_file = os.path.normpath(fst_file)
         verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
 
-        self._model = self._lib.init_plain_nnet3(
-            14.0, 14000, 200, 8.0, 1.0, 3,  # chain: 7.0, 7000, 200, 8.0, 1.0, 3,
-            en(model_dir), en(mfcc_conf_file), en(ie_conf_file), en(model_file),
-            en(words_file), en(word_align_lexicon_file or u''), en(fst_file),
-            verbosity)
+        config_dict = {
+            'model_dir': model_dir,
+            'mfcc_config_filename': mfcc_conf_file,
+            'ie_config_filename': ie_conf_file,
+            'model_filename': model_file,
+            'word_syms_filename': words_file,
+            'word_align_lexicon_filename': word_align_lexicon_file or '',
+            'decode_fst_filename': fst_file,
+            }
+        if config: config_dict.update(config)
+        config_json = json.dumps(config_dict)
+
+        self._model = self._lib.init_plain_nnet3(en(model_dir), en(config_json), verbosity)
         self._saving_adaptation_state = save_adaptation_state
 
     saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
@@ -313,18 +322,26 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 
     def get_output(self, output_max_length=4*1024):
         output_p = _ffi.new('char[]', output_max_length)
-        likelihood_p = _ffi.new('double *')
-        result = self._lib.get_output_plain_nnet3(self._model, output_p, output_max_length, likelihood_p)
+        likelihood_p = _ffi.new('float *')
+        am_score_p = _ffi.new('float *')
+        lm_score_p = _ffi.new('float *')
+        confidence_p = _ffi.new('float *')
+        expected_error_rate_p = _ffi.new('float *')
+        result = self._lib.get_output_plain_nnet3(self._model, output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
         if not result:
             raise KaldiError("get_output error")
         output_str = de(_ffi.string(output_p))
         info = {
             'likelihood': likelihood_p[0],
+            'am_score': am_score_p[0],
+            'lm_score': lm_score_p[0],
+            'confidence': confidence_p[0],
+            'expected_error_rate': expected_error_rate_p[0],
         }
         return output_str, info
 
     def get_word_align(self, output):
-        """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
+        """Returns tuple of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
         words = output.split()
         num_words = len(words)
         kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
@@ -334,7 +351,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("get_word_align error")
         times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
         lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
-        return list(zip(words, times, lengths))
+        return tuple(zip(words, times, lengths))
 
     def reset_adaptation_state(self):
         result = self._lib.reset_adaptation_state_plain_nnet3(self._model)
@@ -348,18 +365,18 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
     _library_header_text = """
-        extern "C" DRAGONFLY_API void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
-        extern "C" DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
-        extern "C" DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
-        extern "C" DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
-        extern "C" DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
-        extern "C" DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+        DRAGONFLY_API void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
+        DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
+        DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
+        DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+        DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
+        DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
+        DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
+        DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
             bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-        extern "C" DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
+        DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
             float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
-        extern "C" DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
-        extern "C" DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
-        extern "C" DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
     """
 
     def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
@@ -498,7 +515,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         return output_str, info
 
     def get_word_align(self, output):
-        """Returns list of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
+        """Returns tuple of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
         words = output.split()
         num_words = len(words)
         kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
@@ -508,7 +525,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("get_word_align error")
         times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
         lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
-        return list(zip(words, times, lengths))
+        return tuple(zip(words, times, lengths))
 
     def save_adaptation_state(self):
         result = self._lib.save_adaptation_state_agf_nnet3(self._model)

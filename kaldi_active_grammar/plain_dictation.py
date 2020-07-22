@@ -28,17 +28,17 @@ class PlainDictationRecognizer(object):
         """
         show_donation_message()
 
+        kwargs = {}
+        if config: kwargs['config'] = dict(config)
+
         if fst_file:
-            assert not config, "specifying config not supported for KaldiPlainNNet3Decoder yet"
             self._model = Model(model_dir, tmp_dir)
-            self.decoder = KaldiPlainNNet3Decoder(self._model.model_dir, self._model.tmp_dir, fst_file=fst_file)
+            self.decoder = KaldiPlainNNet3Decoder(self._model.model_dir, self._model.tmp_dir, fst_file=fst_file, **kwargs)
 
         else:
             self._compiler = Compiler(model_dir, tmp_dir)
             top_fst = self._compiler.compile_top_fst_dictation_only()
             dictation_fst_file = self._compiler.dictation_fst_filepath
-            kwargs = {}
-            if config: kwargs['config'] = dict(config)
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
                 top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, **kwargs)
 
