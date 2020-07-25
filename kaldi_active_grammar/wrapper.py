@@ -221,6 +221,10 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
 class KaldiNNet3Decoder(KaldiDecoderBase):
     """ Abstract base class for nnet3 decoders. """
 
+    _library_header_text = """
+        DRAGONFLY_API bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_cp);
+    """
+
     def __init__(self):
         super(KaldiNNet3Decoder, self).__init__()
 
@@ -245,13 +249,19 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
                 new_file.write("%s=%s\n" % (key, value))
         return new_filename
 
+    def set_lm_prime_text(self, prime_text):
+        prime_text = prime_text.strip()
+        result = self._lib.set_lm_prime_text_base_nnet3(self._model, en(prime_text))
+        if not result:
+            raise KaldiError("error setting prime text %r" % prime_text)
+
 
 ########################################################################################################################
 
 class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiPlainNNet3Decoder"""
 
-    _library_header_text = """
+    _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool load_lexicon_plain_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
         DRAGONFLY_API bool save_adaptation_state_plain_nnet3(void* model_vp);
@@ -364,7 +374,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
-    _library_header_text = """
+    _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
         DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
