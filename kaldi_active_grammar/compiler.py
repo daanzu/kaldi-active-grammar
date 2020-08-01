@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import base64, collections, logging, multiprocessing, os, re, shlex, subprocess
+import base64, collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess
 import concurrent.futures
 from contextlib import contextmanager
 from io import open
@@ -278,6 +278,13 @@ class Compiler(object):
 
                 if compile:
                     compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+                    if self._log.isEnabledFor(5):
+                        g_txt_filename = filename.replace('.fst', '.G.fst.txt')
+                        self._log.log(5, "Saving text grammar FST to %s", g_txt_filename)
+                        with open(g_txt_filename, 'wb') as f: shutil.copyfileobj(copy.deepcopy(compile_command.commands[0].get_opt('stdin')), f)
+                        g_filename = filename.replace('.fst', '.G.fst')
+                        self._log.log(5, "Saving compiled grammar FST to %s", g_filename)
+                        (copy.deepcopy(compile_command) | g_filename)()
                     args.extend(['--arcsort-grammar'])
                 if nonterm:
                     args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}'))
