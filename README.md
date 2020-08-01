@@ -10,7 +10,9 @@
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/kaldi-active-grammar.svg?logo=python)](https://pypi.python.org/pypi/kaldi-active-grammar/)
 [![GitHub - Downloads](https://img.shields.io/github/downloads/daanzu/kaldi-active-grammar/total?logo=github)](https://github.com/daanzu/kaldi-active-grammar/releases)
 <!-- [![GitHub - Downloads](https://img.shields.io/github/downloads/daanzu/kaldi-active-grammar/latest/total?logo=github)](https://github.com/daanzu/kaldi-active-grammar/releases/latest) -->
+
 [![Batteries-Included](https://img.shields.io/badge/batteries-included-green.svg)](https://github.com/daanzu/kaldi-active-grammar/releases)
+![Continuous Integration](https://github.com/daanzu/kaldi-active-grammar/workflows/Continuous%20Integration/badge.svg)
 [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community)
 
 [![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu)
@@ -93,10 +95,14 @@ Or use your own model. Standard Kaldi models must be converted to be usable. Con
 
 * Errors installing
     * Make sure you're using a 64-bit Python.
-    * You must install via `pip install kaldi-active-grammar` (directly or indirectly), *not* `python setup.py install`, in order to get the required binaries.
+    * You should install via `pip install kaldi-active-grammar` (directly or indirectly), *not* `python setup.py install`, in order to get the required binaries.
     * Update your `pip` (to at least `19.0+`) by executing `python -m pip install --upgrade pip`, to support the required python binary wheel package.
-* Try deleting the Kaldi model `*.tmp` directory and rerunning.
-* For reporting issues, try running with `import logging; logging.basicConfig(level=1)` at the top of your main file to enable full debugging logging.
+* Errors running
+    * Windows: `The code execution cannot proceed because VCRUNTIME140.dll was not found.` (or similar)
+        * You must install the VC2017+ redistributable from Microsoft: [download page](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads), [direct link](https://aka.ms/vs/16/release/vc_redist.x64.exe). (This is usually already installed globally by other programs.)
+    * Try deleting the Kaldi model `.tmp` directory, and re-running.
+    * Try deleting the Kaldi model directory itself, re-downloading and/or re-extracting it, and re-running. (Note: You may want to make a copy of your `user_lexicon.txt` file before deleting, to put in the new model directory.)
+* For reporting issues, try running with `import logging; logging.basicConfig(level=1)` at the top of your main/loader file to enable full debugging logging.
 
 ## Documentation
 
@@ -119,8 +125,17 @@ print(repr(output_str), likelihood)  # -> 'it depends on the context' 2.13863992
 
 ### Building
 
-* Linux/MacOS: `python3 setup.py bdist_wheel` (see `CMakeLists.txt` for details)
-* Windows: currently complicated (see [my fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), then similar to Linux/MacOS)
+* Recommendation: use the binary wheels distributed for all major platforms.
+    * Significant work has gone into allowing you to avoid the many repo/dependency downloads, GBs of disk space, and vCPU-hours needed for building from scratch.
+    * They are built in public by automated Continuous Integration run on GitHub Actions: [see manifest](.github/workflows/build.yml).
+* Alternatively, to build for use locally:
+    * Linux/MacOS:
+        1. Install [Intel Math Kernel Library](https://software.intel.com/en-us/mkl)
+        1. `python -m pip install -r requirements-build.txt`
+        1. `python setup.py bdist_wheel` (see [`CMakeLists.txt`](CMakeLists.txt) for details)
+    * Windows:
+        * Less easily generally automated
+        * You can follow the steps for Continuous Integration run on GitHub Actions: see the `build-windows` section of [the manifest](.github/workflows/build.yml).
 
 ## Contributing
 

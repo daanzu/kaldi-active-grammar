@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1](https://github.com/daanzu/kaldi-active-grammar/compare/v1.6.0...v1.6.1) - 2020-07-19
+
+### Changed
+* Windows wheels now only require the VS2017 (not VS2019) redistributables to be installed
+
 ## [1.6.0](https://github.com/daanzu/kaldi-active-grammar/compare/v1.5.0...v1.6.0) - 2020-07-11
 
 ### Added

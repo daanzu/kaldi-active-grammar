@@ -188,4 +188,66 @@ If you have trouble downloading, try using `wget --continue`.
 
 
 
+v1.5.0: Improved Recognition Confidence Estimation
+
+You can subscribe to announcements on Gitter: see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements). [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community)
+
+### Notes
+
+* **Improved Recognition Confidence Estimation**: two new, different measures:
+    * `confidence`: basically the difference in how much "better" the returned recognition was, compared to the second best guess (`>0`)
+    * `expected_error_rate`: an estimate of how often similar utterances are incorrect (roughly out of `1.0`, but can be greater)
+* Refactoring in preparation for future improvements
+* Various bug fixes & optimizations
+
+### Artifacts
+
+* **Models are available [here](https://github.com/daanzu/kaldi-active-grammar/blob/master/docs/models.md)**
+* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
+
+If you have trouble downloading, try using `wget --continue`.
+
+### Donations are appreciated to encourage development.
+
+[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
+
+
+
+
+v1.6.0: Easier Configuration; Public Automated Builds
+
+You can subscribe to announcements on Gitter: see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements). [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community)
+
+### Added
+* Can now pass configuration dict to `KaldiAgfNNet3Decoder`, `PlainDictationRecognizer` (without `HCLG.fst`).
+* Continuous Integration builds run on GitHub Actions for Windows (x64), MacOS (x64), Linux (x64).
+
+### Changed
+* Refactor of passing configuration to initialization.
+* `PlainDictationRecognizer.decode_utterance` can take `chunk_size` parameter.
+* Smaller binaries: MacOS 11MB -> 7.6MB, Linux 21MB -> 18MB.
+
+### Fixed
+* Confidence measurement in the presence of multiple, redundant rules.
+* Python3 int division bug for cloud dictation.
+
+### Artifacts
+
+* **Models are available [here](https://github.com/daanzu/kaldi-active-grammar/blob/master/docs/models.md)**
+* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
+
+If you have trouble downloading, try using `wget --continue`.
+
+### Donations are appreciated to encourage development.
+
+[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
+
+
+
+
+
 This should be included the next dragonfly version, or you can try a self-contained distribution available below.
