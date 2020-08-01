@@ -247,11 +247,11 @@ class Compiler(object):
     #         p3 = run("{exec_dir}fstarcsort {filename} {filename}")
     #         # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
 
-    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, disambiguate_lg=True, **kwargs):
+    def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, simplify_lg=True, **kwargs):
         """
         :param compile: bool whether to compile FST (False if it has already been compiled, like importing dictation FST)
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
-        :param disambiguate: bool whether to disambiguate LG (do for command grammars, but not for dictation graph!)
+        :param simplify_lg: bool whether to simplify LG (disambiguate, and more) (do for command grammars, but not for dictation graph!)
         """
         # Must be thread-safe!
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
@@ -261,7 +261,7 @@ class Compiler(object):
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
             format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
-            format_kwargs.update(disambiguate_lg=str(bool(disambiguate_lg)).lower())
+            format_kwargs.update(simplify_lg=str(bool(simplify_lg)).lower())
 
             if 1:
                 # Pipeline-style
@@ -287,9 +287,12 @@ class Compiler(object):
                         (copy.deepcopy(compile_command) | g_filename)()
                     args.extend(['--arcsort-grammar'])
                 if nonterm:
-                    args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}'))
-                    args.extend(format('--grammar-append-nonterm={words_nonterm_end}'))
-                args.extend(format('--nonterm-phones-offset={nonterm_phones_offset}', '--read-disambig-syms={disambig_int}', '--disambiguate-lg={disambiguate_lg}', '--verbose={verbose}',
+                    args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}', '--grammar-append-nonterm={words_nonterm_end}'))
+                args.extend(format(
+                    '--nonterm-phones-offset={nonterm_phones_offset}',
+                    '--read-disambig-syms={disambig_int}',
+                    '--simplify-lg={simplify_lg}',
+                    '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
                 compile_command()
@@ -297,7 +300,7 @@ class Compiler(object):
                 # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_data), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
 
             else:
-                # CLI-style
+                # CLI-style (deprecated!)
                 run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(input_filename=filename), **kwargs)
                 if compile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {filename}")
                 # run("cp {input_filename} {filename}-G")
@@ -314,14 +317,14 @@ class Compiler(object):
         verbose_level = 5 if self._log.isEnabledFor(5) else 0
         format_kwargs = dict(self.files_dict, g_filename=g_filename, output_filename=output_filename, verbose=verbose_level)
         format = ExternalProcess.get_formatter(format_kwargs)
-        args = format('--read-disambig-syms={disambig_int}', '--disambiguate-lg=false', '--verbose={verbose}',
+        args = format('--read-disambig-syms={disambig_int}', '--simplify-lg=false', '--verbose={verbose}',
             '{tree}', '{final_mdl}', '{L_disambig_fst}', '{g_filename}', '{output_filename}')
         compile_command = ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
         compile_command()
 
     def compile_agf_dictation_fst(self, g_filename=None):
         if g_filename is None: g_filename = self._default_dictation_g_filepath
-        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True, disambiguate_lg=False)
+        self._compile_agf_graph(input_filename=g_filename, filename=self._dictation_fst_filepath, nonterm=True, simplify_lg=False)
 
     # def _compile_base_fsts(self):
     #     filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
