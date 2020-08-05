@@ -230,6 +230,13 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
 
     def _convert_ie_conf_file(self, model_dir, old_filename, new_filename, search=True):
         """ Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration. """
+        with open(new_filename, 'w', encoding='utf-8', newline='\n') as new_file:
+            for key, value in self._read_ie_conf_file(model_dir, old_filename, search).items():
+                new_file.write("--%s=%s\n" % (key, value))
+        return new_filename
+
+    def _read_ie_conf_file(self, model_dir, old_filename, search=True):
+        """ Read ivector_extractor.conf file, converting relative paths to absolute paths for current configuration, returning dict of config. """
         options_with_path = {
             '--splice-config':      'conf/splice.conf',
             '--cmvn-config':        'conf/online_cmvn.conf',
@@ -238,7 +245,8 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
             '--diag-ubm':           'ivector_extractor/final.dubm',
             '--ivector-extractor':  'ivector_extractor/final.ie',
         }
-        with open(old_filename, 'r', encoding='utf-8') as old_file, open(new_filename, 'w', encoding='utf-8', newline='\n') as new_file:
+        config = dict()
+        with open(old_filename, 'r', encoding='utf-8') as old_file:
             for line in old_file:
                 key, value = line.strip().split('=', 1)
                 if key in options_with_path:
@@ -246,8 +254,12 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
                         value = os.path.join(model_dir, options_with_path[key])
                     else:
                         value = find_file(model_dir, os.path.basename(options_with_path[key]), required=True)
-                new_file.write("%s=%s\n" % (key, value))
-        return new_filename
+                else:
+                    value = float(value) if '.' in value else int(value)
+                assert key.startswith('--')
+                key = key[2:]
+                config[key] = value
+        return config
 
     def set_lm_prime_text(self, prime_text):
         prime_text = prime_text.strip()
@@ -282,10 +294,12 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int', required=False)
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
-        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
-            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
         if fst_file is None: fst_file = find_file(model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME, required=True)
+
+        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
+            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
+        ie_config = self._read_ie_conf_file(model_dir, find_file(model_dir, 'ivector_extractor.conf'))
 
         self.model_dir = model_dir
         self.words_file = os.path.normpath(words_file)
@@ -299,7 +313,8 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         config_dict = {
             'model_dir': model_dir,
             'mfcc_config_filename': mfcc_conf_file,
-            'ie_config_filename': ie_conf_file,
+            'ie_config_filename': ie_conf_file,  # FIXME: deprecated
+            'ivector_extraction_config_json': ie_config,
             'model_filename': model_file,
             'word_syms_filename': words_file,
             'word_align_lexicon_filename': word_align_lexicon_file or '',
