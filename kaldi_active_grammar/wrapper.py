@@ -270,7 +270,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         """ Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration. """
         with open(new_filename, 'w', encoding='utf-8', newline='\n') as new_file:
             for key, value in self._read_ie_conf_file(model_dir, old_filename, search).items():
-                new_file.write("--%s=%s\n" % (key, value))
+                new_file.write("--%s=%s\n" % (key, (str(value).lower() if isinstance(value, bool) else str(value))))
         return new_filename
 
     def _read_ie_conf_file(self, model_dir, old_filename, search=True):
@@ -283,17 +283,31 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
             '--diag-ubm':           'ivector_extractor/final.dubm',
             '--ivector-extractor':  'ivector_extractor/final.ie',
         }
+        def convert_path(key, value):
+            if not search:
+                return os.path.join(model_dir, options_with_path[key])
+            else:
+                return find_file(model_dir, os.path.basename(options_with_path[key]), required=True)
+        options_converters = {
+            '--splice-config':          convert_path,
+            '--cmvn-config':            convert_path,
+            '--lda-matrix':             convert_path,
+            '--global-cmvn-stats':      convert_path,
+            '--diag-ubm':               convert_path,
+            '--ivector-extractor':      convert_path,
+            '--ivector-period':         lambda key, value: (float(value) if '.' in value else int(value)),
+            '--max-count':              lambda key, value: (float(value) if '.' in value else int(value)),
+            '--max-remembered-frames':  lambda key, value: (float(value) if '.' in value else int(value)),
+            '--min-post':               lambda key, value: (float(value) if '.' in value else int(value)),
+            '--num-gselect':            lambda key, value: (float(value) if '.' in value else int(value)),
+            '--posterior-scale':        lambda key, value: (float(value) if '.' in value else int(value)),
+            '--online-cmvn-iextractor': lambda key, value: (True if value in ['true'] else False),
+        }
         config = dict()
         with open(old_filename, 'r', encoding='utf-8') as old_file:
             for line in old_file:
                 key, value = line.strip().split('=', 1)
-                if key in options_with_path:
-                    if not search:
-                        value = os.path.join(model_dir, options_with_path[key])
-                    else:
-                        value = find_file(model_dir, os.path.basename(options_with_path[key]), required=True)
-                else:
-                    value = float(value) if '.' in value else int(value)
+                value = options_converters[key](key, value)
                 assert key.startswith('--')
                 key = key[2:]
                 config[key] = value
