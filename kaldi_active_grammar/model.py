@@ -29,6 +29,7 @@ _log = _log.getChild('model')
 class Lexicon(object):
 
     def __init__(self, phones):
+        """ phones: list of strings, each being a phone """
         self.phone_set = set(self.make_position_independent(phones))
 
     # XSAMPA phones are 1-letter each, so 2-letter below represent 2 separate phones.
