@@ -60,6 +60,7 @@ This project extends that to allow each grammar/rule to be **independently marke
 * [daanzu/kaldi-grammar-simple](https://github.com/daanzu/kaldi-grammar-simple)
 * [daanzu/speech-training-recorder](https://github.com/daanzu/speech-training-recorder)
 * [daanzu/dragonfly_daanzu_tools](https://github.com/daanzu/dragonfly_daanzu_tools)
+* [kmdouglass/caster-kaldi](https://github.com/kmdouglass/homelab/tree/master/speech-recognition/toolchains/caster-kaldi): Docker image to run KaldiAG + Dragonfly + Caster inside a container on Linux, using the host's microphone.
 
 ## Getting Started
 
