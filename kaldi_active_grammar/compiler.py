@@ -99,14 +99,18 @@ class KaldiRule(object):
         assert self._fst_text
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
         if _log.isEnabledFor(2): _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
-        assert self.compiler.decoding_framework == 'agf'
-        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
 
-        # elif self.compiler.decoding_framework == 'otf':
-        #     with open(self.filepath + '.txt', 'wb') as f:
-        #         # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
-        #         f.write(self._fst_text)
-        #     self.compiler._compile_otf_graph(filename=self.filepath)
+        try:
+            assert self.compiler.decoding_framework == 'agf'
+            self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
+
+            # elif self.compiler.decoding_framework == 'otf':
+            #     with open(self.filepath + '.txt', 'wb') as f:
+            #         # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
+            #         f.write(self._fst_text)
+            #     self.compiler._compile_otf_graph(filename=self.filepath)
+        except Exception as e:
+            raise KaldiError("Exception while compiling", self)  # Return this KaldiRule inside exception
 
         self._fst_text = None
         self.compiled = True
@@ -455,10 +459,16 @@ class Compiler(object):
     # Methods for recognition.
 
     def prepare_for_recognition(self):
-        if self.compile_queue or self.compile_duplicate_filename_queue or self.load_queue:
-            self.process_compile_and_load_queues()
-        if self.fst_cache.dirty:
-            self.fst_cache.save()
+        try:
+            if self.compile_queue or self.compile_duplicate_filename_queue or self.load_queue:
+                self.process_compile_and_load_queues()
+        except KaldiError:
+            raise
+        except Exception:
+            raise KaldiError("Exception while compiling/loading rules in prepare_for_recognition")
+        finally:
+            if self.fst_cache.dirty:
+                self.fst_cache.save()
 
     wildcard_nonterms = ('#nonterm:dictation', '#nonterm:dictation_cloud')
 
