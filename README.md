@@ -76,20 +76,18 @@ Otherwise...
 
 **Requirements**:
 * Python 2.7 or 3.6+; *64-bit required!*
-* OS: *Windows/Linux/MacOS*
+* OS: Windows/Linux/MacOS all supported
 * Only supports Kaldi left-biphone models, specifically *nnet3 chain* models, with specific modifications
 * ~1GB+ disk space for model plus temporary storage and cache, depending on your grammar complexity
 * ~1GB+ RAM for model and grammars, depending on your model and grammar complexity
 
-Install Python package, which includes necessary Kaldi binaries:
-
-```
-pip install kaldi-active-grammar
-```
-
-Download compatible generic English Kaldi nnet3 chain model from [project releases](https://github.com/daanzu/kaldi-active-grammar/releases). Unzip the model and pass the directory path to kaldi-active-grammar constructor.
-
-Or use your own model. Standard Kaldi models must be converted to be usable. Conversion can be performed automatically, but this hasn't been fully implemented yet.
+**Installation**:
+1. Download compatible generic English Kaldi nnet3 chain model from [project releases](https://github.com/daanzu/kaldi-active-grammar/releases). Unzip the model and pass the directory path to kaldi-active-grammar constructor.
+    * Or use your own model. Standard Kaldi models must be converted to be usable. Conversion can be performed automatically, but this hasn't been fully implemented yet.
+1. Install Python package, which includes necessary Kaldi binaries:
+    * The easy way to use kaldi-active-grammar is as a backend to dragonfly, which makes it easy to define grammars and resultant actions.
+        * For this, simply run `pip install dragonfly2[kaldi]` to install all necessary packages. See the [dragonfly documentation for details on installation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html#setup), plus how to define grammars and actions.
+    * Alternatively, if you only want to use it directly (via a more low level interface), you can just run `pip install kaldi-active-grammar`
 
 ### Troubleshooting
 
@@ -136,6 +134,9 @@ print(repr(output_str), likelihood)  # -> 'it depends on the context' 2.13863992
     * Windows:
         * Less easily generally automated
         * You can follow the steps for Continuous Integration run on GitHub Actions: see the `build-windows` section of [the manifest](.github/workflows/build.yml).
+* Note: the project (and python wheel) is built from a duorepo (2 separate repos used together):
+    1. This repo, containing the external interface and higher-level logic, written in Python.
+    1. [My fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), containing the lower-level code, written in C++.
 
 ## Contributing
 
@@ -155,7 +156,7 @@ Donations are appreciated to encourage development.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3 (AGPL-3.0-or-later). See the LICENSE.txt file for details. If this license is problematic for you, please contact me.
+This project is licensed under the GNU Affero General Public License v3 (AGPL-3.0-or-later). See the [LICENSE.txt file](LICENSE.txt) for details. If this license is problematic for you, please contact me.
 
 ## Acknowledgments
 
