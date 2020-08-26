@@ -105,22 +105,13 @@ Otherwise...
 
 ## Documentation
 
-Documentation is sorely lacking currently. To see example usage, examine the [**backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi).
+Formal documentation is somewhat lacking currently. To see example usage, examine:
 
-The KaldiAG API is pretty low level, but basically: you define a set of rules, and send in audio data, along with a bit mask of which rules are active at the beginning of each utterance, and receive back the recognized rule and text. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
+* [**Plain dictation interface**](examples/plain_dictation.py): Set up recognizer for plain dictation; perform decoding on given `wav` file.
+* [**Full example**](examples/full_example.py): Set up grammar compiler & decoder; set up a rule; perform decoding on live, real-time audio from microphone.
+* [**Backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi): Many advanced features and complex interactions.
 
-### Plain dictation interface
-
-```python
-import sys, wave
-from kaldi_active_grammar import PlainDictationRecognizer
-recognizer = PlainDictationRecognizer()  # Or supply non-default model_dir, tmp_dir, or fst_file
-filename = sys.argv[1] if len(sys.argv) > 1 else 'test.wav'
-wave_file = wave.open(filename, 'rb')
-data = wave_file.readframes(wave_file.getnframes())
-output_str, likelihood = recognizer.decode_utterance(data)
-print(repr(output_str), likelihood)  # -> 'it depends on the context' 2.1386399269104004
-```
+The KaldiAG API is fairly low level, but basically: you define a set of grammar rules, then send in audio data, along with a bit mask of which rules are active at the beginning of each utterance, and receive back the recognized rule and text. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
 
 ### Building
 

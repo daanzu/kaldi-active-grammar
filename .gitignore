@@ -1,6 +1,8 @@
 kaldi_active_grammar/exec
 portable/
 tmp/
+wheels
+examples/*.fst
 */kaldi_model*/
 */kaldi_tmp*/
 
@@ -18,6 +20,7 @@ __pycache__/
 *.so
 *~
 .vscode/
+pip-wheel-metadata/
 
 # due to using tox and pytest
 .tox

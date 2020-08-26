@@ -1,0 +1,2 @@
+sounddevice==0.3.*
+webrtcvad-wheels==2.0.*
