@@ -1,7 +1,7 @@
 #
 # This file is part of kaldi-active-grammar.
 # (c) Copyright 2019 by David Zurow
-# Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
+# Licensed under the AGPL-3.0; see LICENSE.txt file.
 #
 
 import base64, collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess
