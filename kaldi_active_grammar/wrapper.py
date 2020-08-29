@@ -222,11 +222,49 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
     """ Abstract base class for nnet3 decoders. """
 
     _library_header_text = """
+        DRAGONFLY_API bool load_lexicon_base_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
+        DRAGONFLY_API bool save_adaptation_state_base_nnet3(void* model_vp);
+        DRAGONFLY_API bool reset_adaptation_state_base_nnet3(void* model_vp);
+        DRAGONFLY_API bool get_word_align_base_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
+        DRAGONFLY_API bool decode_base_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
+        DRAGONFLY_API bool get_output_base_nnet3(void* model_vp, char* output, int32_t output_max_length,
+                float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
         DRAGONFLY_API bool set_lm_prime_text_base_nnet3(void* model_vp, char* prime_cp);
     """
 
-    def __init__(self):
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
+            model_file=None, save_adaptation_state=False):
         super(KaldiNNet3Decoder, self).__init__()
+
+        model_dir = os.path.normpath(model_dir)
+        if words_file is None: words_file = find_file(model_dir, 'words.txt')
+        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int', required=False)
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
+        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
+        if model_file is None: model_file = find_file(model_dir, 'final.mdl')
+
+        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
+            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
+        self.ie_config = self._read_ie_conf_file(model_dir, find_file(model_dir, 'ivector_extractor.conf'))
+
+        self.model_dir = model_dir
+        self.words_file = os.path.normpath(words_file)
+        self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
+        self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
+        self.ie_conf_file = os.path.normpath(ie_conf_file)
+        self.model_file = os.path.normpath(model_file)
+        self.verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
+        self._saving_adaptation_state = save_adaptation_state
+
+        self.config_dict = {
+            'model_dir': self.model_dir,
+            'mfcc_config_filename': self.mfcc_conf_file,
+            'ie_config_filename': self.ie_conf_file,  # FIXME: deprecated
+            'ivector_extraction_config_json': self.ie_config,
+            'model_filename': self.model_file,
+            'word_syms_filename': self.words_file,
+            'word_align_lexicon_filename': self.word_align_lexicon_file or '',
+            }
 
     def _convert_ie_conf_file(self, model_dir, old_filename, new_filename, search=True):
         """ Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration. """
@@ -261,6 +299,53 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
                 config[key] = value
         return config
 
+    saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
+    @saving_adaptation_state.setter
+    def saving_adaptation_state(self, value): self._saving_adaptation_state = value
+
+    def save_adaptation_state(self):
+        result = self._lib.save_adaptation_state_agf_nnet3(self._model)
+        if not result:
+            raise KaldiError("save_adaptation_state error")
+
+    def reset_adaptation_state(self):
+        result = self._lib.reset_adaptation_state_agf_nnet3(self._model)
+        if not result:
+            raise KaldiError("reset_adaptation_state error")
+
+    def get_output(self, output_max_length=4*1024):
+        output_p = _ffi.new('char[]', output_max_length)
+        likelihood_p = _ffi.new('float *')
+        am_score_p = _ffi.new('float *')
+        lm_score_p = _ffi.new('float *')
+        confidence_p = _ffi.new('float *')
+        expected_error_rate_p = _ffi.new('float *')
+        result = self._lib.get_output_base_nnet3(self._model, output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
+        if not result:
+            raise KaldiError("get_output error")
+        output_str = de(_ffi.string(output_p))
+        info = {
+            'likelihood': likelihood_p[0],
+            'am_score': am_score_p[0],
+            'lm_score': lm_score_p[0],
+            'confidence': confidence_p[0],
+            'expected_error_rate': expected_error_rate_p[0],
+        }
+        return output_str, info
+
+    def get_word_align(self, output):
+        """Returns tuple of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
+        words = output.split()
+        num_words = len(words)
+        kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
+        kaldi_frame_lengths_p = _ffi.new('int32_t[]', num_words)
+        result = self._lib.get_word_align_base_nnet3(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
+        if not result:
+            raise KaldiError("get_word_align error")
+        times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
+        lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
+        return tuple(zip(words, times, lengths))
+
     def set_lm_prime_text(self, prime_text):
         prime_text = prime_text.strip()
         result = self._lib.set_lm_prime_text_base_nnet3(self._model, en(prime_text))
@@ -284,51 +369,18 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
                 float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
     """
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, fst_file=None,
-            save_adaptation_state=False, config=None):
-        super(KaldiPlainNNet3Decoder, self).__init__()
+    def __init__(self, fst_file=None, config=None, **kwargs):
+        super(KaldiPlainNNet3Decoder, self).__init__(**kwargs)
 
-        model_dir = os.path.normpath(model_dir)
-        if words_file is None: words_file = find_file(model_dir, 'words.txt')
-        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int', required=False)
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
-        if model_file is None: model_file = find_file(model_dir, 'final.mdl')
-        if fst_file is None: fst_file = find_file(model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME, required=True)
+        if fst_file is None: fst_file = find_file(self.model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME, required=True)
+        fst_file = os.path.normpath(fst_file)
 
-        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
-            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
-        ie_config = self._read_ie_conf_file(model_dir, find_file(model_dir, 'ivector_extractor.conf'))
-
-        self.model_dir = model_dir
-        self.words_file = os.path.normpath(words_file)
-        self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
-        self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
-        self.ie_conf_file = os.path.normpath(ie_conf_file)
-        self.model_file = os.path.normpath(model_file)
-        self.fst_file = os.path.normpath(fst_file)
-        verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
-
-        config_dict = {
-            'model_dir': model_dir,
-            'mfcc_config_filename': mfcc_conf_file,
-            'ie_config_filename': ie_conf_file,  # FIXME: deprecated
-            'ivector_extraction_config_json': ie_config,
-            'model_filename': model_file,
-            'word_syms_filename': words_file,
-            'word_align_lexicon_filename': word_align_lexicon_file or '',
+        self.config_dict.update({
             'decode_fst_filename': fst_file,
-            }
-        if config: config_dict.update(config)
-        config_json = json.dumps(config_dict)
+            })
+        if config: self.config_dict.update(config)
 
-        self._model = self._lib.init_plain_nnet3(en(model_dir), en(config_json), verbosity)
-        self._saving_adaptation_state = save_adaptation_state
-
-    saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
-    @saving_adaptation_state.setter
-    def saving_adaptation_state(self, value): self._saving_adaptation_state = value
+        self._model = self._lib.init_plain_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
 
     def decode(self, frames, finalize):
         """Continue decoding with given new audio data."""
@@ -344,44 +396,6 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         if not result:
             raise KaldiError("decoding error")
         return finalize
-
-    def get_output(self, output_max_length=4*1024):
-        output_p = _ffi.new('char[]', output_max_length)
-        likelihood_p = _ffi.new('float *')
-        am_score_p = _ffi.new('float *')
-        lm_score_p = _ffi.new('float *')
-        confidence_p = _ffi.new('float *')
-        expected_error_rate_p = _ffi.new('float *')
-        result = self._lib.get_output_plain_nnet3(self._model, output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
-        if not result:
-            raise KaldiError("get_output error")
-        output_str = de(_ffi.string(output_p))
-        info = {
-            'likelihood': likelihood_p[0],
-            'am_score': am_score_p[0],
-            'lm_score': lm_score_p[0],
-            'confidence': confidence_p[0],
-            'expected_error_rate': expected_error_rate_p[0],
-        }
-        return output_str, info
-
-    def get_word_align(self, output):
-        """Returns tuple of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
-        words = output.split()
-        num_words = len(words)
-        kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
-        kaldi_frame_lengths_p = _ffi.new('int32_t[]', num_words)
-        result = self._lib.get_word_align_plain_nnet3(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
-        if not result:
-            raise KaldiError("get_word_align error")
-        times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
-        lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
-        return tuple(zip(words, times, lengths))
-
-    def reset_adaptation_state(self):
-        result = self._lib.reset_adaptation_state_plain_nnet3(self._model)
-        if not result:
-            raise KaldiError("reset_adaptation_state error")
 
 
 ########################################################################################################################
@@ -404,21 +418,10 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
     """
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, top_fst_file=None, dictation_fst_file=None,
-            save_adaptation_state=False, config=None):
-        super(KaldiAgfNNet3Decoder, self).__init__()
+    def __init__(self, top_fst_file=None, dictation_fst_file=None, config=None, **kwargs):
+        super(KaldiAgfNNet3Decoder, self).__init__(**kwargs)
 
-        model_dir = os.path.normpath(model_dir)
-        if words_file is None: words_file = find_file(model_dir, 'words.txt')
-        if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int')
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
-        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
-            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
-        if model_file is None: model_file = find_file(model_dir, 'final.mdl')
-
-        phones_file = find_file(model_dir, 'phones.txt')
+        phones_file = find_file(self.model_dir, 'phones.txt')
         nonterm_phones_offset = symbol_table_lookup(phones_file, '#nonterm_bos')
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
@@ -429,39 +432,19 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if dictation_phones_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
 
-        self.model_dir = model_dir
-        # FIXME
-        self.words_file = os.path.normpath(words_file)
-        self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
-        self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
-        self.ie_conf_file = os.path.normpath(ie_conf_file)
-        self.model_file = os.path.normpath(model_file)
-        self.top_fst_file = os.path.normpath(top_fst_file)
-        verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
+        top_fst_file = os.path.normpath(top_fst_file)
 
-        config_dict = {
-            'model_dir': model_dir,
-            'mfcc_config_filename': mfcc_conf_file,
-            'ie_config_filename': ie_conf_file,
-            'model_filename': model_file,
+        self.config_dict.update({
             'nonterm_phones_offset': nonterm_phones_offset,
             'rules_phones_offset': rules_phones_offset,
             'dictation_phones_offset': dictation_phones_offset,
-            'word_syms_filename': words_file,
-            'word_align_lexicon_filename': word_align_lexicon_file or '',
             'top_fst_filename': top_fst_file,
             'dictation_fst_filename': dictation_fst_file or '',
-            }
-        if config: config_dict.update(config)
-        config_json = json.dumps(config_dict)
+            })
+        if config: self.config_dict.update(config)
 
-        self._model = self._lib.init_agf_nnet3(en(model_dir), en(config_json), verbosity)
+        self._model = self._lib.init_agf_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
         self.num_grammars = 0
-        self._saving_adaptation_state = save_adaptation_state
-
-    saving_adaptation_state = property(lambda self: self._saving_adaptation_state, doc="Whether currently to save updated adaptation state at end of utterance")
-    @saving_adaptation_state.setter
-    def saving_adaptation_state(self, value): self._saving_adaptation_state = value
 
     def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
         if words_file is None: words_file = self.words_file
@@ -518,46 +501,3 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if not result:
             raise KaldiError("decoding error")
         return finalize
-
-    def get_output(self, output_max_length=4*1024):
-        output_p = _ffi.new('char[]', output_max_length)
-        likelihood_p = _ffi.new('float *')
-        am_score_p = _ffi.new('float *')
-        lm_score_p = _ffi.new('float *')
-        confidence_p = _ffi.new('float *')
-        expected_error_rate_p = _ffi.new('float *')
-        result = self._lib.get_output_agf_nnet3(self._model, output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
-        if not result:
-            raise KaldiError("get_output error")
-        output_str = de(_ffi.string(output_p))
-        info = {
-            'likelihood': likelihood_p[0],
-            'am_score': am_score_p[0],
-            'lm_score': lm_score_p[0],
-            'confidence': confidence_p[0],
-            'expected_error_rate': expected_error_rate_p[0],
-        }
-        return output_str, info
-
-    def get_word_align(self, output):
-        """Returns tuple of tuples: words (including nonterminals but not eps), each's time (in bytes), and each's length (in bytes)."""
-        words = output.split()
-        num_words = len(words)
-        kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
-        kaldi_frame_lengths_p = _ffi.new('int32_t[]', num_words)
-        result = self._lib.get_word_align_agf_nnet3(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
-        if not result:
-            raise KaldiError("get_word_align error")
-        times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
-        lengths = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_lengths_p]
-        return tuple(zip(words, times, lengths))
-
-    def save_adaptation_state(self):
-        result = self._lib.save_adaptation_state_agf_nnet3(self._model)
-        if not result:
-            raise KaldiError("save_adaptation_state error")
-
-    def reset_adaptation_state(self):
-        result = self._lib.reset_adaptation_state_agf_nnet3(self._model)
-        if not result:
-            raise KaldiError("reset_adaptation_state error")

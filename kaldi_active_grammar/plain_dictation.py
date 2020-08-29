@@ -33,7 +33,8 @@ class PlainDictationRecognizer(object):
 
         if fst_file:
             self._model = Model(model_dir, tmp_dir)
-            self.decoder = KaldiPlainNNet3Decoder(self._model.model_dir, self._model.tmp_dir, fst_file=fst_file, **kwargs)
+            self.decoder = KaldiPlainNNet3Decoder(model_dir=self._model.model_dir, tmp_dir=self._model.tmp_dir,
+                fst_file=fst_file, **kwargs)
 
         else:
             self._compiler = Compiler(model_dir, tmp_dir)
