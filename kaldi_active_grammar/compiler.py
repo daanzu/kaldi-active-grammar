@@ -208,6 +208,10 @@ class Compiler(object):
         self._max_rule_id = 999
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
+        words = frozenset(word for (word, id) in load_symbol_table(self.files_dict['words.txt']))
+        self._oov_word = '<unk>' if '<unk>' in words else None
+        self._noise_words = frozenset(['<unk>', '!SIL']) & words
+
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self.compile_queue = set()  # KaldiRule
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
@@ -351,6 +355,8 @@ class Compiler(object):
         state_initial = fst.add_state(initial=True)
         state_return = fst.add_state()
         state_final = fst.add_state(final=True)
+        for word in self._noise_words:
+            fst.add_arc(state_initial, state_final, word)  # FIXME: loop?
         for i in range(self._max_rule_id + 1):
             # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i), olabel=WFST.eps)
             # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i))
@@ -489,7 +495,7 @@ class Compiler(object):
     def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
-        if output == '':
+        if (output == '') or (output in self._noise_words):
             return None, [], []
 
         nonterm_token, _, parsed_output = output.partition(' ')
