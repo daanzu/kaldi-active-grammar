@@ -218,7 +218,7 @@ If you have trouble downloading, try using `wget --continue`.
 
 v1.6.0: Easier Configuration; Public Automated Builds
 
-You can subscribe to announcements on Gitter: see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements). [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community)
+You can subscribe to announcements on GitHub (see Watch panel above), or on Gitter (see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements) [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community))
 
 ### Added
 * Can now pass configuration dict to `KaldiAgfNNet3Decoder`, `PlainDictationRecognizer` (without `HCLG.fst`).
@@ -245,6 +245,26 @@ If you have trouble downloading, try using `wget --continue`.
 
 [![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
 [**GitHub** is matching (only) my **GitHub Sponsors** donations.]
+
+
+
+
+
+You can subscribe to announcements on GitHub (see Watch panel above), or on Gitter (see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements) [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community))
+
+#### Donations are appreciated to encourage development.
+
+[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
+
+
+### Artifacts
+
+* **Models are available [here](https://github.com/daanzu/kaldi-active-grammar/blob/master/docs/models.md)**
+* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
+
+If you have trouble downloading, try using `wget --continue`.
 
 
 
