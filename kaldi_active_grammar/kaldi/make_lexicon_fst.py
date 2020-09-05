@@ -15,8 +15,8 @@ import re
 # with utf-8 encoding as well as other encodings such as gbk, as long as the
 # spaces are also spaces in ascii (which we check).  It is basically how we
 # emulate the behavior of python before python3.
-sys.stdout = open(1, 'w', encoding='latin-1', closefd=False)
-sys.stderr = open(2, 'w', encoding='latin-1', closefd=False)
+sys.stdout = open(1, 'w', encoding='latin-1', newline='\n', closefd=False)
+sys.stderr = open(2, 'w', encoding='latin-1', newline='\n', closefd=False)
 
 def get_args():
     parser = argparse.ArgumentParser(description="""This script creates the
