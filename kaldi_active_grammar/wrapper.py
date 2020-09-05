@@ -317,6 +317,13 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
     @saving_adaptation_state.setter
     def saving_adaptation_state(self, value): self._saving_adaptation_state = value
 
+    def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
+        if words_file is None: words_file = self.words_file
+        if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
+        result = self._lib.load_lexicon_base_nnet3(self._model, en(words_file), en(word_align_lexicon_file))
+        if not result:
+            raise KaldiError("error loading lexicon (%r, %r)" % (words_file, word_align_lexicon_file))
+
     def save_adaptation_state(self):
         result = self._lib.save_adaptation_state_agf_nnet3(self._model)
         if not result:
@@ -374,13 +381,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* init_plain_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
-        DRAGONFLY_API bool load_lexicon_plain_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
-        DRAGONFLY_API bool save_adaptation_state_plain_nnet3(void* model_vp);
-        DRAGONFLY_API bool reset_adaptation_state_plain_nnet3(void* model_vp);
-        DRAGONFLY_API bool get_word_align_plain_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
         DRAGONFLY_API bool decode_plain_nnet3(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
-        DRAGONFLY_API bool get_output_plain_nnet3(void* model_vp, char* output, int32_t output_max_length,
-                float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
     """
 
     def __init__(self, fst_file=None, config=None, **kwargs):
@@ -419,17 +420,11 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* init_agf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
-        DRAGONFLY_API bool load_lexicon_agf_nnet3(void* model_vp, char* word_syms_filename_cp, char* word_align_lexicon_filename_cp);
-        DRAGONFLY_API bool save_adaptation_state_agf_nnet3(void* model_vp);
-        DRAGONFLY_API bool reset_adaptation_state_agf_nnet3(void* model_vp);
-        DRAGONFLY_API bool get_word_align_agf_nnet3(void* model_vp, int32_t* times_cp, int32_t* lengths_cp, int32_t num_words);
         DRAGONFLY_API int32_t add_grammar_fst_agf_nnet3(void* model_vp, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool reload_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool remove_grammar_fst_agf_nnet3(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool decode_agf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
             bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
-        DRAGONFLY_API bool get_output_agf_nnet3(void* model_vp, char* output, int32_t output_max_length,
-            float* likelihood_p, float* am_score_p, float* lm_score_p, float* confidence_p, float* expected_error_rate_p);
     """
 
     def __init__(self, top_fst_file=None, dictation_fst_file=None, config=None, **kwargs):
@@ -459,13 +454,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
         self._model = self._lib.init_agf_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
         self.num_grammars = 0
-
-    def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
-        if words_file is None: words_file = self.words_file
-        if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
-        result = self._lib.load_lexicon_agf_nnet3(self._model, en(words_file), en(word_align_lexicon_file))
-        if not result:
-            raise KaldiError("error loading lexicon (%r, %r)" % (words_file, word_align_lexicon_file))
 
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
