@@ -100,6 +100,19 @@ class ExternalProcess(object):
     def get_debug_stderr_kwargs(log):
         return (dict() if log.isEnabledFor(logging.DEBUG) else dict(stderr=six.BytesIO()))
 
+    @staticmethod
+    def execute_command_safely(commands, log):
+        """ Executes given `ush` command, redirecting stderr appropriately: either logging, or storing to output upon error. """
+        stderr = six.BytesIO()
+        for command in commands.commands:
+            command.opts['stderr'] = stderr
+        try:
+            result = commands()
+        except Exception as e:
+            log.error("Error running command. Printing stderr as follows...\n%s", stderr.getvalue().decode('utf-8'))
+            raise e
+        return result
+
 
 ########################################################################################################################
 

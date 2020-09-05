@@ -261,7 +261,7 @@ class Compiler(object):
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
         with debug_timer(self._log.debug, "agf graph compilation") as get_time_spent:
-            verbose_level = 5 if self._log.isEnabledFor(5) else 0
+            verbose_level = 5  # if self._log.isEnabledFor(5) else 0
             format_kwargs = dict(self.files_dict, input_filename=input_filename, filename=filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
             format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
@@ -299,7 +299,7 @@ class Compiler(object):
                     '--verbose={verbose}',
                     '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{filename}'))
                 compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
-                compile_command()
+                ExternalProcess.execute_command_safely(compile_command, self._log)
 
                 # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_data), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
 
