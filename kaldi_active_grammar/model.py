@@ -7,7 +7,7 @@
 import os, re, shutil
 from io import open
 
-from six import text_type
+from six import PY2, text_type
 import requests
 
 try:
@@ -383,7 +383,7 @@ class Model(object):
 
 def convert_generic_model_to_agf(src_dir, model_dir):
     from .compiler import Compiler
-    if six.PY2:
+    if PY2:
         from .kaldi import augment_phones_txt_py2 as augment_phones_txt, augment_words_txt_py2 as augment_words_txt
     else:
         from .kaldi import augment_phones_txt, augment_words_txt

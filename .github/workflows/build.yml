@@ -83,7 +83,7 @@ jobs:
           echo $GITHUB_WORKSPACE
           df -h
           ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/'
-          ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'
+          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'
           ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/v142'
           # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.16.27012/x64/Microsoft.VC141.CRT'
           ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/'*/x64/Microsoft.*.CRT
@@ -163,12 +163,12 @@ jobs:
         with:
           name: wheels
           path: main/dist/*
-      - name: Copy Windows vc_redist
-        run: |
-          mkdir -p vc_redist
-          cp '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'/vc_redist.x64.exe vc_redist/
-          cp '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'/x64/Microsoft.*.CRT/* vc_redist/
-      - uses: actions/upload-artifact@v2
-        with:
-          name: vc_redist
-          path: vc_redist/*
+      # - name: Copy Windows vc_redist
+      #   run: |
+      #     mkdir -p vc_redist
+      #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'/vc_redist.x64.exe vc_redist/
+      #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'/x64/Microsoft.*.CRT/* vc_redist/
+      # - uses: actions/upload-artifact@v2
+      #   with:
+      #     name: vc_redist
+      #     path: vc_redist/*

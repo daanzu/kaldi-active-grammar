@@ -36,7 +36,7 @@ class WFST(object):
     def iter_arcs(self):
         return itertools.chain.from_iterable(itervalues(self._arc_table_dict))
 
-    def state_is_final(self, state):
+    def is_state_final(self, state):
         return (self._state_table[state] != 0)
 
     def add_state(self, weight=None, initial=False, final=False):
@@ -84,12 +84,14 @@ class WFST(object):
         return ((label in self.silent_labels) or (label.startswith('#nonterm')))
 
     def scale_weights(self, factor):
+        # Unused
         factor = float(factor)
         for arcs in itervalues(self._arc_table_dict):
             for arc in arcs:
                 arc[4] = arc[4] * factor
 
     def normalize_weights(self, stochasticity=False):
+        # Unused
         for arcs in itervalues(self._arc_table_dict):
             num_weights = len(arcs)
             sum_weights = sum(arc[4] for arc in arcs)
@@ -99,6 +101,7 @@ class WFST(object):
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
+        # Used in: dragonfly backend compiler.
         eps_like_labels = frozenset((self.eps, self.eps_disambig)) | frozenset(eps_like_labels)
         state_queue = collections.deque([path_src_state])
         queued = set(state_queue)
@@ -115,12 +118,13 @@ class WFST(object):
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
         """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
+        # Used in: KaldiAG compiler.
         queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index into target_words of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
             state, path, target_word_index = queue.popleft()
             target_word = target_words[target_word_index] if target_word_index < len(target_words) else None
-            if (target_word is None) and self.state_is_final(state):
+            if (target_word is None) and self.is_state_final(state):
                 return tuple(olabel for olabel in path
                     if include_silent or not self.label_is_silent(olabel))
             for arc in self._arc_table_dict[state]:
