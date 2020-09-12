@@ -209,8 +209,8 @@ class Compiler(object):
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
 
         words = frozenset(word for (word, id) in load_symbol_table(self.files_dict['words.txt']))
-        self._oov_word = '<unk>' if '<unk>' in words else None
-        self._noise_words = frozenset(['<unk>', '!SIL']) & words
+        self._oov_word = '<unk>' if '<unk>' in words else None  # FIXME: make this configurable, for different models
+        self._noise_words = frozenset(['<unk>', '!SIL']) & words  # FIXME: make this configurable, for different models
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self.compile_queue = set()  # KaldiRule
@@ -565,8 +565,8 @@ class Compiler(object):
 
     def parse_partial_output(self, output):
         assert self.parsing_framework == 'token'
-        # self._log.debug("parse_partial_output(%r)" % output)
-        if output == '':
+        self._log.log(3, "parse_partial_output(%r)", output)
+        if (output == '') or (output in self._noise_words):
             return None, [], [], False
 
         nonterm_token, _, parsed_output = output.partition(' ')
