@@ -23,6 +23,9 @@ setup-dockcross:
 	docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
 	@# [ ! -e building/dockcross-manylinux2010-x64 ] && docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64 || true
 
+pip-install-develop:
+	KALDIAG_SETUP_RAW=1 pip3 install --user -e .
+
 # setup an editable development environment on linux
 setup-linux-develop kaldi_root_dir:
 	mkdir -p kaldi_active_grammar/exec/linux/
