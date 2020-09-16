@@ -16,6 +16,14 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: 10.9
     steps:
       - uses: actions/checkout@v2
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        run: |
+          export TAG=$(git tag --points-at HEAD)
+          if [[ $TAG ]]; then
+            echo ::set-env name=KALDI_BRANCH::kag-$TAG
+          else
+            echo ::set-env name=KALDI_BRANCH::${GITHUB_REF/refs\/heads\//}
+          fi
       - name: Dependencies
         run: |
           python3 -m pip install --upgrade setuptools wheel scikit-build cmake ninja
@@ -42,6 +50,14 @@ jobs:
     if: true
     steps:
       - uses: actions/checkout@v2
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        run: |
+          export TAG=$(git tag --points-at HEAD)
+          if [[ $TAG ]]; then
+            echo ::set-env name=KALDI_BRANCH::kag-$TAG
+          else
+            echo ::set-env name=KALDI_BRANCH::${GITHUB_REF/refs\/heads\//}
+          fi
       - name: Setup just
         run: |
           ls -al $HOME
@@ -66,6 +82,14 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: main
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        run: |
+          export TAG=$(git tag --points-at HEAD)
+          if [[ $TAG ]]; then
+            echo ::set-env name=KALDI_BRANCH::kag-$TAG
+          else
+            echo ::set-env name=KALDI_BRANCH::${GITHUB_REF/refs\/heads\//}
+          fi
       - uses: actions/checkout@v2
         with:
           repository: daanzu/openfst
@@ -74,7 +98,7 @@ jobs:
         with:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
-          # FIXME: use $KALDI_BRANCH from setup.py
+          ref: ${{ env.KALDI_BRANCH }}
       # - name: wget
       #   uses: wei/wget@v1
       #   with:
