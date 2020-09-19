@@ -99,14 +99,10 @@ class KaldiRule(object):
         assert self._fst_text
         _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
         if _log.isEnabledFor(2): _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
-        assert self.compiler.decoding_framework == 'agf'
-        self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
 
-        # elif self.compiler.decoding_framework == 'otf':
-        #     with open(self.filepath + '.txt', 'wb') as f:
-        #         # FIXME: https://stackoverflow.com/questions/2536545/how-to-write-unix-end-of-line-characters-in-windows-using-python/23434608#23434608
-        #         f.write(self._fst_text)
-        #     self.compiler._compile_otf_graph(filename=self.filepath)
+        if self.compiler.decoding_framework == 'agf':
+            self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
+        else: raise KaldiError("unknown compiler decoding_framework")
 
         self._fst_text = None
         self.compiled = True
@@ -123,9 +119,13 @@ class KaldiRule(object):
         assert self.compiled
 
         if self.has_been_loaded:
-            self.decoder.reload_grammar_fst(self.id, self.filepath)
+            if self.compiler.decoding_framework == 'agf':
+                self.decoder.reload_grammar_fst(self.id, self.filepath)
+            else: raise KaldiError("unknown compiler decoding_framework")
         else:
-            grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
+            if self.compiler.decoding_framework == 'agf':
+                grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
+            else: raise KaldiError("unknown compiler decoding_framework")
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
 
         self.loaded = True
@@ -185,13 +185,13 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US'):
+    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf'):
         show_donation_message()
 
-        self.decoding_framework = 'agf'
-        assert self.decoding_framework in ('otf', 'agf')
+        self.decoding_framework = framework
+        assert self.decoding_framework in ('agf', 'laf')
         self.parsing_framework = 'token'
-        assert self.parsing_framework in ('text', 'token')
+        assert self.parsing_framework in ('token', 'text')
         self._log = _log
 
         self.model = Model(model_dir, tmp_dir)
@@ -236,16 +236,6 @@ class Compiler(object):
     ####################################################################################################################
     # Methods for compiling graphs.
 
-    # def _compile_otf_graph(self, **kwargs):
-    #     # FIXME: documentation
-    #     with debug_timer(self._log.debug, "otf graph compilation"):
-    #         format_kwargs = dict(self.files_dict, **kwargs)
-    #         run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "otf graph compilation step", **kwargs)
-
-    #         p1 = run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {filename}.txt {filename}")
-    #         p2 = run("{exec_dir}fstrelabel --relabel_ipairs={g.irelabel} {filename} {filename}")
-    #         p3 = run("{exec_dir}fstarcsort {filename} {filename}")
-    #         # p4 = run("{exec_dir}fstconvert --fst_type=const {filename} {filename}")
 
     def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, simplify_lg=True, **kwargs):
         """

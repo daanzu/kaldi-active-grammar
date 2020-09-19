@@ -352,6 +352,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
             'confidence': confidence_p[0],
             'expected_error_rate': expected_error_rate_p[0],
         }
+        _log.log(7, "get_output: %r %s", output_str, info)
         return output_str, info
 
     def get_word_align(self, output):
