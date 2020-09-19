@@ -102,6 +102,9 @@ class KaldiRule(object):
 
         if self.compiler.decoding_framework == 'agf':
             self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
+        elif self.compiler.decoding_framework == 'laf':
+            # self.compiler._compile_laf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
+            self._fst_text_backup = self._fst_text  # FIXME: hack!
         else: raise KaldiError("unknown compiler decoding_framework")
 
         self._fst_text = None
@@ -121,10 +124,14 @@ class KaldiRule(object):
         if self.has_been_loaded:
             if self.compiler.decoding_framework == 'agf':
                 self.decoder.reload_grammar_fst(self.id, self.filepath)
+            elif self.compiler.decoding_framework == 'laf':
+                self.decoder.reload_grammar_fst(self.id, self._fst_text_backup)
             else: raise KaldiError("unknown compiler decoding_framework")
         else:
             if self.compiler.decoding_framework == 'agf':
                 grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
+            elif self.compiler.decoding_framework == 'laf':
+                grammar_fst_index = self.decoder.add_grammar_fst(self._fst_text_backup)
             else: raise KaldiError("unknown compiler decoding_framework")
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
 
@@ -220,7 +227,8 @@ class Compiler(object):
     _longest_word = property(lambda self: self.model.longest_word)
 
     _default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_G_FILENAME))
-    _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_FST_FILENAME))
+    _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir,
+        (defaults.DEFAULT_DICTATION_FST_FILENAME if self.decoding_framework == 'agf' else 'Gr.fst')))  # FIXME: generalize
     _plain_dictation_hclg_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME))
 
     def alloc_rule_id(self):
@@ -236,6 +244,23 @@ class Compiler(object):
     ####################################################################################################################
     # Methods for compiling graphs.
 
+    def _compile_laf_graph(self, input_data=None, input_filename=None, filename=None, **kwargs):
+        # FIXME: documentation
+        with debug_timer(self._log.debug, "laf graph compilation"):
+            format_kwargs = dict(self.files_dict, **kwargs)
+
+            if input_data and input_filename: raise KaldiError("_compile_laf_graph passed both input_data and input_filename")
+            elif input_data: input = ExternalProcess.shell.echo(input_data.encode('utf-8'))
+            elif input_filename: input = input_filename
+            else: raise KaldiError("_compile_laf_graph passed neither input_data nor input_filename")
+            compile_command = input
+            format = ExternalProcess.get_formatter(format_kwargs)
+
+            compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+            # g_filename = filename.replace('.fst', '.G.fst')
+            compile_command |= filename
+            compile_command()
+            # fstrelabel --relabel_ipairs=relabel G.fst | fstarcsort --sort_type=ilabel | fstconvert --fst_type=const > Gr.fst
 
     def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, simplify_lg=True, **kwargs):
         """

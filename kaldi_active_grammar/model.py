@@ -377,6 +377,22 @@ class Model(object):
         utils.clear_file(self.files_dict['user_lexicon.txt'])
         self.generate_lexicon_files()
 
+    @staticmethod
+    def generate_words_relabeled_file(words_filename, relabel_filename, words_relabel_filename):
+        with open(words_filename, 'r', encoding='utf-8') as file:
+            word_id_pairs = [(word, id) for (word, id) in [line.strip().split() for line in file]]
+        with open(relabel_filename, 'r', encoding='utf-8') as file:
+            relabel_map = {from_id: to_id for (from_id, to_id) in [line.strip().split() for line in file]}
+        word_ids = frozenset(id for (word, id) in word_id_pairs)
+        relabel_from_ids = frozenset(from_id for from_id in relabel_map.keys())
+        if word_ids < relabel_from_ids:
+            _log.warning("generate_words_relabeled_file: word_ids < relabel_from_ids")
+        # if word_ids > relabel_from_ids:
+        #     _log.warning("generate_words_relabeled_file: word_ids > relabel_from_ids")
+        with open(words_relabel_filename, 'w', encoding='utf-8') as file:
+            for (word, id) in word_id_pairs:
+                file.write("%s %s\n" % (word, (relabel_map.get(id, id))))
+
 
 ########################################################################################################################
 

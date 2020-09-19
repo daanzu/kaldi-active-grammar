@@ -504,3 +504,91 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if not result:
             raise KaldiError("decoding error")
         return finalize
+
+
+########################################################################################################################
+
+class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
+    """docstring for KaldiLafNNet3Decoder"""
+
+    _library_header_text = KaldiNNet3Decoder._library_header_text + """
+        DRAGONFLY_API void* init_laf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API int32_t add_grammar_fst_laf_nnet3(void* model_vp, char* grammar_fst_cp);
+        DRAGONFLY_API bool reload_grammar_fst_laf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
+        DRAGONFLY_API bool remove_grammar_fst_laf_nnet3(void* model_vp, int32_t grammar_fst_index);
+        DRAGONFLY_API bool decode_laf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
+            bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
+    """
+
+    def __init__(self, dictation_fst_file=None, config=None, **kwargs):
+        super(KaldiLafNNet3Decoder, self).__init__(**kwargs)
+
+        self.config_dict.update({
+            'hcl_fst_filename': find_file(self.model_dir, 'HCLr.fst'),
+            'disambig_tids_filename': find_file(self.model_dir, 'disambig_tid.int'),
+            # 'relabel_ilabels_filename': find_file(self.model_dir, 'relabel_ilabels.int'),
+            'word_syms_relabeled_filename': find_file(self.model_dir, 'words.relabeled.txt'),
+            'dictation_fst_filename': dictation_fst_file or '',
+            })
+        if config: self.config_dict.update(config)
+
+        self._model = self._lib.init_laf_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        self.num_grammars = 0
+
+    # def add_grammar_fst(self, grammar_fst_file):
+    #     grammar_fst_file = os.path.normpath(grammar_fst_file)
+    #     _log.log(8, "%s: adding grammar_fst_file: %r", self, grammar_fst_file)
+    #     grammar_fst_index = self._lib.add_grammar_fst_laf_nnet3(self._model, en(grammar_fst_file))
+    #     if grammar_fst_index < 0:
+    #         raise KaldiError("error adding grammar %r" % grammar_fst_file)
+    #     assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
+    #     self.num_grammars += 1
+    #     return grammar_fst_index
+
+    def add_grammar_fst(self, grammar_fst_text):
+        _log.log(8, "%s: adding grammar_fst_text: %r", self, grammar_fst_text[:512])
+        grammar_fst_index = self._lib.add_grammar_fst_laf_nnet3(self._model, en(grammar_fst_text))
+        if grammar_fst_index < 0:
+            raise KaldiError("error adding grammar %r" % grammar_fst_text[:512])
+        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
+        self.num_grammars += 1
+        return grammar_fst_index
+
+    def reload_grammar_fst(self, grammar_fst_index, grammar_fst_file):
+        _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
+        result = self._lib.reload_grammar_fst_laf_nnet3(self._model, grammar_fst_index, en(grammar_fst_file))
+        if not result:
+            raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
+
+    def remove_grammar_fst(self, grammar_fst_index):
+        _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
+        result = self._lib.remove_grammar_fst_laf_nnet3(self._model, grammar_fst_index)
+        if not result:
+            raise KaldiError("error removing grammar #%s" % grammar_fst_index)
+        self.num_grammars -= 1
+
+    def decode(self, frames, finalize, grammars_activity=None):
+        """Continue decoding with given new audio data."""
+        # grammars_activity = [True] * self.num_grammars
+        # grammars_activity = np.random.choice([True, False], len(grammars_activity)).tolist(); print grammars_activity; time.sleep(5)
+        if grammars_activity is None:
+            grammars_activity = []
+        else:
+            # Start of utterance
+            _log.log(5, "decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
+            if len(grammars_activity) != self.num_grammars:
+                _log.error("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
+
+        if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
+        frames = frames.astype(np.float32)
+        frames_char = _ffi.from_buffer(frames)
+        frames_float = _ffi.cast('float *', frames_char)
+
+        self._start_decode_time(len(frames))
+        result = self._lib.decode_laf_nnet3(self._model, self.sample_rate, len(frames), frames_float, finalize,
+            grammars_activity, len(grammars_activity), self._saving_adaptation_state)
+        self._stop_decode_time(finalize)
+
+        if not result:
+            raise KaldiError("decoding error")
+        return finalize
