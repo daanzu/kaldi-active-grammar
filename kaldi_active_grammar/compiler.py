@@ -13,7 +13,7 @@ from six.moves import range, zip
 
 from . import _log, KaldiError
 from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
-from .wfst import WFST
+from .wfst import WFST, NativeWFST
 from .model import Model
 import kaldi_active_grammar.alternative_dictation as alternative_dictation
 import kaldi_active_grammar.defaults as defaults
@@ -25,7 +25,7 @@ _log = _log.getChild('compiler')
 
 class KaldiRule(object):
 
-    def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
+    def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None, native_fst=True):
         """
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
         """
@@ -51,7 +51,7 @@ class KaldiRule(object):
         self.destroyed = False  # KaldiRule must not be used/referenced anymore
 
         # Public
-        self.fst = WFST()
+        self.fst = WFST() if not native_fst else NativeWFST()
         self.filename = None
         self.matcher = None
         self.active = True
@@ -68,6 +68,11 @@ class KaldiRule(object):
 
     def compile(self, lazy=False, duplicate=None):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+
+        if self.fst.native:
+            self.compiled = True
+            return self
+
         if not self._fst_text:
             # self.fst.normalize_weights()
             self._fst_text = self.fst.get_fst_text()
@@ -131,7 +136,7 @@ class KaldiRule(object):
             if self.compiler.decoding_framework == 'agf':
                 grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
             elif self.compiler.decoding_framework == 'laf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self._fst_text_backup)
+                grammar_fst_index = self.decoder.add_grammar_fst(self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self._fst_text_backup)
             else: raise KaldiError("unknown compiler decoding_framework")
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
 
@@ -215,6 +220,8 @@ class Compiler(object):
         self.compile_queue = set()  # KaldiRule
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
+
+        NativeWFST.init(self.model.words_table, self.model.symbols_table, self.wildcard_nonterms)
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)

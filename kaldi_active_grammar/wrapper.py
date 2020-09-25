@@ -24,7 +24,8 @@ _log = _log.getChild('wrapper')
 _log_library = _log.getChild('library')
 
 _ffi = FFI()
-_c_source_ignore_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')
+_library_binary_path = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
+_c_source_ignore_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')  # Pattern for extraneous stuff to be removed
 
 def en(text):
     """ For C interop: encode unicode text -> binary utf-8. """
@@ -43,27 +44,32 @@ else:
 
 ########################################################################################################################
 
-class KaldiDecoderBase(object):
+class FFIObject(object):
+
+    def __init__(self):
+        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
+
+    @classmethod
+    def _init_ffi(cls):
+        _ffi.cdef(_c_source_ignore_regex.sub(' ', cls._library_header_text))
+        return _ffi.dlopen(_library_binary_path)
+
+
+########################################################################################################################
+
+class KaldiDecoderBase(FFIObject):
     """docstring for KaldiDecoderBase"""
 
     def __init__(self):
-        show_donation_message()
+        super(KaldiDecoderBase, self).__init__()
 
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
+        show_donation_message()
 
         self.sample_rate = 16000
         self.num_channels = 1
         self.bytes_per_kaldi_frame = self.kaldi_frame_num_to_audio_bytes(1)
 
         self._reset_decode_time()
-
-    _library_binary_path = os.path.join(exec_dir,
-        dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
-
-    @classmethod
-    def _init_ffi(cls):
-        _ffi.cdef(_c_source_ignore_regex.sub(' ', cls._library_header_text))
-        return _ffi.dlopen(cls._library_binary_path)
 
     def _reset_decode_time(self):
         self._decode_time = 0
@@ -513,7 +519,8 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* init_laf_nnet3(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
-        DRAGONFLY_API int32_t add_grammar_fst_laf_nnet3(void* model_vp, char* grammar_fst_cp);
+        DRAGONFLY_API int32_t add_grammar_fst_laf_nnet3(void* model_vp, void* grammar_fst_cp);
+        DRAGONFLY_API int32_t add_grammar_fst_text_laf_nnet3(void* model_vp, char* grammar_fst_cp);
         DRAGONFLY_API bool reload_grammar_fst_laf_nnet3(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool remove_grammar_fst_laf_nnet3(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool decode_laf_nnet3(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
@@ -526,7 +533,7 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         self.config_dict.update({
             'hcl_fst_filename': find_file(self.model_dir, 'HCLr.fst'),
             'disambig_tids_filename': find_file(self.model_dir, 'disambig_tid.int'),
-            # 'relabel_ilabels_filename': find_file(self.model_dir, 'relabel_ilabels.int'),
+            'relabel_ilabels_filename': find_file(self.model_dir, 'relabel_ilabels.int'),
             'word_syms_relabeled_filename': find_file(self.model_dir, 'words.relabeled.txt'),
             'dictation_fst_filename': dictation_fst_file or '',
             })
@@ -535,19 +542,28 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         self._model = self._lib.init_laf_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
         self.num_grammars = 0
 
-    # def add_grammar_fst(self, grammar_fst_file):
+    # def add_grammar_fst_file(self, grammar_fst_file):
     #     grammar_fst_file = os.path.normpath(grammar_fst_file)
     #     _log.log(8, "%s: adding grammar_fst_file: %r", self, grammar_fst_file)
-    #     grammar_fst_index = self._lib.add_grammar_fst_laf_nnet3(self._model, en(grammar_fst_file))
+    #     grammar_fst_index = self._lib.add_grammar_fst_file_laf_nnet3(self._model, en(grammar_fst_file))
     #     if grammar_fst_index < 0:
     #         raise KaldiError("error adding grammar %r" % grammar_fst_file)
     #     assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
     #     self.num_grammars += 1
     #     return grammar_fst_index
 
-    def add_grammar_fst(self, grammar_fst_text):
+    def add_grammar_fst(self, grammar_fst):
+        _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
+        grammar_fst_index = self._lib.add_grammar_fst_laf_nnet3(self._model, grammar_fst.native_obj)
+        if grammar_fst_index < 0:
+            raise KaldiError("error adding grammar %r" % grammar_fst)
+        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
+        self.num_grammars += 1
+        return grammar_fst_index
+
+    def add_grammar_fst_text(self, grammar_fst_text):
         _log.log(8, "%s: adding grammar_fst_text: %r", self, grammar_fst_text[:512])
-        grammar_fst_index = self._lib.add_grammar_fst_laf_nnet3(self._model, en(grammar_fst_text))
+        grammar_fst_index = self._lib.add_grammar_fst_text_laf_nnet3(self._model, en(grammar_fst_text))
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst_text[:512])
         assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"

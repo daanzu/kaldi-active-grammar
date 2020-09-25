@@ -238,10 +238,13 @@ class Model(object):
 
         with open(words_file, 'r', encoding='utf-8') as file:
             word_id_pairs = [line.strip().split() for line in file]
-        self.lexicon_words = set([word for word, id in word_id_pairs
+        self.lexicon_words = set([word for (word, id) in word_id_pairs
             if word.lower() not in invalid_words and not word.startswith('#nonterm')])
         assert self.lexicon_words, "Empty lexicon from %r" % words_file
         self.longest_word = max(self.lexicon_words, key=len)
+
+        self.words_table = { word: int(symbol) for (word, symbol) in word_id_pairs }
+        self.symbols_table = { symbol: word for (word, symbol) in self.words_table.items() }
 
         return self.lexicon_words
 

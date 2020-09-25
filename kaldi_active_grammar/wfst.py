@@ -8,6 +8,9 @@ import collections, itertools, math
 
 from six import iteritems, itervalues, text_type
 
+from . import KaldiError
+
+
 class WFST(object):
     """
     WFST class.
@@ -20,6 +23,7 @@ class WFST(object):
     eps = u'<eps>'
     eps_disambig = u'#0'
     silent_labels = frozenset((eps, eps_disambig, u'!SIL'))
+    native = False
 
     def __init__(self):
         self.clear()
@@ -62,7 +66,7 @@ class WFST(object):
 
     def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
-        states_text = u''.join("%d %d %s %s %f\n" % (
+        arcs_text = u''.join("%d %d %s %s %f\n" % (
                 src_state,
                 dst_state,
                 ilabel if ilabel != self.eps else eps_replacement,
@@ -70,13 +74,13 @@ class WFST(object):
                 -math.log(weight) if weight != 0 else self.zero,
             )
             for (src_state, dst_state, ilabel, olabel, weight) in self.iter_arcs())
-        arcs_text = u''.join("%d %f\n" % (
+        states_text = u''.join("%d %f\n" % (
                 id,
                 -math.log(weight) if weight != 0 else self.zero,
             )
             for (id, weight) in iteritems(self._state_table)
             if weight != 0)
-        return states_text + arcs_text
+        return arcs_text + states_text
 
     ####################################################################################################################
 
@@ -129,10 +133,113 @@ class WFST(object):
                     queue.append((dst_state, path+(olabel,), target_word_index+1))
                 elif ilabel in wildcard_nonterms:
                     if olabel not in path:
-                        path += (olabel,)
+                        path += (olabel,)  # FIXME: Is this right? shouldn't we only check for olabel at end of path?
                     if target_word is not None:
                         queue.append((src_state, path+(target_word,), target_word_index+1))  # accept word and stay
                     queue.append((dst_state, path, target_word_index))  # epsilon transition; already added olabel above or previously
                 elif self.label_is_silent(ilabel):
                     queue.append((dst_state, path+(olabel,), target_word_index))  # epsilon transition
+        return False
+
+
+########################################################################################################################
+
+from .wrapper import FFIObject, _ffi
+
+class NativeWFST(FFIObject):
+    """
+    WFST class, implemented in native code.
+    Notes:
+        * Weight (arc & state) is stored as raw probability, then normalized and converted to negative log likelihood/probability before export.
+    """
+
+    _library_header_text = """
+        DRAGONFLY_API bool fst__init(int32_t eps_labels_len, int32_t eps_labels_cp[], int32_t silent_labels_len, int32_t silent_labels_cp[], int32_t wildcard_labels_len, int32_t wildcard_labels_cp[]);
+        DRAGONFLY_API void* fst__construct();
+        DRAGONFLY_API bool fst__destruct(void* fst_vp);
+        DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
+        DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
+        DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
+        DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
+    """
+
+    zero = float('inf')  # Weight of non-final states; a state is final if and only if its weight is not equal to self.zero
+    one = 0.0
+    eps = u'<eps>'
+    eps_disambig = u'#0'
+    silent_words = frozenset((eps, eps_disambig, u'!SIL'))
+    native = True
+
+    @classmethod
+    def init(cls, words_table, symbols_table, wildcard_nonterms):
+        cls.words_table = words_table
+        cls.symbols_table = symbols_table
+        cls.eps_like_labels = tuple(words_table[word] for word in (cls.eps, cls.eps_disambig))
+        cls.silent_labels = tuple(frozenset(words_table[word] for word in cls.silent_words)
+            | frozenset(symbol for (word, symbol) in words_table.items() if word.startswith('#nonterm')))
+        cls.wildcard_labels = tuple(words_table[word] for word in wildcard_nonterms)
+        assert cls.words_table[cls.eps] == 0
+
+    def __init__(self):
+        super(NativeWFST, self).__init__()
+        self.native_obj = self._lib.fst__construct()
+        if self.native_obj == _ffi.NULL:
+            raise KaldiError("Failed fst__construct")
+
+        result = self._lib.fst__init(len(self.eps_like_labels), self.eps_like_labels,
+            len(self.silent_labels), self.silent_labels,
+            len(self.wildcard_labels), self.wildcard_labels)
+        if not result:
+            raise KaldiError("Failed fst__init")
+
+    def __del__(self):
+        result = self._lib.fst__destruct(self.native_obj)
+        if not result:
+            raise KaldiError("Failed fst__destruct")
+
+    def add_state(self, weight=None, initial=False, final=False):
+        """ Default weight is 1. """
+        if weight is None:
+            weight = 1 if final else 0
+        else:
+            assert final
+        weight = -math.log(weight) if weight != 0 else self.zero
+        id = self._lib.fst__add_state(self.native_obj, float(weight), bool(initial))
+        if id < 0:
+            raise KaldiError("Failed fst__add_state")
+        return id
+
+    def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
+        """ Default weight is 1. None label is replaced by eps. Default olabel of None is replaced by label. """
+        if label is None: label = self.eps
+        if olabel is None: olabel = label
+        if weight is None: weight = 1
+        weight = -math.log(weight) if weight != 0 else self.zero
+        result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state),
+            int(self.words_table[label]), int(self.words_table[olabel]), float(weight))
+        if not result:
+            raise KaldiError("Failed fst__add_arc")
+
+    ####################################################################################################################
+
+    def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
+        """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
+        assert not eps_like_labels
+        result = self._lib.fst__has_eps_path(self.native_obj, path_src_state, path_dst_state)
+        return result
+
+    def does_match(self, target_words, wildcard_nonterms=(), include_silent=False, output_max_length=1024):
+        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
+        # FIXME: do in decoder!
+        assert frozenset(wildcard_nonterms) == self.wildcard_nonterms
+        output_p = _ffi.new('int32_t[]', output_max_length)
+        output_len_p = _ffi.new('int32_t*', output_max_length)
+        target_labels = [self.words_table[word] for word in target_words]
+        result = self._lib.fst__does_match(self.native_obj, len(target_labels), target_labels, output_p, output_len_p)
+        if output_len_p[0] > output_max_length:
+            raise KaldiError("fst__does_match needed too much output length")
+        if result:
+            return tuple(self.symbols_table[symbol]
+                for symbol in output_p[:output_len_p[0]]
+                if include_silent or symbol not in self.silent_labels)
         return False
