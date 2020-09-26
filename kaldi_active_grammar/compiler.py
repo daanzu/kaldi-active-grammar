@@ -25,7 +25,7 @@ _log = _log.getChild('compiler')
 
 class KaldiRule(object):
 
-    def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None, native_fst=True):
+    def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
         """
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
         """
@@ -51,7 +51,7 @@ class KaldiRule(object):
         self.destroyed = False  # KaldiRule must not be used/referenced anymore
 
         # Public
-        self.fst = WFST() if not native_fst else NativeWFST()
+        self.fst = WFST() if not self.compiler.native_fst else NativeWFST()
         self.filename = None
         self.matcher = None
         self.active = True
@@ -197,13 +197,14 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf'):
+    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf', native_fst=False):
         show_donation_message()
 
         self.decoding_framework = framework
         assert self.decoding_framework in ('agf', 'laf')
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('token', 'text')
+        self.native_fst = native_fst
         self._log = _log
 
         self.model = Model(model_dir, tmp_dir)
@@ -221,9 +222,10 @@ class Compiler(object):
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
-        NativeWFST.init(word_to_ilabel_map=SymbolTable(self.files_dict['words.relabeled.txt']).word_to_id_map,
-            olabel_to_word_map=SymbolTable(self.files_dict['words.txt']).id_to_word_map,
-            wildcard_nonterms=self.wildcard_nonterms)
+        if self.native_fst:
+            NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt']),
+                osymbol_table=SymbolTable(self.files_dict['words.txt']),
+                wildcard_nonterms=self.wildcard_nonterms)
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)

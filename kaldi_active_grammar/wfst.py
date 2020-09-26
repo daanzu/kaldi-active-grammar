@@ -154,7 +154,7 @@ class NativeWFST(FFIObject):
     """
 
     _library_header_text = """
-        DRAGONFLY_API bool fst__init(int32_t eps_labels_len, int32_t eps_labels_cp[], int32_t silent_labels_len, int32_t silent_labels_cp[], int32_t wildcard_labels_len, int32_t wildcard_labels_cp[]);
+        DRAGONFLY_API bool fst__init(int32_t eps_like_ilabels_len, int32_t eps_like_ilabels_cp[], int32_t silent_olabels_len, int32_t silent_olabels_cp[], int32_t wildcard_olabels_len, int32_t wildcard_olabels_cp[]);
         DRAGONFLY_API void* fst__construct();
         DRAGONFLY_API bool fst__destruct(void* fst_vp);
         DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
@@ -171,13 +171,17 @@ class NativeWFST(FFIObject):
     native = True
 
     @classmethod
-    def init(cls, word_to_ilabel_map, olabel_to_word_map, wildcard_nonterms):
-        cls.word_to_ilabel_map = word_to_ilabel_map
-        cls.olabel_to_word_map = olabel_to_word_map
-        cls.eps_like_labels = tuple(word_to_ilabel_map[word] for word in (cls.eps, cls.eps_disambig))
-        cls.silent_labels = tuple(frozenset(word_to_ilabel_map[word] for word in cls.silent_words)
-            | frozenset(symbol for (word, symbol) in word_to_ilabel_map.items() if word.startswith('#nonterm')))
-        cls.wildcard_labels = tuple(word_to_ilabel_map[word] for word in wildcard_nonterms)
+    def init(cls, isymbol_table, wildcard_nonterms, osymbol_table=None):
+        if osymbol_table is None: osymbol_table = isymbol_table
+        cls.word_to_ilabel_map = isymbol_table.word_to_id_map
+        cls.word_to_olabel_map = osymbol_table.word_to_id_map
+        cls.olabel_to_word_map = osymbol_table.id_to_word_map
+        cls.eps_like_ilabels = tuple(cls.word_to_ilabel_map[word] for word in (cls.eps, cls.eps_disambig))
+        cls.silent_olabels = tuple(
+            frozenset(cls.word_to_olabel_map[word] for word in cls.silent_words)
+            | frozenset(symbol for (word, symbol) in cls.word_to_olabel_map.items() if word.startswith('#nonterm')))
+        cls.wildcard_nonterms = wildcard_nonterms
+        cls.wildcard_olabels = tuple(cls.word_to_olabel_map[word] for word in wildcard_nonterms)
         assert cls.word_to_ilabel_map[cls.eps] == 0
 
     def __init__(self):
@@ -186,9 +190,9 @@ class NativeWFST(FFIObject):
         if self.native_obj == _ffi.NULL:
             raise KaldiError("Failed fst__construct")
 
-        result = self._lib.fst__init(len(self.eps_like_labels), self.eps_like_labels,
-            len(self.silent_labels), self.silent_labels,
-            len(self.wildcard_labels), self.wildcard_labels)
+        result = self._lib.fst__init(len(self.eps_like_ilabels), self.eps_like_ilabels,
+            len(self.silent_olabels), self.silent_olabels,
+            len(self.wildcard_olabels), self.wildcard_olabels)
         if not result:
             raise KaldiError("Failed fst__init")
 
@@ -216,7 +220,7 @@ class NativeWFST(FFIObject):
         if weight is None: weight = 1
         weight = -math.log(weight) if weight != 0 else self.zero
         result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state),
-            int(self.word_to_ilabel_map[label]), int(self.word_to_ilabel_map[olabel]), float(weight))
+            int(self.word_to_ilabel_map[label]), int(self.word_to_olabel_map[olabel]), float(weight))
         if not result:
             raise KaldiError("Failed fst__add_arc")
 
@@ -241,7 +245,7 @@ class NativeWFST(FFIObject):
         if result:
             return tuple(self.olabel_to_word_map[symbol]
                 for symbol in output_p[:output_len_p[0]]
-                if include_silent or symbol not in self.silent_labels)
+                if include_silent or symbol not in self.silent_olabels)
         return False
 
 
