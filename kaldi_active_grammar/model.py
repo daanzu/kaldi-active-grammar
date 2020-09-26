@@ -210,6 +210,7 @@ class Model(object):
             'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int', default=True),
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt', default=True),
             'lexiconp_disambig.base.txt': find_file(self.model_dir, 'lexiconp_disambig.base.txt', default=True),
+            'words.relabeled.txt': find_file(self.model_dir, 'words.relabeled.txt', default=True),
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
@@ -242,9 +243,6 @@ class Model(object):
             if word.lower() not in invalid_words and not word.startswith('#nonterm')])
         assert self.lexicon_words, "Empty lexicon from %r" % words_file
         self.longest_word = max(self.lexicon_words, key=len)
-
-        self.words_table = { word: int(symbol) for (word, symbol) in word_id_pairs }
-        self.symbols_table = { symbol: word for (word, symbol) in self.words_table.items() }
 
         return self.lexicon_words
 

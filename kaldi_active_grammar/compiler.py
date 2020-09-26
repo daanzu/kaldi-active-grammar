@@ -13,7 +13,7 @@ from six.moves import range, zip
 
 from . import _log, KaldiError
 from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
-from .wfst import WFST, NativeWFST
+from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
 import kaldi_active_grammar.alternative_dictation as alternative_dictation
 import kaldi_active_grammar.defaults as defaults
@@ -221,7 +221,9 @@ class Compiler(object):
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
-        NativeWFST.init(self.model.words_table, self.model.symbols_table, self.wildcard_nonterms)
+        NativeWFST.init(word_to_ilabel_map=SymbolTable(self.files_dict['words.relabeled.txt']).word_to_id_map,
+            olabel_to_word_map=SymbolTable(self.files_dict['words.txt']).id_to_word_map,
+            wildcard_nonterms=self.wildcard_nonterms)
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)

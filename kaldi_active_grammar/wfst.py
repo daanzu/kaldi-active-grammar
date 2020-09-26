@@ -102,7 +102,7 @@ class WFST(object):
                 arc[4] = arc[4] / divisor
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
-        """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
+        """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! Used by Dragonfly compiler. """
         eps_like_labels = frozenset((self.eps, self.eps_disambig)) | frozenset(eps_like_labels)
         state_queue = collections.deque([path_src_state])
         queued = set(state_queue)
@@ -118,7 +118,7 @@ class WFST(object):
         return False
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
-        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
+        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. Used for parsing by KaldiAG.compiler. """
         queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index into target_words of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
@@ -171,14 +171,14 @@ class NativeWFST(FFIObject):
     native = True
 
     @classmethod
-    def init(cls, words_table, symbols_table, wildcard_nonterms):
-        cls.words_table = words_table
-        cls.symbols_table = symbols_table
-        cls.eps_like_labels = tuple(words_table[word] for word in (cls.eps, cls.eps_disambig))
-        cls.silent_labels = tuple(frozenset(words_table[word] for word in cls.silent_words)
-            | frozenset(symbol for (word, symbol) in words_table.items() if word.startswith('#nonterm')))
-        cls.wildcard_labels = tuple(words_table[word] for word in wildcard_nonterms)
-        assert cls.words_table[cls.eps] == 0
+    def init(cls, word_to_ilabel_map, olabel_to_word_map, wildcard_nonterms):
+        cls.word_to_ilabel_map = word_to_ilabel_map
+        cls.olabel_to_word_map = olabel_to_word_map
+        cls.eps_like_labels = tuple(word_to_ilabel_map[word] for word in (cls.eps, cls.eps_disambig))
+        cls.silent_labels = tuple(frozenset(word_to_ilabel_map[word] for word in cls.silent_words)
+            | frozenset(symbol for (word, symbol) in word_to_ilabel_map.items() if word.startswith('#nonterm')))
+        cls.wildcard_labels = tuple(word_to_ilabel_map[word] for word in wildcard_nonterms)
+        assert cls.word_to_ilabel_map[cls.eps] == 0
 
     def __init__(self):
         super(NativeWFST, self).__init__()
@@ -216,7 +216,7 @@ class NativeWFST(FFIObject):
         if weight is None: weight = 1
         weight = -math.log(weight) if weight != 0 else self.zero
         result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state),
-            int(self.words_table[label]), int(self.words_table[olabel]), float(weight))
+            int(self.word_to_ilabel_map[label]), int(self.word_to_ilabel_map[olabel]), float(weight))
         if not result:
             raise KaldiError("Failed fst__add_arc")
 
@@ -234,12 +234,23 @@ class NativeWFST(FFIObject):
         assert frozenset(wildcard_nonterms) == self.wildcard_nonterms
         output_p = _ffi.new('int32_t[]', output_max_length)
         output_len_p = _ffi.new('int32_t*', output_max_length)
-        target_labels = [self.words_table[word] for word in target_words]
+        target_labels = [self.word_to_ilabel_map[word] for word in target_words]
         result = self._lib.fst__does_match(self.native_obj, len(target_labels), target_labels, output_p, output_len_p)
         if output_len_p[0] > output_max_length:
             raise KaldiError("fst__does_match needed too much output length")
         if result:
-            return tuple(self.symbols_table[symbol]
+            return tuple(self.olabel_to_word_map[symbol]
                 for symbol in output_p[:output_len_p[0]]
                 if include_silent or symbol not in self.silent_labels)
         return False
+
+
+########################################################################################################################
+
+class SymbolTable(object):
+
+    def __init__(self, filename):
+        with open(filename, 'r', encoding='utf-8') as file:
+            word_id_pairs = [line.strip().split() for line in file]
+        self.word_to_id_map = { word: int(id) for (word, id) in word_id_pairs }
+        self.id_to_word_map = { id: word for (word, id) in self.word_to_id_map.items() }
