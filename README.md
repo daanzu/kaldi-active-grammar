@@ -87,7 +87,7 @@ Otherwise...
     * Or use your own model. Standard Kaldi models must be converted to be usable. Conversion can be performed automatically, but this hasn't been fully implemented yet.
 1. Install Python package, which includes necessary Kaldi binaries:
     * The easy way to use kaldi-active-grammar is as a backend to dragonfly, which makes it easy to define grammars and resultant actions.
-        * For this, simply run `pip install dragonfly2[kaldi]` to install all necessary packages. See the [dragonfly documentation for details on installation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html#setup), plus how to define grammars and actions.
+        * For this, simply run `pip install 'dragonfly2[kaldi]'` to install all necessary packages. See the [dragonfly documentation for details on installation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html#setup), plus how to define grammars and actions.
     * Alternatively, if you only want to use it directly (via a more low level interface), you can just run `pip install kaldi-active-grammar`
 
 ### Troubleshooting
