@@ -8,7 +8,7 @@
 Wrapper classes for Kaldi
 """
 
-import json, logging, os.path, re, time
+import json, os.path, re, time
 from io import open
 
 from six import PY3
@@ -123,6 +123,7 @@ class KaldiGmmDecoder(KaldiDecoderBase):
         self.graph_file = os.path.normpath(graph_file)
         self.model_conf_file = os.path.normpath(model_conf_file)
         self._model = self._lib.init_gmm(7.0, 7000, 200, 8.0, words_file, graph_file, model_conf_file)
+        if not self._model: raise KaldiError("failed init_gmm")
         self.sample_rate = 16000
 
     def decode(self, frames, finalize, grammars_activity=None):
@@ -178,6 +179,7 @@ class KaldiOtfGmmDecoder(KaldiDecoderBase):
         grammar_fst_filenames_cp = _ffi.new('char*[]', grammar_fst_filenames_cps)
         self._model = self._lib.init_otf_gmm(7.0, 7000, 200, 8.0, words_file, model_conf_file,
             hcl_fst_file, _ffi.cast('char**', grammar_fst_filenames_cp), len(grammar_fst_files))
+        if not self._model: raise KaldiError("failed init_otf_gmm")
         self.sample_rate = 16000
         self.num_grammars = len(grammar_fst_files)
 
@@ -403,6 +405,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         if config: self.config_dict.update(config)
 
         self._model = self._lib.init_plain_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not self._model: raise KaldiError("failed init_plain_nnet3")
 
     def decode(self, frames, finalize):
         """Continue decoding with given new audio data."""
@@ -460,6 +463,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if config: self.config_dict.update(config)
 
         self._model = self._lib.init_agf_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not self._model: raise KaldiError("failed init_agf_nnet3")
         self.num_grammars = 0
 
     def add_grammar_fst(self, grammar_fst_file):
@@ -540,6 +544,7 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         if config: self.config_dict.update(config)
 
         self._model = self._lib.init_laf_nnet3(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not self._model: raise KaldiError("failed init_laf_nnet3")
         self.num_grammars = 0
 
     # def add_grammar_fst_file(self, grammar_fst_file):
