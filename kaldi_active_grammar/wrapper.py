@@ -389,7 +389,8 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiPlainNNet3Decoder"""
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
-        DRAGONFLY_API void* nnet3_plain__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API void* nnet3_plain__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API bool nnet3_plain__destruct(void* model_vp);
         DRAGONFLY_API bool nnet3_plain__decode(void* model_vp, float samp_freq, int32_t num_samples, float* samples, bool finalize, bool save_adaptation_state);
     """
 
@@ -404,8 +405,15 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             })
         if config: self.config_dict.update(config)
 
-        self._model = self._lib.nnet3_plain__init(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
-        if not self._model: raise KaldiError("failed nnet3_plain__init")
+        self._model = self._lib.nnet3_plain__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not self._model: raise KaldiError("failed nnet3_plain__construct")
+
+    def destroy(self):
+        if self._model:
+            result = self._lib.nnet3_plain__destruct(self._model)
+            if not result:
+                raise KaldiError("failed nnet3_plain__destruct")
+            self._model = None
 
     def decode(self, frames, finalize):
         """Continue decoding with given new audio data."""
@@ -429,7 +437,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiAgfNNet3Decoder"""
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
-        DRAGONFLY_API void* nnet3_agf__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
@@ -462,9 +471,16 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             })
         if config: self.config_dict.update(config)
 
-        self._model = self._lib.nnet3_agf__init(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
-        if not self._model: raise KaldiError("failed nnet3_agf__init")
+        self._model = self._lib.nnet3_agf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not self._model: raise KaldiError("failed nnet3_agf__construct")
         self.num_grammars = 0
+
+    def destroy(self):
+        if self._model:
+            result = self._lib.nnet3_agf__destruct(self._model)
+            if not result:
+                raise KaldiError("failed nnet3_agf__destruct")
+            self._model = None
 
     def add_grammar_fst(self, grammar_fst_file):
         grammar_fst_file = os.path.normpath(grammar_fst_file)
@@ -519,7 +535,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 class KaldiAgfCompiler(FFIObject):
 
     _library_header_text = """
-        DRAGONFLY_API void* nnet3_agf__init_compiler(char* config_str_cp);
+        DRAGONFLY_API void* nnet3_agf__construct_compiler(char* config_str_cp);
+        DRAGONFLY_API bool nnet3_agf__destruct_compiler(void* compiler_vp);
         DRAGONFLY_API void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph);
         DRAGONFLY_API void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph);
         DRAGONFLY_API void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph);
@@ -527,8 +544,15 @@ class KaldiAgfCompiler(FFIObject):
 
     def __init__(self, config):
         super(KaldiAgfCompiler, self).__init__()
-        self._compiler = self._lib.nnet3_agf__init_compiler(en(json.dumps(config)))
-        if not self._compiler: raise KaldiError("failed nnet3_agf__init_compiler")
+        self._compiler = self._lib.nnet3_agf__construct_compiler(en(json.dumps(config)))
+        if not self._compiler: raise KaldiError("failed nnet3_agf__construct_compiler")
+
+    def destroy(self):
+        if self._model:
+            result = self._lib.nnet3_agf__destruct_compiler(self._model)
+            if not result:
+                raise KaldiError("failed nnet3_agf__destruct_compiler")
+            self._model = None
 
     def compile_graph(self, config, grammar_fst=None, grammar_fst_text=None, grammar_fst_file=None):
         if 1 != sum(int(g is not None) for g in [grammar_fst, grammar_fst_text, grammar_fst_file]):
@@ -550,7 +574,8 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
     """docstring for KaldiLafNNet3Decoder"""
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
-        DRAGONFLY_API void* nnet3_laf__init(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
+        DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp);
         DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
@@ -571,9 +596,16 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
             })
         if config: self.config_dict.update(config)
 
-        self._model = self._lib.nnet3_laf__init(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
-        if not self._model: raise KaldiError("failed nnet3_laf__init")
+        self._model = self._lib.nnet3_laf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not self._model: raise KaldiError("failed nnet3_laf__construct")
         self.num_grammars = 0
+
+    def destroy(self):
+        if self._model:
+            result = self._lib.nnet3_laf__destruct(self._model)
+            if not result:
+                raise KaldiError("failed nnet3_laf__destruct")
+            self._model = None
 
     # def add_grammar_fst_file(self, grammar_fst_file):
     #     grammar_fst_file = os.path.normpath(grammar_fst_file)
