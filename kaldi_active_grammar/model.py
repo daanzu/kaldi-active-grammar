@@ -354,7 +354,7 @@ class Model(object):
         generate_file_from_base('lexiconp_disambig.txt', lambda word, word_id, phones:
             '%s\t1.0 %s' % (word, ' '.join(phones)))
 
-        format = ExternalProcess.get_formatter(self.files_dict)
+        format = ExternalProcess.get_list_formatter(self.files_dict)
         command = ExternalProcess.make_lexicon_fst(*format(
             '--left-context-phones={left_context_phones_txt}',
             '--nonterminals={nonterminals_txt}',

@@ -93,7 +93,10 @@ class ExternalProcess(object):
     make_lexicon_fst = shell([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst%s.py' % ('_py2' if PY2 else ''))])
 
     @staticmethod
-    def get_formatter(format_kwargs):
+    def get_dict_formatter(format_kwargs):
+        return lambda **kwargs: { key: value.format(**format_kwargs) for (key, value) in kwargs.items() }
+    @staticmethod
+    def get_list_formatter(format_kwargs):
         return lambda *args: [arg.format(**format_kwargs) for arg in args]
 
     @staticmethod

@@ -25,7 +25,7 @@ _log_library = _log.getChild('library')
 
 _ffi = FFI()
 _library_binary_path = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
-_c_source_ignore_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")')  # Pattern for extraneous stuff to be removed
+_c_source_ignore_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")|(//.*$)', re.MULTILINE)  # Pattern for extraneous stuff to be removed
 
 def en(text):
     """ For C interop: encode unicode text -> binary utf-8. """
@@ -514,6 +514,34 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         if not result:
             raise KaldiError("decoding error")
         return finalize
+
+
+class KaldiAgfCompiler(FFIObject):
+
+    _library_header_text = """
+        DRAGONFLY_API void* nnet3_agf__init_compiler(char* config_str_cp);
+        DRAGONFLY_API void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph);
+        DRAGONFLY_API void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph);
+        DRAGONFLY_API void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph);
+    """
+
+    def __init__(self, config):
+        super(KaldiAgfCompiler, self).__init__()
+        self._compiler = self._lib.nnet3_agf__init_compiler(en(json.dumps(config)))
+        if not self._compiler: raise KaldiError("failed nnet3_agf__init_compiler")
+
+    def compile_graph(self, config, grammar_fst=None, grammar_fst_text=None, grammar_fst_file=None):
+        if 1 != sum(int(g is not None) for g in [grammar_fst, grammar_fst_text, grammar_fst_file]):
+            raise ValueError("must pass exactly one grammar")
+        if grammar_fst is not None:
+            _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst=%r", config, grammar_fst)
+            result = self._lib.nnet3_agf__compile_graph_text(self._compiler, en(json.dumps(config)), grammar_fst.native_obj, False)
+        if grammar_fst_text is not None:
+            _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_text:\n%s", config, grammar_fst_text)
+            result = self._lib.nnet3_agf__compile_graph_text(self._compiler, en(json.dumps(config)), en(grammar_fst_text), False)
+        if grammar_fst_file is not None:
+            _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_file=%r", config, grammar_fst_file)
+            result = self._lib.nnet3_agf__compile_graph_text(self._compiler, en(json.dumps(config)), en(grammar_fst_file), False)
 
 
 ########################################################################################################################

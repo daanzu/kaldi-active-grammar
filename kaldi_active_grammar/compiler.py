@@ -15,6 +15,7 @@ from . import _log, KaldiError
 from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
+from .wrapper import KaldiAgfCompiler
 import kaldi_active_grammar.alternative_dictation as alternative_dictation
 import kaldi_active_grammar.defaults as defaults
 
@@ -200,6 +201,10 @@ class Compiler(object):
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf', native_fst=False):
         show_donation_message()
 
+        AGF_INTERNAL_COMPILATION = False
+        if framework == 'agf-direct':
+            framework = 'agf'
+            AGF_INTERNAL_COMPILATION = True
         self.decoding_framework = framework
         assert self.decoding_framework in ('agf', 'laf')
         self.parsing_framework = 'token'
@@ -226,6 +231,7 @@ class Compiler(object):
             NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt']),
                 osymbol_table=SymbolTable(self.files_dict['words.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)
+        self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)
@@ -265,13 +271,25 @@ class Compiler(object):
             elif input_filename: input = input_filename
             else: raise KaldiError("_compile_laf_graph passed neither input_data nor input_filename")
             compile_command = input
-            format = ExternalProcess.get_formatter(format_kwargs)
+            format = ExternalProcess.get_list_formatter(format_kwargs)
 
             compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
             # g_filename = filename.replace('.fst', '.G.fst')
             compile_command |= filename
             compile_command()
             # fstrelabel --relabel_ipairs=relabel G.fst | fstarcsort --sort_type=ilabel | fstconvert --fst_type=const > Gr.fst
+
+    def _init_agf_compiler(self):
+        format_kwargs = dict(self.files_dict)
+        config = dict(
+            tree_rxfilename = '{tree}',
+            model_rxfilename = '{final_mdl}',
+            lex_rxfilename = '{L_disambig_fst}',
+            disambig_rxfilename = '{disambig_int}',
+            word_syms_filename = '{words_txt}',
+            )
+        config = { key: value.format(**format_kwargs) for (key, value) in config.items() }
+        return KaldiAgfCompiler(config)
 
     def _compile_agf_graph(self, compile=False, nonterm=False, input_data=None, input_filename=None, filename=None, simplify_lg=True, **kwargs):
         """
@@ -289,14 +307,35 @@ class Compiler(object):
             format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
             format_kwargs.update(simplify_lg=str(bool(simplify_lg)).lower())
 
-            if 1:
+            if self._agf_compiler:
+                # Internal-style
+                config = dict(
+                    nonterm_phones_offset = self.model.nonterm_phones_offset,
+                    disambig_rxfilename = '{disambig_int}',
+                    simplify_lg = simplify_lg,
+                    verbose = verbose_level,
+                    tree_rxfilename = '{tree}',
+                    model_rxfilename = '{final_mdl}',
+                    lex_rxfilename = '{L_disambig_fst}',
+                    word_syms_filename = '{words_txt}',
+                    hclg_wxfilename = filename,
+                    )
+                if nonterm:
+                    config.update(grammar_prepend_nonterm=self.model.nonterm_words_offset, grammar_append_nonterm=self.model.nonterm_words_offset+1)
+                config = { key: value.format(**format_kwargs) if isinstance(value, str) else value for (key, value) in config.items() }
+                if compile:
+                    self._agf_compiler.compile_graph(config, grammar_fst_text=input_data)
+                else:
+                    self._agf_compiler.compile_graph(config, grammar_fst_file=input_filename)
+
+            elif True:
                 # Pipeline-style
                 if input_data and input_filename: raise KaldiError("_compile_agf_graph passed both input_data and input_filename")
                 elif input_data: input = ExternalProcess.shell.echo(input_data.encode('utf-8'))
                 elif input_filename: input = input_filename
                 else: raise KaldiError("_compile_agf_graph passed neither input_data nor input_filename")
                 compile_command = input
-                format = ExternalProcess.get_formatter(format_kwargs)
+                format = ExternalProcess.get_list_formatter(format_kwargs)
                 args = []
 
                 # if True: (input | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | ExternalProcess.fstinfo | 'stats.log+')()
@@ -342,7 +381,7 @@ class Compiler(object):
         if output_filename is None: output_filename = self._plain_dictation_hclg_fst_filepath
         verbose_level = 5 if self._log.isEnabledFor(5) else 0
         format_kwargs = dict(self.files_dict, g_filename=g_filename, output_filename=output_filename, verbose=verbose_level)
-        format = ExternalProcess.get_formatter(format_kwargs)
+        format = ExternalProcess.get_list_formatter(format_kwargs)
         args = format('--read-disambig-syms={disambig_int}', '--simplify-lg=false', '--verbose={verbose}',
             '{tree}', '{final_mdl}', '{L_disambig_fst}', '{g_filename}', '{output_filename}')
         compile_command = ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
