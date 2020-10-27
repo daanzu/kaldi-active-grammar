@@ -22,8 +22,9 @@ fst.add_arc(previous_state, next_state, None)  # Optionally skip, with an epsilo
 previous_state = next_state
 extra_state = fst.add_state()
 next_state = fst.add_state()
+# These two arcs together (always use together) will recognize one or more words of free dictation (but not zero):
 fst.add_arc(previous_state, extra_state, dictation_nonterm)
-fst.add_arc(extra_state, next_state, kaldi_active_grammar.WFST.eps, end_nonterm)
+fst.add_arc(extra_state, next_state, None, end_nonterm)
 
 # Loop repetition, alternating between a group of alternatives and more free dictation
 previous_state = next_state
@@ -33,7 +34,7 @@ for word in ['period', 'comma', 'colon']:
 extra_state = fst.add_state()
 next_state = fst.add_state()
 fst.add_arc(next_state, extra_state, dictation_nonterm)
-fst.add_arc(extra_state, next_state, kaldi_active_grammar.WFST.eps, end_nonterm)
+fst.add_arc(extra_state, next_state, None, end_nonterm)
 fst.add_arc(next_state, previous_state, None)  # Loop back, with an epsilon (silent) arc
 fst.add_arc(previous_state, next_state, None)  # Optionally skip, with an epsilon (silent) arc
 

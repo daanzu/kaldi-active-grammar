@@ -1,24 +1,20 @@
-import logging, time
+import time
 import kaldi_active_grammar
 from audio import VADAudio
 
-logging.basicConfig(level=20)
-model_dir = None  # Default
-tmp_dir = None  # Default
-
-def initialize():
+def initialize(model_dir=None, tmp_dir=None, config={}):
     compiler = kaldi_active_grammar.Compiler(model_dir=model_dir, tmp_dir=tmp_dir)
 
     top_fst = compiler.compile_top_fst()
     dictation_fst_file = compiler.dictation_fst_filepath
     decoder = kaldi_active_grammar.KaldiAgfNNet3Decoder(model_dir=compiler.model_dir, tmp_dir=compiler.tmp_dir,
         top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, save_adaptation_state=False,
-        config={},)
+        config=config,)
     compiler.decoder = decoder
 
     return (compiler, decoder)
 
-def do_recognition(compiler, decoder):
+def do_recognition(compiler, decoder, print_partial=True, cap_dictation=True):
     audio = VADAudio()
     audio_iterator = audio.vad_collector(nowait=True)
     print("Listening...")
@@ -41,7 +37,8 @@ def do_recognition(compiler, decoder):
 
             decoder.decode(block, False, kaldi_rules_activity)
             output, info = decoder.get_output()
-            print("Partial phrase: %r" % (output,))
+            if print_partial:
+                print("Partial phrase: %r" % (output,))
             recognized_rule, words, words_are_dictation_mask, in_dictation = compiler.parse_partial_output(output)
 
         else:
@@ -53,6 +50,8 @@ def do_recognition(compiler, decoder):
 
             recognized_rule, words, words_are_dictation_mask = compiler.parse_output(output)
             is_acceptable_recognition = bool(recognized_rule)
+            if cap_dictation:
+                words = [(word.upper() if word_in_dictation else word) for (word, word_in_dictation) in zip(words, words_are_dictation_mask)]
             parsed_output = ' '.join(words)
             print("End of phrase: eer=%.2f conf=%.2f%s, rule %s, %r" %
                 (expected_error_rate, confidence, (" [BAD]" if not is_acceptable_recognition else ""), recognized_rule, parsed_output))
