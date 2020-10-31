@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0, with exceptions; see LICENSE.txt file.
 #
 
-import base64, collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess
+import collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess
 import concurrent.futures
 from contextlib import contextmanager
 from io import open
@@ -12,7 +12,7 @@ from io import open
 from six.moves import range, zip
 
 from . import _log, KaldiError
-from .utils import ExternalProcess, debug_timer, lazy_readonly_property, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
+from .utils import ExternalProcess, debug_timer, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
 from .wrapper import KaldiAgfCompiler
