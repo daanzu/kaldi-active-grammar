@@ -23,7 +23,7 @@ setup-dockcross:
 	docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
 	@# [ ! -e building/dockcross-manylinux2010-x64 ] && docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64 || true
 
-# setup an editable development environment on linux
+# Setup an editable development environment on linux
 setup-linux-develop kaldi_root_dir:
 	mkdir -p kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstarcsort kaldi_active_grammar/exec/linux/
@@ -32,3 +32,6 @@ setup-linux-develop kaldi_root_dir:
 	ln -sr {{kaldi_root_dir}}/src/fstbin/fstaddselfloops kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/src/dragonfly/libkaldi-dragonfly.so kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/src/dragonflybin/compile-graph-agf kaldi_active_grammar/exec/linux/
+
+trigger_build ref='master':
+	gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref={{ref}}
