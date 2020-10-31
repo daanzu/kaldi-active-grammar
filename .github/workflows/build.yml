@@ -120,16 +120,20 @@ jobs:
         run: |
           cd kaldi/windows
           cp kaldiwin_mkl.props kaldiwin.props
+          # Add MKL static libraries to build
           perl -pi -e 's/<AdditionalDependencies>.*<\/AdditionalDependencies>/<AdditionalDependencies>mkl_sequential.lib;mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)<\/AdditionalDependencies>/g' kaldiwin.props
           cp variables.props.dev variables.props
-          # sed -i.bak \
-          #   -e 's%<OPENFST>.*</OPENFST>%<OPENFST>${{ github.workspace }}/openfst</OPENFST>%g' \
-          #   -e 's%<OPENFSTLIB>.*</OPENFSTLIB>%<OPENFSTLIB>${{ github.workspace }}/openfst/build64</OPENFSTLIB>%g' \
-          #   variables.props
+          # Add openfst location
           perl -pi -e 's/<OPENFST>.*<\/OPENFST>/<OPENFST>$ENV{GITHUB_WORKSPACE}\\openfst<\/OPENFST>/g' variables.props
           perl -pi -e 's/<OPENFSTLIB>.*<\/OPENFSTLIB>/<OPENFSTLIB>$ENV{GITHUB_WORKSPACE}\\openfst\\build_output<\/OPENFSTLIB>/g' variables.props
-          # cat variables.props
           perl generate_solution.pl --vsver vs2019 --enable-mkl --noportaudio
+          # Add additional libfstscript library to dragonfly build file
+          sed -i.bak '$i\
+            <ItemDefinitionGroup>\
+              <Link>\
+                <AdditionalDependencies>libfstscript.lib;%(AdditionalDependencies)</AdditionalDependencies>\
+              </Link>\
+            </ItemDefinitionGroup>' ../kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
           perl get_version.pl
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v1.0.0
