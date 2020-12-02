@@ -228,6 +228,8 @@ class Compiler(object):
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
         if self.native_fst:
+            if self.decoding_framework == 'agf':
+                raise KaldiError("AGF with NativeWFST not supported")
             NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt' if self.decoding_framework == 'laf' else 'words.txt']),
                 osymbol_table=SymbolTable(self.files_dict['words.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)
