@@ -228,7 +228,7 @@ class Compiler(object):
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
         if self.native_fst:
-            NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt']),
+            NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt' if self.decoding_framework == 'laf' else 'words.txt']),
                 osymbol_table=SymbolTable(self.files_dict['words.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)
         self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
