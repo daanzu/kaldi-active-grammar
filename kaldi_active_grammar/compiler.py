@@ -15,7 +15,7 @@ from . import _log, KaldiError
 from .utils import ExternalProcess, debug_timer, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
-from .wrapper import KaldiAgfCompiler
+from .wrapper import KaldiAgfCompiler, KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder
 import kaldi_active_grammar.alternative_dictation as alternative_dictation
 import kaldi_active_grammar.defaults as defaults
 
@@ -232,6 +232,21 @@ class Compiler(object):
                 osymbol_table=SymbolTable(self.files_dict['words.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)
         self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
+
+    def init_decoder(self, config=None, dictation_fst_file=None):
+        if self.decoder: raise KaldiError("Decoder already initialized")
+        if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath
+        if self.decoding_framework == 'agf':
+            top_fst = self.compile_top_fst()
+            self.decoder = KaldiAgfNNet3Decoder(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
+                dictation_fst_file=dictation_fst_file, config=config,
+                top_fst_file=top_fst.filepath,)
+        elif self.decoding_framework == 'laf':
+            self.decoder = KaldiLafNNet3Decoder(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
+                dictation_fst_file=dictation_fst_file, config=config,)
+        else:
+            raise KaldiError("Invalid Compiler.decoding_framework: %r" % self.decoding_framework)
+        return self.decoder
 
     exec_dir = property(lambda self: self.model.exec_dir)
     model_dir = property(lambda self: self.model.model_dir)
