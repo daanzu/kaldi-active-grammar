@@ -33,8 +33,11 @@ setup-linux-develop kaldi_root_dir:
 	ln -sr {{kaldi_root_dir}}/src/dragonfly/libkaldi-dragonfly.so kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/src/dragonflybin/compile-graph-agf kaldi_active_grammar/exec/linux/
 
-test_model model_dir:
+watch-windows-develop config='Release':
+	bash -c "watchexec -v --no-ignore -w /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/ cp /mnt/c/Work/Speech/kaldi/kaldi-windows-deps/openfst.2019/build_output/x64/{{config}}/bin/{fstarcsort,fstcompile,fstinfo}.exe /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/{{config}}/{kaldi-dragonfly.dll,compile-graph-agf.exe,fstaddselfloops.exe} /mnt/c/Work/Speech/kaldi/kaldi-active-grammar/kaldi_active_grammar/exec/windows/"
+
+test-model model_dir:
 	cd {{invocation_directory()}} && rm -rf kaldi_model kaldi_model.tmp && cp -rp {{model_dir}} kaldi_model
 
-trigger_build ref='master':
+trigger-build ref='master':
 	gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref={{ref}}
