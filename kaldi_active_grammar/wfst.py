@@ -182,8 +182,8 @@ class NativeWFST(FFIObject):
         cls.silent_olabels = tuple(
             frozenset(cls.word_to_olabel_map[word] for word in cls.silent_words)
             | frozenset(symbol for (word, symbol) in cls.word_to_olabel_map.items() if word.startswith('#nonterm')))
-        cls.wildcard_nonterms = wildcard_nonterms
-        cls.wildcard_olabels = tuple(cls.word_to_olabel_map[word] for word in wildcard_nonterms)
+        cls.wildcard_nonterms = frozenset(wildcard_nonterms)
+        cls.wildcard_olabels = tuple(cls.word_to_olabel_map[word] for word in cls.wildcard_nonterms)
         assert cls.word_to_ilabel_map[cls.eps] == 0
 
     def __init__(self):
@@ -246,7 +246,7 @@ class NativeWFST(FFIObject):
             raise KaldiError("fst__does_match needed too much output length")
         if result:
             return tuple(self.olabel_to_word_map[symbol]
-                for symbol in output_p[:output_len_p[0]]
+                for symbol in output_p[0:output_len_p[0]]
                 if include_silent or symbol not in self.silent_olabels)
         return False
 

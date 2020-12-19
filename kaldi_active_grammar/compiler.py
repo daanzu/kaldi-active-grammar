@@ -108,12 +108,14 @@ class KaldiRule(object):
 
         if self.compiler.decoding_framework == 'agf':
             self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
+            self._fst_text = None
         elif self.compiler.decoding_framework == 'laf':
             # self.compiler._compile_laf_graph(compile=True, nonterm=self.nonterm, input_data=self._fst_text, filename=self.filepath)
-            self._fst_text_backup = self._fst_text  # FIXME: hack!
-        else: raise KaldiError("unknown compiler decoding_framework")
+            # self._fst_text_backup = self._fst_text  # FIXME: hack!
+            # Keep self._fst_text, for adding directly later
+            pass
+        else: raise KaldiError("unknown compiler.decoding_framework")
 
-        self._fst_text = None
         self.compiled = True
         with self.fst_cache.lock:
             self.fst_cache.add_fst(self.filepath)
@@ -131,13 +133,13 @@ class KaldiRule(object):
             if self.compiler.decoding_framework == 'agf':
                 self.decoder.reload_grammar_fst(self.id, self.filepath)
             elif self.compiler.decoding_framework == 'laf':
-                self.decoder.reload_grammar_fst(self.id, self._fst_text_backup)
+                self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented
             else: raise KaldiError("unknown compiler decoding_framework")
         else:
             if self.compiler.decoding_framework == 'agf':
                 grammar_fst_index = self.decoder.add_grammar_fst(self.filepath)
             elif self.compiler.decoding_framework == 'laf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self._fst_text_backup)
+                grammar_fst_index = self.decoder.add_grammar_fst(self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self._fst_text)
             else: raise KaldiError("unknown compiler decoding_framework")
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
 
@@ -199,12 +201,21 @@ class KaldiRule(object):
 class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf', native_fst=False):
+        # Supported parameter combinations:
+        #   framework='agf-indirect' native_fst=False
+        #   framework='agf-direct' native_fst=False (no external CLI programs needed)
+        #   framework='laf' native_fst=False (no reloading)
+        #   framework='laf' native_fst=True
+        
         show_donation_message()
 
-        AGF_INTERNAL_COMPILATION = False
+        AGF_INTERNAL_COMPILATION = True
         if framework == 'agf-direct':
             framework = 'agf'
             AGF_INTERNAL_COMPILATION = True
+        if framework == 'agf-indirect':
+            framework = 'agf'
+            AGF_INTERNAL_COMPILATION = False
         self.decoding_framework = framework
         assert self.decoding_framework in ('agf', 'laf')
         self.parsing_framework = 'token'
@@ -229,7 +240,7 @@ class Compiler(object):
 
         if self.native_fst:
             if self.decoding_framework == 'agf':
-                raise KaldiError("AGF with NativeWFST not supported")
+                raise KaldiError("AGF with NativeWFST not supported")  # FIXME
             NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt' if self.decoding_framework == 'laf' else 'words.txt']),
                 osymbol_table=SymbolTable(self.files_dict['words.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)
@@ -325,7 +336,7 @@ class Compiler(object):
             format_kwargs.update(simplify_lg=str(bool(simplify_lg)).lower())
 
             if self._agf_compiler:
-                # Internal-style
+                # Internal-style (no external CLI programs)
                 config = dict(
                     nonterm_phones_offset = self.model.nonterm_phones_offset,
                     disambig_rxfilename = '{disambig_int}',

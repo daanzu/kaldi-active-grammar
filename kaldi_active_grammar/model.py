@@ -380,6 +380,7 @@ class Model(object):
 
     @staticmethod
     def generate_words_relabeled_file(words_filename, relabel_filename, words_relabel_filename):
+        """ generate a version of the words file, that has already been relabeled with the given relabel file """
         with open(words_filename, 'r', encoding='utf-8') as file:
             word_id_pairs = [(word, id) for (word, id) in [line.strip().split() for line in file]]
         with open(relabel_filename, 'r', encoding='utf-8') as file:

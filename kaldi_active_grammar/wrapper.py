@@ -405,6 +405,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
             })
         if config: self.config_dict.update(config)
 
+        _log.debug("config_dict: %s", self.config_dict)
         self._model = self._lib.nnet3_plain__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
         if not self._model: raise KaldiError("failed nnet3_plain__construct")
 
@@ -471,6 +472,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             })
         if config: self.config_dict.update(config)
 
+        _log.debug("config_dict: %s", self.config_dict)
         self._model = self._lib.nnet3_agf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
         if not self._model: raise KaldiError("failed nnet3_agf__construct")
         self.num_grammars = 0
@@ -548,11 +550,11 @@ class KaldiAgfCompiler(FFIObject):
         if not self._compiler: raise KaldiError("failed nnet3_agf__construct_compiler")
 
     def destroy(self):
-        if self._model:
-            result = self._lib.nnet3_agf__destruct_compiler(self._model)
+        if self._compiler:
+            result = self._lib.nnet3_agf__destruct_compiler(self._compiler)
             if not result:
                 raise KaldiError("failed nnet3_agf__destruct_compiler")
-            self._model = None
+            self._compiler = None
 
     def compile_graph(self, config, grammar_fst=None, grammar_fst_text=None, grammar_fst_file=None):
         if 1 != sum(int(g is not None) for g in [grammar_fst, grammar_fst_text, grammar_fst_file]):
@@ -591,11 +593,12 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
             'hcl_fst_filename': find_file(self.model_dir, 'HCLr.fst'),
             'disambig_tids_filename': find_file(self.model_dir, 'disambig_tid.int'),
             'relabel_ilabels_filename': find_file(self.model_dir, 'relabel_ilabels.int'),
-            'word_syms_relabeled_filename': find_file(self.model_dir, 'words.relabeled.txt'),
+            'word_syms_relabeled_filename': find_file(self.model_dir, 'words.relabeled.txt', required=True),
             'dictation_fst_filename': dictation_fst_file or '',
             })
         if config: self.config_dict.update(config)
 
+        _log.debug("config_dict: %s", self.config_dict)
         self._model = self._lib.nnet3_laf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
         if not self._model: raise KaldiError("failed nnet3_laf__construct")
         self.num_grammars = 0
@@ -627,6 +630,7 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         return grammar_fst_index
 
     def add_grammar_fst_text(self, grammar_fst_text):
+        assert grammar_fst_text
         _log.log(8, "%s: adding grammar_fst_text: %r", self, grammar_fst_text[:512])
         grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_text(self._model, en(grammar_fst_text))
         if grammar_fst_index < 0:
@@ -640,6 +644,12 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         result = self._lib.nnet3_laf__reload_grammar_fst(self._model, grammar_fst_index, en(grammar_fst_file))
         if not result:
             raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
+
+    # def reload_grammar_fst_text(self, grammar_fst_index, grammar_fst_text):
+    #     _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
+    #     result = self._lib.nnet3_laf__reload_grammar_fst(self._model, grammar_fst_index, en(grammar_fst_file))
+    #     if not result:
+    #         raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
