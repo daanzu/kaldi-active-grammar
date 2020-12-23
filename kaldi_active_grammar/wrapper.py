@@ -333,12 +333,12 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
             raise KaldiError("error loading lexicon (%r, %r)" % (words_file, word_align_lexicon_file))
 
     def save_adaptation_state(self):
-        result = self._lib.nnet3_agf__save_adaptation_state(self._model)
+        result = self._lib.nnet3_base__save_adaptation_state(self._model)
         if not result:
             raise KaldiError("save_adaptation_state error")
 
     def reset_adaptation_state(self):
-        result = self._lib.nnet3_agf__reset_adaptation_state(self._model)
+        result = self._lib.nnet3_base__reset_adaptation_state(self._model)
         if not result:
             raise KaldiError("reset_adaptation_state error")
 
