@@ -68,7 +68,7 @@ jobs:
           echo "$HOME/bin" >> $GITHUB_PATH
       - run: |
           echo "KALDI_BRANCH: $KALDI_BRANCH"
-          just build-dockcross
+          just build-dockcross $KALDI_BRANCH
           ls -al wheelhouse/
       - uses: actions/upload-artifact@v2
         with:

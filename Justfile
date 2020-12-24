@@ -16,8 +16,8 @@ build-linux python='python3':
 	rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
 	{{python}} setup.py bdist_wheel
 
-build-dockcross:
-	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64
+build-dockcross kaldi_branch:
+	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{kaldi_branch}}
 
 setup-dockcross:
 	docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
@@ -25,6 +25,7 @@ setup-dockcross:
 
 # Setup an editable development environment on linux
 setup-linux-develop kaldi_root_dir:
+	# Compile kaldi_root_dir with: env CXXFLAGS=-O2 ./configure --mkl-root=/home/daanzu/intel/mkl/ --shared --static-math
 	mkdir -p kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstarcsort kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstcompile kaldi_active_grammar/exec/linux/
