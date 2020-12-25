@@ -199,9 +199,14 @@ class NativeWFST(FFIObject):
             raise KaldiError("Failed fst__init")
 
     def __del__(self):
-        result = self._lib.fst__destruct(self.native_obj)
-        if not result:
-            raise KaldiError("Failed fst__destruct")
+        self.destruct()
+
+    def destruct(self):
+        if self.native_obj is not None:
+            result = self._lib.fst__destruct(self.native_obj)
+            self.native_obj = None
+            if not result:
+                raise KaldiError("Failed fst__destruct")
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
