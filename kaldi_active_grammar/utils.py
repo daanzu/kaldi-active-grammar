@@ -181,10 +181,10 @@ def find_file(directory, filename, required=False, default=False):
             matches.append(os.path.join(root, filename))
     if matches:
         matches.sort(key=len)
-        _log.debug("%s: find_file found file %r", _name, matches[0])
+        _log.log(8, "%s: find_file found file %r", _name, matches[0])
         return matches[0]
     else:
-        _log.debug("%s: find_file cannot find file %r in %r (or subdirectories)", _name, filename, directory)
+        _log.log(8, "%s: find_file cannot find file %r in %r (or subdirectories)", _name, filename, directory)
         if required:
             raise IOError("cannot find file %r in %r" % (filename, directory))
         if default == True:
