@@ -35,7 +35,7 @@ def main():
     logging.basicConfig(level=5 if args.verbose else logging.INFO)
 
     if args.command == 'compile_agf_dictation_graph':
-        compiler = Compiler(args.model_dir, args.tmp_dir, framework='agf-indirect')  # FIXME: agf-direct should be able to handle this
+        compiler = Compiler(args.model_dir, args.tmp_dir)
         g_filename = unknown.pop(0) if unknown else None
         print_("Compiling dictation graph...")
         compiler.compile_agf_dictation_fst(g_filename=g_filename)
