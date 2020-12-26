@@ -76,7 +76,8 @@ class KaldiRule(object):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
 
         if self.fst.native:
-            self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True)
+            if self.compiler.decoding_framework == 'agf':
+                self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True)
             self.compiled = True
             return self
 
@@ -212,12 +213,14 @@ class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf-direct', native_fst=False):
         # Supported parameter combinations:
-        #   framework='agf-indirect' native_fst=False
+        #   framework='agf-indirect' native_fst=False (original method)
         #   framework='agf-direct' native_fst=False (no external CLI programs needed)
-        #   framework='laf' native_fst=False (no reloading)
-        #   framework='laf' native_fst=True
-        
+        #   framework='agf-direct' native_fst=True (no external CLI programs needed; no cache/temp files used)
+        #   framework='laf' native_fst=False (no reloading supported)
+        #   framework='laf' native_fst=True (no reloading supported)
+
         show_donation_message()
+        self._log = _log
 
         AGF_INTERNAL_COMPILATION = True
         if framework == 'agf-direct':
@@ -232,7 +235,6 @@ class Compiler(object):
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('token', 'text')
         self.native_fst = bool(native_fst)
-        self._log = _log
 
         self.model = Model(model_dir, tmp_dir)
         self.alternative_dictation = alternative_dictation
@@ -259,8 +261,8 @@ class Compiler(object):
         if self.decoder: raise KaldiError("Decoder already initialized")
         if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath
         if self.decoding_framework == 'agf':
-            top_fst = self.compile_top_fst()
-            decoder_kwargs = dict(top_fst=top_fst.fst) if top_fst.fst.native else dict(top_fst_file=top_fst.filepath)
+            top_fst_rule = self.compile_top_fst()
+            decoder_kwargs = dict(top_fst_cp=top_fst_rule.fst_hclg_cp) if top_fst_rule.fst.native else dict(top_fst_file=top_fst_rule.filepath)
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
                 dictation_fst_file=dictation_fst_file, config=config, **decoder_kwargs)
         elif self.decoding_framework == 'laf':
@@ -358,6 +360,9 @@ class Compiler(object):
                     )
                 if output_filename:
                     config.update(hclg_wxfilename=output_filename)
+                elif self._log.isEnabledFor(3):
+                    import datetime
+                    config.update(hclg_wxfilename=os.path.join(self.tmp_dir, datetime.datetime.now().isoformat().replace(':', '') + '.fst'))
                 if nonterm:
                     config.update(grammar_prepend_nonterm=self.model.nonterm_words_offset, grammar_append_nonterm=self.model.nonterm_words_offset+1)
                 config = { key: value.format(**format_kwargs) if isinstance(value, str) else value for (key, value) in config.items() }

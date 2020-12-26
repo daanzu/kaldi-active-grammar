@@ -449,7 +449,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
     """
 
-    def __init__(self, *, top_fst=None, top_fst_file=None, dictation_fst_file=None, config=None, **kwargs):
+    def __init__(self, *, top_fst_cp=None, top_fst_file=None, dictation_fst_file=None, config=None, **kwargs):
         super(KaldiAgfNNet3Decoder, self).__init__(**kwargs)
 
         phones_file = find_file(self.model_dir, 'phones.txt')
@@ -462,7 +462,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         dictation_phones_offset = symbol_table_lookup(phones_file, '#nonterm:dictation')
         if dictation_phones_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
-        if (top_fst is not None) == (top_fst_file is not None):
+        if (top_fst_cp is not None) == (top_fst_file is not None):
             raise KaldiError("must specify exactly one of top_fst and top_fst_file")
 
         self.config_dict.update({
@@ -471,7 +471,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             'dictation_phones_offset': dictation_phones_offset,
             'dictation_fst_filename': os.path.normpath(dictation_fst_file) if dictation_fst_file is not None else '',
             })
-        if top_fst is not None: self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst.native_obj))})
+        if top_fst_cp is not None: self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst_cp))})
         if top_fst_file is not None: self.config_dict.update({'top_fst_filename': os.path.normpath(top_fst_file)})
         if config: self.config_dict.update(config)
 
