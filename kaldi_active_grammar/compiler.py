@@ -262,14 +262,14 @@ class Compiler(object):
     def init_decoder(self, config=None, dictation_fst_file=None):
         if self.decoder: raise KaldiError("Decoder already initialized")
         if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath
+        decoder_kwargs = dict(model_dir=self.model_dir, tmp_dir=self.tmp_dir, dictation_fst_file=dictation_fst_file, max_num_rules=self._max_rule_id+1, config=config)
         if self.decoding_framework == 'agf':
             top_fst_rule = self.compile_top_fst()
-            decoder_kwargs = dict(top_fst_cp=top_fst_rule.fst_hclg_cp) if top_fst_rule.fst.native else dict(top_fst_file=top_fst_rule.filepath)
-            self.decoder = KaldiAgfNNet3Decoder(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
-                dictation_fst_file=dictation_fst_file, config=config, **decoder_kwargs)
+            if top_fst_rule.fst.native: decoder_kwargs.update(top_fst_cp=top_fst_rule.fst_hclg_cp)
+            else: decoder_kwargs.update(top_fst_file=top_fst_rule.filepath)
+            self.decoder = KaldiAgfNNet3Decoder(**decoder_kwargs)
         elif self.decoding_framework == 'laf':
-            self.decoder = KaldiLafNNet3Decoder(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
-                dictation_fst_file=dictation_fst_file, config=config,)
+            self.decoder = KaldiLafNNet3Decoder(**decoder_kwargs)
         else:
             raise KaldiError("Invalid Compiler.decoding_framework: %r" % self.decoding_framework)
         return self.decoder

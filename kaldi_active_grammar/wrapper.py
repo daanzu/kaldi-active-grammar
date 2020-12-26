@@ -240,15 +240,15 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         DRAGONFLY_API bool nnet3_base__set_lm_prime_text(void* model_vp, char* prime_cp);
     """
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, model_file=None, save_adaptation_state=False):
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, max_num_rules=None, save_adaptation_state=False):
         super(KaldiNNet3Decoder, self).__init__()
 
         model_dir = os.path.normpath(model_dir)
         if words_file is None: words_file = find_file(model_dir, 'words.txt')
         if word_align_lexicon_file is None: word_align_lexicon_file = find_file(model_dir, 'align_lexicon.int', required=False)
-        if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
+        mfcc_conf_file = find_file(model_dir, 'mfcc_hires.conf')
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
-        if model_file is None: model_file = find_file(model_dir, 'final.mdl')
+        model_file = find_file(model_dir, 'final.mdl')
 
         self.model_dir = model_dir
         self.words_file = os.path.normpath(words_file)
@@ -257,6 +257,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         self.model_file = os.path.normpath(model_file)
         self.ie_config = self._read_ie_conf_file(model_dir, find_file(model_dir, 'ivector_extractor.conf'))
         self.verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
+        self.max_num_rules = int(max_num_rules) if max_num_rules is not None else None
         self._saving_adaptation_state = save_adaptation_state
 
         self.config_dict = {
@@ -267,6 +268,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
             'word_syms_filename': self.words_file,
             'word_align_lexicon_filename': self.word_align_lexicon_file or '',
             }
+        if self.max_num_rules is not None: self.config_dict.update(max_num_rules=self.max_num_rules)
 
     def _read_ie_conf_file(self, model_dir, old_filename, search=True):
         """ Read ivector_extractor.conf file, converting relative paths to absolute paths for current configuration, returning dict of config. """
