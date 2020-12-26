@@ -240,8 +240,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         DRAGONFLY_API bool nnet3_base__set_lm_prime_text(void* model_vp, char* prime_cp);
     """
 
-    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, ie_conf_file=None,
-            model_file=None, save_adaptation_state=False):
+    def __init__(self, model_dir, tmp_dir, words_file=None, word_align_lexicon_file=None, mfcc_conf_file=None, model_file=None, save_adaptation_state=False):
         super(KaldiNNet3Decoder, self).__init__()
 
         model_dir = os.path.normpath(model_dir)
@@ -251,35 +250,23 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         if mfcc_conf_file is None: mfcc_conf_file = find_file(model_dir, 'mfcc.conf')  # FIXME: warning?
         if model_file is None: model_file = find_file(model_dir, 'final.mdl')
 
-        if ie_conf_file is None: ie_conf_file = self._convert_ie_conf_file(model_dir,
-            find_file(model_dir, 'ivector_extractor.conf'), os.path.join(tmp_dir, 'ivector_extractor.conf'))
-        self.ie_config = self._read_ie_conf_file(model_dir, find_file(model_dir, 'ivector_extractor.conf'))
-
         self.model_dir = model_dir
         self.words_file = os.path.normpath(words_file)
         self.word_align_lexicon_file = os.path.normpath(word_align_lexicon_file) if word_align_lexicon_file is not None else None
         self.mfcc_conf_file = os.path.normpath(mfcc_conf_file)
-        self.ie_conf_file = os.path.normpath(ie_conf_file)
         self.model_file = os.path.normpath(model_file)
+        self.ie_config = self._read_ie_conf_file(model_dir, find_file(model_dir, 'ivector_extractor.conf'))
         self.verbosity = (10 - _log_library.getEffectiveLevel()) if _log_library.isEnabledFor(10) else -1
         self._saving_adaptation_state = save_adaptation_state
 
         self.config_dict = {
             'model_dir': self.model_dir,
             'mfcc_config_filename': self.mfcc_conf_file,
-            'ie_config_filename': self.ie_conf_file,  # FIXME: deprecated
             'ivector_extraction_config_json': self.ie_config,
             'model_filename': self.model_file,
             'word_syms_filename': self.words_file,
             'word_align_lexicon_filename': self.word_align_lexicon_file or '',
             }
-
-    def _convert_ie_conf_file(self, model_dir, old_filename, new_filename, search=True):
-        """ Rewrite ivector_extractor.conf file, converting relative paths to absolute paths for current configuration. """
-        with open(new_filename, 'w', encoding='utf-8', newline='\n') as new_file:
-            for key, value in self._read_ie_conf_file(model_dir, old_filename, search).items():
-                new_file.write("--%s=%s\n" % (key, (str(value).lower() if isinstance(value, bool) else str(value))))
-        return new_filename
 
     def _read_ie_conf_file(self, model_dir, old_filename, search=True):
         """ Read ivector_extractor.conf file, converting relative paths to absolute paths for current configuration, returning dict of config. """
