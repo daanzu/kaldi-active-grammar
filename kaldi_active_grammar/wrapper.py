@@ -590,7 +590,7 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp);
         DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp);
-        DRAGONFLY_API bool nnet3_laf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
+        DRAGONFLY_API bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_laf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool nnet3_laf__decode(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
             bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
@@ -649,17 +649,11 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         self.num_grammars += 1
         return grammar_fst_index
 
-    def reload_grammar_fst_file(self, grammar_fst_index, grammar_fst_file):
-        _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
-        result = self._lib.nnet3_laf__reload_grammar_fst_file(self._model, grammar_fst_index, en(grammar_fst_file))
+    def reload_grammar_fst(self, grammar_fst_index, grammar_fst):
+        _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst)
+        result = self._lib.nnet3_laf__reload_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
         if not result:
-            raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
-
-    # def reload_grammar_fst_text(self, grammar_fst_index, grammar_fst_text):
-    #     _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
-    #     result = self._lib.nnet3_laf__reload_grammar_fst(self._model, grammar_fst_index, en(grammar_fst_file))
-    #     if not result:
-    #         raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
+            raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst))
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
