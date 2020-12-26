@@ -206,7 +206,7 @@ class FSTFileCache(object):
     def __init__(self, cache_filename, dependencies_dict=None, invalidate=False):
         """
         Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary. Assumes file is in model_dir.
-        FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source. Assumes file is in tmp_dir.
+        FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source.
         Also stores an entry ``dependencies_list`` listing filenames of all dependencies.
         If ``invalidate``, then initialize a fresh cache.
         """

@@ -69,6 +69,7 @@ class KaldiRule(object):
     def filepath(self):
         if isinstance(self.fst, WFST):
             assert self.filename
+            assert self.compiler.tmp_dir
             return os.path.join(self.compiler.tmp_dir, self.filename)
         raise KaldiError("Invalid KaldiRule.fst")
 
@@ -236,7 +237,8 @@ class Compiler(object):
         assert self.parsing_framework in ('token', 'text')
         self.native_fst = bool(native_fst)
 
-        self.model = Model(model_dir, tmp_dir)
+        tmp_dir_needed = bool(not self.native_fst)
+        self.model = Model(model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed)
         self.alternative_dictation = alternative_dictation
         self.cloud_dictation_lang = cloud_dictation_lang
         self.decoder = None

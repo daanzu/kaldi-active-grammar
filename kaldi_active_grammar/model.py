@@ -159,23 +159,26 @@ class Lexicon(object):
 ########################################################################################################################
 
 class Model(object):
-    def __init__(self, model_dir=None, tmp_dir=None):
+    def __init__(self, model_dir=None, tmp_dir=None, tmp_dir_needed=False):
         show_donation_message()
 
-        self.exec_dir = os.path.join(utils.exec_dir, '')
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
-        self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
+        self.tmp_dir = None
+        if tmp_dir_needed:
+            self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
+        self.exec_dir = os.path.join(utils.exec_dir, '')
 
+        if not os.path.isdir(self.model_dir):
+            raise KaldiError("cannot find model_dir: %r" % self.model_dir)
+        if self.tmp_dir:
+            if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
+            if not os.path.exists(self.tmp_dir):
+                _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
+                os.mkdir(self.tmp_dir)
+                utils.touch_file(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
         if not os.path.isdir(self.exec_dir):
             raise KaldiError("cannot find exec_dir: %r" % self.exec_dir,
                 "are you sure you installed kaldi-active-grammar correctly?")
-        if not os.path.isdir(self.model_dir):
-            raise KaldiError("cannot find model_dir: %r" % self.model_dir)
-        if not os.path.exists(self.tmp_dir):
-            _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
-            os.mkdir(self.tmp_dir)
-            utils.touch_file(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
-        if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
 
         version_file = os.path.join(self.model_dir, 'KAG_VERSION')
         if os.path.isfile(version_file):

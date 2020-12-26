@@ -18,7 +18,6 @@ class KaldiError(Exception):
     pass
 
 from .compiler import Compiler, KaldiRule
-from .model import Model
 from .wrapper import KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder, KaldiPlainNNet3Decoder
 from .wfst import WFST
 from .plain_dictation import PlainDictationRecognizer
