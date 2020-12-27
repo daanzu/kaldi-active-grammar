@@ -212,7 +212,7 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf-direct', native_fst=False):
+    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf-direct', native_fst=True):
         # Supported parameter combinations:
         #   framework='agf-indirect' native_fst=False (original method)
         #   framework='agf-direct' native_fst=False (no external CLI programs needed)
