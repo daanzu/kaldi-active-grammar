@@ -93,7 +93,10 @@ class ExternalProcess(object):
     make_lexicon_fst = shell([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaldi', 'make_lexicon_fst%s.py' % ('_py2' if PY2 else ''))])
 
     @staticmethod
-    def get_formatter(format_kwargs):
+    def get_dict_formatter(format_kwargs):
+        return lambda **kwargs: { key: value.format(**format_kwargs) for (key, value) in kwargs.items() }
+    @staticmethod
+    def get_list_formatter(format_kwargs):
         return lambda *args: [arg.format(**format_kwargs) for arg in args]
 
     @staticmethod
@@ -191,10 +194,10 @@ def find_file(directory, filename, required=False, default=False):
             matches.append(os.path.join(root, filename))
     if matches:
         matches.sort(key=len)
-        _log.debug("%s: find_file found file %r", _name, matches[0])
+        _log.log(8, "%s: find_file found file %r", _name, matches[0])
         return matches[0]
     else:
-        _log.debug("%s: find_file cannot find file %r in %r (or subdirectories)", _name, filename, directory)
+        _log.log(8, "%s: find_file cannot find file %r in %r (or subdirectories)", _name, filename, directory)
         if required:
             raise IOError("cannot find file %r in %r" % (filename, directory))
         if default == True:
@@ -216,7 +219,7 @@ class FSTFileCache(object):
     def __init__(self, cache_filename, dependencies_dict=None, invalidate=False):
         """
         Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary. Assumes file is in model_dir.
-        FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source. Assumes file is in tmp_dir.
+        FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source.
         Also stores an entry ``dependencies_list`` listing filenames of all dependencies.
         If ``invalidate``, then initialize a fresh cache.
         """

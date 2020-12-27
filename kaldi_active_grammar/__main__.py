@@ -26,6 +26,7 @@ def main():
         'add_word',
         'generate_lexicon_files',
         'reset_user_lexicon',
+        'generate_words_relabeled_file',
     ])
     # FIXME: helps
     # FIXME: subparsers?
@@ -65,6 +66,10 @@ def main():
     if args.command == 'reset_user_lexicon':
         Model(args.model_dir).reset_user_lexicon()
         print_("Reset user lexicon")
+
+    if args.command == 'generate_words_relabeled_file':
+        Model.generate_words_relabeled_file(*unknown)
+        print_("Generated words_relabeled file")
 
 if __name__ == '__main__':
     main()

@@ -160,23 +160,26 @@ class Lexicon(object):
 ########################################################################################################################
 
 class Model(object):
-    def __init__(self, model_dir=None, tmp_dir=None):
+    def __init__(self, model_dir=None, tmp_dir=None, tmp_dir_needed=False):
         show_donation_message()
 
-        self.exec_dir = os.path.join(utils.exec_dir, '')
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
-        self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
+        self.tmp_dir = None
+        if tmp_dir_needed:
+            self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
+        self.exec_dir = os.path.join(utils.exec_dir, '')
 
+        if not os.path.isdir(self.model_dir):
+            raise KaldiError("cannot find model_dir: %r" % self.model_dir)
+        if self.tmp_dir:
+            if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
+            if not os.path.exists(self.tmp_dir):
+                _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
+                os.mkdir(self.tmp_dir)
+                utils.touch_file(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
         if not os.path.isdir(self.exec_dir):
             raise KaldiError("cannot find exec_dir: %r" % self.exec_dir,
                 "are you sure you installed kaldi-active-grammar correctly?")
-        if not os.path.isdir(self.model_dir):
-            raise KaldiError("cannot find model_dir: %r" % self.model_dir)
-        if not os.path.exists(self.tmp_dir):
-            _log.warning("%s: creating tmp dir: %r" % (self, self.tmp_dir))
-            os.mkdir(self.tmp_dir)
-            utils.touch_file(os.path.join(self.tmp_dir, "FILES_ARE_SAFE_TO_DELETE"))
-        if os.path.isfile(self.tmp_dir): raise KaldiError("please specify an available tmp_dir, or remove %r" % self.tmp_dir)
 
         version_file = os.path.join(self.model_dir, 'KAG_VERSION')
         if os.path.isfile(version_file):
@@ -211,10 +214,11 @@ class Model(object):
             'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int', default=True),
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt', default=True),
             'lexiconp_disambig.base.txt': find_file(self.model_dir, 'lexiconp_disambig.base.txt', default=True),
+            'words.relabeled.txt': find_file(self.model_dir, 'words.relabeled.txt', default=True),
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
-        self.fst_cache = utils.FSTFileCache(os.path.join(self.tmp_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
+        self.fst_cache = utils.FSTFileCache(os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.lexicon = Lexicon(self.phone_to_int_dict.keys())
@@ -239,7 +243,7 @@ class Model(object):
 
         with open(words_file, 'r', encoding='utf-8') as file:
             word_id_pairs = [line.strip().split() for line in file]
-        self.lexicon_words = set([word for word, id in word_id_pairs
+        self.lexicon_words = set([word for (word, id) in word_id_pairs
             if word.lower() not in invalid_words and not word.startswith('#nonterm')])
         assert self.lexicon_words, "Empty lexicon from %r" % words_file
         self.longest_word = max(self.lexicon_words, key=len)
@@ -354,7 +358,7 @@ class Model(object):
         generate_file_from_base('lexiconp_disambig.txt', lambda word, word_id, phones:
             '%s\t1.0 %s' % (word, ' '.join(phones)))
 
-        format = ExternalProcess.get_formatter(self.files_dict)
+        format = ExternalProcess.get_list_formatter(self.files_dict)
         command = ExternalProcess.make_lexicon_fst(*format(
             '--left-context-phones={left_context_phones_txt}',
             '--nonterminals={nonterminals_txt}',
@@ -377,6 +381,23 @@ class Model(object):
     def reset_user_lexicon(self):
         utils.clear_file(self.files_dict['user_lexicon.txt'])
         self.generate_lexicon_files()
+
+    @staticmethod
+    def generate_words_relabeled_file(words_filename, relabel_filename, words_relabel_filename):
+        """ generate a version of the words file, that has already been relabeled with the given relabel file """
+        with open(words_filename, 'r', encoding='utf-8') as file:
+            word_id_pairs = [(word, id) for (word, id) in [line.strip().split() for line in file]]
+        with open(relabel_filename, 'r', encoding='utf-8') as file:
+            relabel_map = {from_id: to_id for (from_id, to_id) in [line.strip().split() for line in file]}
+        word_ids = frozenset(id for (word, id) in word_id_pairs)
+        relabel_from_ids = frozenset(from_id for from_id in relabel_map.keys())
+        if word_ids < relabel_from_ids:
+            _log.warning("generate_words_relabeled_file: word_ids < relabel_from_ids")
+        # if word_ids > relabel_from_ids:
+        #     _log.warning("generate_words_relabeled_file: word_ids > relabel_from_ids")
+        with open(words_relabel_filename, 'w', encoding='utf-8') as file:
+            for (word, id) in word_id_pairs:
+                file.write("%s %s\n" % (word, (relabel_map.get(id, id))))
 
 
 ########################################################################################################################

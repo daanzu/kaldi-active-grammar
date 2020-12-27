@@ -7,6 +7,7 @@ MKL_URL="http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16533/l_
 MKL_FILE=$(basename $MKL_URL)
 # MKL_DIR=${MKL_URL%.*}
 WHEEL_PLAT=$1
+KALDI_BRANCH=$2
 
 if [ -z "$WHEEL_PLAT" ] || [ -z "$PYTHON_EXE" ]; then
     echo "ERROR: variable not set!"
@@ -27,7 +28,7 @@ rm -rf /tmp/mkl
 popd
 
 # $PYTHON_EXE -m pip install --upgrade setuptools wheel scikit-build cmake ninja
-$PYTHON_EXE setup.py bdist_wheel
+KALDI_BRANCH=$KALDI_BRANCH $PYTHON_EXE setup.py bdist_wheel
 
 mkdir -p wheelhouse
 for whl in dist/*.whl; do auditwheel repair $whl --plat $WHEEL_PLAT -w wheelhouse/; done

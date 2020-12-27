@@ -1,4 +1,4 @@
-name: CI
+name: Build
 
 on:
   push:
@@ -6,23 +6,24 @@ on:
   pull_request:
     branches: [ build ]
   workflow_dispatch:
+    # gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref=master
 
 jobs:
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-10.15
     if: true
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.9
     steps:
       - uses: actions/checkout@v2
-      - name: Get KALDI_BRANCH
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
           if [[ $TAG ]]; then
-            echo ::set-env name=KALDI_BRANCH::kag-$TAG
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
           else
-            echo ::set-env name=KALDI_BRANCH::${GITHUB_REF/refs\/heads\//}
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
       - name: Dependencies
         run: |
@@ -46,26 +47,28 @@ jobs:
           path: dist/*
           
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     if: true
     steps:
       - uses: actions/checkout@v2
-      - name: Get KALDI_BRANCH
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
+          echo "TAG: $TAG"
           if [[ $TAG ]]; then
-            echo ::set-env name=KALDI_BRANCH::kag-$TAG
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
           else
-            echo ::set-env name=KALDI_BRANCH::${GITHUB_REF/refs\/heads\//}
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
       - name: Setup just
         run: |
           ls -al $HOME
           mkdir $HOME/bin
           curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to $HOME/bin/
-          echo "::add-path::$HOME/bin"
+          echo "$HOME/bin" >> $GITHUB_PATH
       - run: |
-          just build-dockcross
+          echo "KALDI_BRANCH: $KALDI_BRANCH"
+          just build-dockcross $KALDI_BRANCH
           ls -al wheelhouse/
       - uses: actions/upload-artifact@v2
         with:
@@ -82,13 +85,13 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: main
-      - name: Get KALDI_BRANCH
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
           if [[ $TAG ]]; then
-            echo ::set-env name=KALDI_BRANCH::kag-$TAG
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
           else
-            echo ::set-env name=KALDI_BRANCH::${GITHUB_REF/refs\/heads\//}
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
       - uses: actions/checkout@v2
         with:
@@ -120,19 +123,23 @@ jobs:
         run: |
           cd kaldi/windows
           cp kaldiwin_mkl.props kaldiwin.props
+          # Add MKL static libraries to build
           perl -pi -e 's/<AdditionalDependencies>.*<\/AdditionalDependencies>/<AdditionalDependencies>mkl_sequential.lib;mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)<\/AdditionalDependencies>/g' kaldiwin.props
           cp variables.props.dev variables.props
-          # sed -i.bak \
-          #   -e 's%<OPENFST>.*</OPENFST>%<OPENFST>${{ github.workspace }}/openfst</OPENFST>%g' \
-          #   -e 's%<OPENFSTLIB>.*</OPENFSTLIB>%<OPENFSTLIB>${{ github.workspace }}/openfst/build64</OPENFSTLIB>%g' \
-          #   variables.props
+          # Add openfst location
           perl -pi -e 's/<OPENFST>.*<\/OPENFST>/<OPENFST>$ENV{GITHUB_WORKSPACE}\\openfst<\/OPENFST>/g' variables.props
           perl -pi -e 's/<OPENFSTLIB>.*<\/OPENFSTLIB>/<OPENFSTLIB>$ENV{GITHUB_WORKSPACE}\\openfst\\build_output<\/OPENFSTLIB>/g' variables.props
-          # cat variables.props
           perl generate_solution.pl --vsver vs2019 --enable-mkl --noportaudio
+          # Add additional libfstscript library to dragonfly build file
+          sed -i.bak '$i\
+            <ItemDefinitionGroup>\
+              <Link>\
+                <AdditionalDependencies>libfstscript.lib;%(AdditionalDependencies)</AdditionalDependencies>\
+              </Link>\
+            </ItemDefinitionGroup>' ../kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
           perl get_version.pl
       - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.0.0
+        uses: microsoft/setup-msbuild@v1.0.2
       # - run: |
       #     setx VCTargetsPath "C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\v140" /M
       #   shell: cmd

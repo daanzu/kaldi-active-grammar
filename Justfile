@@ -16,8 +16,8 @@ build-linux python='python3':
 	rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
 	{{python}} setup.py bdist_wheel
 
-build-dockcross:
-	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64
+build-dockcross kaldi_branch:
+	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{kaldi_branch}}
 
 setup-dockcross:
 	docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
@@ -26,8 +26,9 @@ setup-dockcross:
 pip-install-develop:
 	KALDIAG_SETUP_RAW=1 pip3 install --user -e .
 
-# setup an editable development environment on linux
+# Setup an editable development environment on linux
 setup-linux-develop kaldi_root_dir:
+	# Compile kaldi_root_dir with: env CXXFLAGS=-O2 ./configure --mkl-root=/home/daanzu/intel/mkl/ --shared --static-math
 	mkdir -p kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstarcsort kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstcompile kaldi_active_grammar/exec/linux/
@@ -36,5 +37,11 @@ setup-linux-develop kaldi_root_dir:
 	ln -sr {{kaldi_root_dir}}/src/dragonfly/libkaldi-dragonfly.so kaldi_active_grammar/exec/linux/
 	ln -sr {{kaldi_root_dir}}/src/dragonflybin/compile-graph-agf kaldi_active_grammar/exec/linux/
 
-test_model model_dir:
+watch-windows-develop config='Release':
+	bash -c "watchexec -v --no-ignore -w /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/ cp /mnt/c/Work/Speech/kaldi/kaldi-windows-deps/openfst.2019/build_output/x64/{{config}}/bin/{fstarcsort,fstcompile,fstinfo}.exe /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/{{config}}/{kaldi-dragonfly.dll,compile-graph-agf.exe,fstaddselfloops.exe} /mnt/c/Work/Speech/kaldi/kaldi-active-grammar/kaldi_active_grammar/exec/windows/"
+
+test-model model_dir:
 	cd {{invocation_directory()}} && rm -rf kaldi_model kaldi_model.tmp && cp -rp {{model_dir}} kaldi_model
+
+trigger-build ref='master':
+	gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref={{ref}}
