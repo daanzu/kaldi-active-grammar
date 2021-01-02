@@ -213,7 +213,7 @@ setup(
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
         'cffi ~= 1.12',
-        'numpy ~= 1.16',
+        'numpy ~= 1.16, != 1.19.4',
         'ush ~= 3.1',
         'requests >= 2',
         'six',
