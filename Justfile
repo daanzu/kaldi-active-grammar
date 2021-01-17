@@ -3,6 +3,7 @@ docker_repo := 'daanzu/kaldi-fork-active-grammar-manylinux'
 
 _default:
 	just --list
+	just --summary
 
 build-docker:
 	cd building; docker build --file Dockerfile.manylinux --tag {{docker_repo}}:latest .

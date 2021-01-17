@@ -226,8 +226,9 @@ class NativeWFST(FFIObject):
         if olabel is None: olabel = label
         if weight is None: weight = 1
         weight = -math.log(weight) if weight != 0 else self.zero
-        result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state),
-            int(self.word_to_ilabel_map[label]), int(self.word_to_olabel_map[olabel]), float(weight))
+        label_id = self.word_to_ilabel_map[label]
+        olabel_id = self.word_to_olabel_map[olabel]
+        result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state), int(label_id), int(olabel_id), float(weight))
         if not result:
             raise KaldiError("Failed fst__add_arc")
 

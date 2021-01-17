@@ -148,7 +148,7 @@ class KaldiRule(object):
             elif self.compiler.decoding_framework == 'laf':
                 grammar_fst_index = self.decoder.add_grammar_fst(self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self._fst_text)
             else: raise KaldiError("unknown compiler decoding_framework")
-            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d for %s" % (grammar_fst_index, self)
+            assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d != %d for %s" % (grammar_fst_index, self.id, self)
 
         self.loaded = True
         self.has_been_loaded = True
@@ -349,7 +349,7 @@ class Compiler(object):
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
         with debug_timer(self._log.debug, "agf graph compilation") as get_time_spent:
-            verbose_level = 5 if self._log.isEnabledFor(5) else 0
+            verbose_level = 3 if self._log.isEnabledFor(5) else 0
             format_kwargs = dict(self.files_dict, input_filename=input_filename, output_filename=output_filename, verbose=verbose_level, **kwargs)
             format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
             format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)

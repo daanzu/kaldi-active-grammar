@@ -5,6 +5,7 @@ wheels
 examples/*.fst
 */kaldi_model*/
 */kaldi_tmp*/
+_cmake_test_compile/
 
 # general things to ignore
 venv*/
