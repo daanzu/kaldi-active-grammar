@@ -7,7 +7,7 @@ https://github.com/pypa/sampleproject
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages
-import os, re
+import os, re, datetime
 # io.open is needed for projects that support Python 2.7
 # It ensures open() defaults to text mode with universal newlines,
 # and accepts an argument to specify the text encoding
@@ -67,6 +67,8 @@ def find_version(*file_paths):
     raise RuntimeError("Unable to find version string.")
 
 version = find_version('kaldi_active_grammar', '__init__.py')
+if version.endswith('dev0'):
+    version = version[:-1] + datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
 # Set branch for Kaldi source repository (maybe we should use commits instead?)
 if not os.environ.get('KALDI_BRANCH'):
