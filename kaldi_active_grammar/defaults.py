@@ -5,7 +5,6 @@
 #
 
 DEFAULT_MODEL_DIR = 'kaldi_model'
-DEFAULT_TMP_DIR_SUFFIX = '.tmp'
 FILE_CACHE_FILENAME = 'file_cache.json'
 
 DEFAULT_DICTATION_G_FILENAME = 'G.fst'

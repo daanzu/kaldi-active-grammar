@@ -166,7 +166,7 @@ class Model(object):
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
         self.tmp_dir = None
         if tmp_dir_needed:
-            self.tmp_dir = os.path.join(tmp_dir or (os.path.normpath(self.model_dir) + defaults.DEFAULT_TMP_DIR_SUFFIX), '')
+            self.tmp_dir = os.path.join(tmp_dir or os.path.join(self.model_dir, 'cache.tmp'), '')
         self.exec_dir = os.path.join(utils.exec_dir, '')
 
         if not os.path.isdir(self.model_dir):
