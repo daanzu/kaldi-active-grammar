@@ -351,92 +351,91 @@ class Compiler(object):
         # Must be thread-safe!
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
-        with debug_timer(self._log.debug, "agf graph compilation") as get_time_spent:
-            verbose_level = 3 if self._log.isEnabledFor(5) else 0
-            format_kwargs = dict(self.files_dict, input_filename=input_filename, output_filename=output_filename, verbose=verbose_level, **kwargs)
-            format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
-            format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
-            format_kwargs.update(simplify_lg=str(bool(simplify_lg)).lower())
+        verbose_level = 3 if self._log.isEnabledFor(5) else 0
+        format_kwargs = dict(self.files_dict, input_filename=input_filename, output_filename=output_filename, verbose=verbose_level, **kwargs)
+        format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
+        format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
+        format_kwargs.update(simplify_lg=str(bool(simplify_lg)).lower())
 
-            if self._agf_compiler:
-                # Internal-style (no external CLI programs)
-                config = dict(
-                    nonterm_phones_offset = self.model.nonterm_phones_offset,
-                    disambig_rxfilename = '{disambig_int}',
-                    simplify_lg = simplify_lg,
-                    verbose = verbose_level,
-                    tree_rxfilename = '{tree}',
-                    model_rxfilename = '{final_mdl}',
-                    lex_rxfilename = '{L_disambig_fst}',
-                    word_syms_filename = '{words_txt}',
-                    )
-                if output_filename:
-                    config.update(hclg_wxfilename=output_filename)
-                elif self._log.isEnabledFor(3):
-                    import datetime
-                    config.update(hclg_wxfilename=os.path.join(self.tmp_dir, datetime.datetime.now().isoformat().replace(':', '') + '.fst'))
-                if nonterm:
-                    config.update(grammar_prepend_nonterm=self.model.nonterm_words_offset, grammar_append_nonterm=self.model.nonterm_words_offset+1)
-                config = { key: value.format(**format_kwargs) if isinstance(value, str) else value for (key, value) in config.items() }
+        if self._agf_compiler:
+            # Internal-style (no external CLI programs)
+            config = dict(
+                nonterm_phones_offset = self.model.nonterm_phones_offset,
+                disambig_rxfilename = '{disambig_int}',
+                simplify_lg = simplify_lg,
+                verbose = verbose_level,
+                tree_rxfilename = '{tree}',
+                model_rxfilename = '{final_mdl}',
+                lex_rxfilename = '{L_disambig_fst}',
+                word_syms_filename = '{words_txt}',
+                )
+            if output_filename:
+                config.update(hclg_wxfilename=output_filename)
+            elif self._log.isEnabledFor(3):
+                import datetime
+                config.update(hclg_wxfilename=os.path.join(self.tmp_dir, datetime.datetime.now().isoformat().replace(':', '') + '.fst'))
+            if nonterm:
+                config.update(grammar_prepend_nonterm=self.model.nonterm_words_offset, grammar_append_nonterm=self.model.nonterm_words_offset+1)
+            config = { key: value.format(**format_kwargs) if isinstance(value, str) else value for (key, value) in config.items() }
 
-                if 1 != sum(int(i is not None) for i in [input_text, input_filename, input_fst]):
-                    raise KaldiError("must pass exactly one input")
-                if input_text:
-                    return self._agf_compiler.compile_graph(config, grammar_fst_text=input_text, return_graph=return_output_fst)
-                if input_filename:
-                    return self._agf_compiler.compile_graph(config, grammar_fst_file=input_filename, return_graph=return_output_fst)
-                if input_fst:
-                    return self._agf_compiler.compile_graph(config, grammar_fst=input_fst, return_graph=return_output_fst)
+            if 1 != sum(int(i is not None) for i in [input_text, input_filename, input_fst]):
+                raise KaldiError("must pass exactly one input")
+            if input_text:
+                return self._agf_compiler.compile_graph(config, grammar_fst_text=input_text, return_graph=return_output_fst)
+            if input_filename:
+                return self._agf_compiler.compile_graph(config, grammar_fst_file=input_filename, return_graph=return_output_fst)
+            if input_fst:
+                return self._agf_compiler.compile_graph(config, grammar_fst=input_fst, return_graph=return_output_fst)
 
-            elif True:
-                # Pipeline-style
-                assert not input_fst
-                if input_text and input_filename: raise KaldiError("_compile_agf_graph passed both input_text and input_filename")
-                elif input_text: input = ExternalProcess.shell.echo(input_text.encode('utf-8'))
-                elif input_filename: input = input_filename
-                else: raise KaldiError("_compile_agf_graph passed neither input_text nor input_filename")
-                compile_command = input
-                format = ExternalProcess.get_list_formatter(format_kwargs)
-                args = []
+        elif True:
+            # Pipeline-style
+            assert not input_fst
+            if input_text and input_filename: raise KaldiError("_compile_agf_graph passed both input_text and input_filename")
+            elif input_text: input = ExternalProcess.shell.echo(input_text.encode('utf-8'))
+            elif input_filename: input = input_filename
+            else: raise KaldiError("_compile_agf_graph passed neither input_text nor input_filename")
+            compile_command = input
+            format = ExternalProcess.get_list_formatter(format_kwargs)
+            args = []
 
-                # if True: (input | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | ExternalProcess.fstinfo | 'stats.log+')()
-                # if True: (ExternalProcess.shell.echo(input_text) | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | (output_filename+'-G'))()
+            # if True: (input | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | ExternalProcess.fstinfo | 'stats.log+')()
+            # if True: (ExternalProcess.shell.echo(input_text) | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | (output_filename+'-G'))()
 
-                if compile:
-                    compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
-                    if self._log.isEnabledFor(5):
-                        g_txt_filename = output_filename.replace('.fst', '.G.fst.txt')
-                        self._log.log(5, "Saving text grammar FST to %s", g_txt_filename)
-                        with open(g_txt_filename, 'wb') as f: shutil.copyfileobj(copy.deepcopy(compile_command.commands[0].get_opt('stdin')), f)
-                        g_filename = output_filename.replace('.fst', '.G.fst')
-                        self._log.log(5, "Saving compiled grammar FST to %s", g_filename)
-                        (copy.deepcopy(compile_command) | g_filename)()
-                    args.extend(['--arcsort-grammar'])
-                if nonterm:
-                    args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}', '--grammar-append-nonterm={words_nonterm_end}'))
-                args.extend(format(
-                    '--nonterm-phones-offset={nonterm_phones_offset}',
-                    '--read-disambig-syms={disambig_int}',
-                    '--simplify-lg={simplify_lg}',
-                    '--verbose={verbose}',
-                    '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{output_filename}'))
-                compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
-                ExternalProcess.execute_command_safely(compile_command, self._log)
+            if compile:
+                compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
+                if self._log.isEnabledFor(5):
+                    g_txt_filename = output_filename.replace('.fst', '.G.fst.txt')
+                    self._log.log(5, "Saving text grammar FST to %s", g_txt_filename)
+                    with open(g_txt_filename, 'wb') as f: shutil.copyfileobj(copy.deepcopy(compile_command.commands[0].get_opt('stdin')), f)
+                    g_filename = output_filename.replace('.fst', '.G.fst')
+                    self._log.log(5, "Saving compiled grammar FST to %s", g_filename)
+                    (copy.deepcopy(compile_command) | g_filename)()
+                args.extend(['--arcsort-grammar'])
+            if nonterm:
+                args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}', '--grammar-append-nonterm={words_nonterm_end}'))
+            args.extend(format(
+                '--nonterm-phones-offset={nonterm_phones_offset}',
+                '--read-disambig-syms={disambig_int}',
+                '--simplify-lg={simplify_lg}',
+                '--verbose={verbose}',
+                '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{output_filename}'))
+            compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
+            ExternalProcess.execute_command_safely(compile_command, self._log)
 
-                # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_text), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
+            # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_text), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
 
-            else:
-                # CLI-style (deprecated!)
-                assert not input_fst
-                run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(input_filename=output_filename), **kwargs)
-                if compile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {output_filename}")
-                # run("cp {input_filename} {output_filename}-G")
-                if compile: run("{exec_dir}fstarcsort --sort_type=ilabel {input_filename} {output_filename}")
-                if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {output_filename}")
-                if nonterm: run("{exec_dir}fstconcat {input_filename} {tmp_dir}nonterm_end.fst {output_filename}")
-                # run("cp {input_filename} {output_filename}-G")
-                run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
-                    + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {output_filename}")
+        else:
+            # CLI-style (deprecated!)
+            assert not input_fst
+            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(input_filename=output_filename), **kwargs)
+            if compile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {output_filename}")
+            # run("cp {input_filename} {output_filename}-G")
+            if compile: run("{exec_dir}fstarcsort --sort_type=ilabel {input_filename} {output_filename}")
+            if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {output_filename}")
+            if nonterm: run("{exec_dir}fstconcat {input_filename} {tmp_dir}nonterm_end.fst {output_filename}")
+            # run("cp {input_filename} {output_filename}-G")
+            run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
+                + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {output_filename}")
 
     def compile_plain_dictation_fst(self, g_filename=None, output_filename=None):
         if g_filename is None: g_filename = self._default_dictation_g_filepath
