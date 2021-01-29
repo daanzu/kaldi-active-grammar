@@ -170,7 +170,7 @@ class NativeWFST(FFIObject):
     eps = u'<eps>'
     eps_disambig = u'#0'
     silent_words = frozenset((eps, eps_disambig, u'!SIL'))
-    native = True
+    native = property(lambda self: True)
 
     @classmethod
     def init(cls, isymbol_table, wildcard_nonterms, osymbol_table=None):
@@ -198,6 +198,9 @@ class NativeWFST(FFIObject):
         if not result:
             raise KaldiError("Failed fst__init")
 
+        self.num_states = 1  # Is initialized with a start state
+        self.num_arcs = 0
+
     def __del__(self):
         self.destruct()
 
@@ -218,6 +221,9 @@ class NativeWFST(FFIObject):
         id = self._lib.fst__add_state(self.native_obj, float(weight), bool(initial))
         if id < 0:
             raise KaldiError("Failed fst__add_state")
+        self.num_states += 1
+        if initial:
+            self.num_arcs += 1
         return id
 
     def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
@@ -231,6 +237,7 @@ class NativeWFST(FFIObject):
         result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state), int(label_id), int(olabel_id), float(weight))
         if not result:
             raise KaldiError("Failed fst__add_arc")
+        self.num_arcs += 1
 
     ####################################################################################################################
 

@@ -77,10 +77,7 @@ class KaldiRule(object):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
 
         if self.fst.native:
-            if self.compiler.decoding_framework == 'agf':
-                self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True)
-            self.compiled = True
-            return self
+            return self.finish_compile()
 
         if not self._fst_text:
             # self.fst.normalize_weights()
@@ -110,27 +107,33 @@ class KaldiRule(object):
 
     def finish_compile(self):
         # Must be thread-safe!
-        assert self._fst_text
-        _log.debug("%s: Compiling %sstate/%sarc/%sbyte fst.txt file to %s" % (self, self.fst.num_states, self.fst.num_arcs, len(self._fst_text), self.filename))
-        if _log.isEnabledFor(2): _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
+        _log.log(15, "%s: Compiling %sstate/%sarc FST%s%s" % (self, self.fst.num_states, self.fst.num_arcs,
+                (" (%dbyte)" % len(self._fst_text)) if self._fst_text else "",
+                (" to " + self.filename) if self.filename else ""))
+        assert self.fst.native or self._fst_text
+        if self._fst_text and _log.isEnabledFor(2): _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
 
         try:
             if self.compiler.decoding_framework == 'agf':
-                self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
-                self._fst_text = None
+                if self.fst.native:
+                    self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True)
+                else:
+                    self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
+                    self._fst_text = None
+                    with self.fst_cache.lock:
+                        self.fst_cache.add_fst(self.filepath)
+                        self.fst_cache.save()
+
             elif self.compiler.decoding_framework == 'laf':
                 # self.compiler._compile_laf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
-                # self._fst_text_backup = self._fst_text  # FIXME: hack!
                 # Keep self._fst_text, for adding directly later
                 pass
+
             else: raise KaldiError("unknown compiler.decoding_framework")
         except Exception as e:
             raise KaldiError("Exception while compiling", self)  # Return this KaldiRule inside exception
 
         self.compiled = True
-        with self.fst_cache.lock:
-            self.fst_cache.add_fst(self.filepath)
-            self.fst_cache.save()
         return self
 
     def load(self, lazy=False):
