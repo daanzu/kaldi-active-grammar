@@ -310,10 +310,13 @@ class FSTFileCache(object):
         self.cache[filename] = self.hash_data(data)
         self.dirty = True
 
-    def add_fst(self, filepath):
+    def add_fst(self, filepath, save=True):
         filename = os.path.basename(filepath)
-        self.cache[filename] = self.cache['dependencies_hash']
-        self.dirty = True
+        with self.lock:
+            self.cache[filename] = self.cache['dependencies_hash']
+            self.dirty = True
+            if save:
+                self.save()
 
     def contains(self, filename, data):
         return (filename in self.cache) and (self.cache[filename] == self.hash_data(data))
@@ -330,7 +333,12 @@ class FSTFileCache(object):
                 data = f.read()
         return self.contains(filename, data)
 
-    def fst_is_current(self, filepath):
+    def fst_is_current(self, filepath, touch=True):
         """Returns bool whether FST file for fst_text in directory path exists and matches current dependencies."""
         filename = os.path.basename(filepath)
-        return (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash']) and os.path.isfile(filepath)
+        with self.lock:
+            result = (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash'])
+        result = result and os.path.isfile(filepath)
+        if result and touch:
+            touch_file(filepath)
+        return result

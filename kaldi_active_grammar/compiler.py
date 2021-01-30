@@ -93,9 +93,8 @@ class KaldiRule(object):
                 assert self.filename
             # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
 
-            if self.fst_cache.fst_is_current(self.filepath):
+            if self.fst_cache.fst_is_current(self.filepath, touch=True):
                 _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
-                touch_file(self.filepath)
                 self.compiled = True
                 return self
             else:
@@ -128,10 +127,8 @@ class KaldiRule(object):
                     self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True)
                 else:
                     self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
-                    self._fst_text = None
-                    with self.fst_cache.lock:
-                        self.fst_cache.add_fst(self.filepath)
-                        self.fst_cache.save()
+                    self._fst_text = None  # Free memory
+                    self.fst_cache.add_fst(self.filepath, save=True)
 
             elif self.compiler.decoding_framework == 'laf':
                 # self.compiler._compile_laf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
