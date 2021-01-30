@@ -9,6 +9,7 @@ import collections, itertools, math
 from six import iteritems, itervalues, text_type
 
 from . import KaldiError
+from .utils import FSTFileCache
 
 
 class WFST(object):
@@ -23,7 +24,7 @@ class WFST(object):
     eps = u'<eps>'
     eps_disambig = u'#0'
     silent_labels = frozenset((eps, eps_disambig, u'!SIL'))
-    native = False
+    native = property(lambda self: False)
 
     def __init__(self):
         self.clear()
@@ -33,6 +34,7 @@ class WFST(object):
         self._state_table = dict()  # { id: weight }
         self._next_state_id = 0
         self.start_state = self.add_state()
+        self.filename = None
 
     num_arcs = property(lambda self: sum(len(arc_list) for arc_list in itervalues(self._arc_table_dict)))
     num_states = property(lambda self: len(self._state_table))
@@ -45,6 +47,7 @@ class WFST(object):
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
+        self.filename = None
         id = int(self._next_state_id)
         self._next_state_id += 1
         if weight is None:
@@ -58,6 +61,7 @@ class WFST(object):
 
     def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
         """ Default weight is 1. None label is replaced by eps. Default olabel of None is replaced by label. """
+        self.filename = None
         if label is None: label = self.eps
         if olabel is None: olabel = label
         if weight is None: weight = 1
@@ -80,7 +84,9 @@ class WFST(object):
             )
             for (id, weight) in iteritems(self._state_table)
             if weight != 0)
-        return arcs_text + states_text
+        text = arcs_text + states_text
+        self.filename = FSTFileCache.hash_data(text) + '.fst'
+        return text
 
     ####################################################################################################################
 
@@ -146,7 +152,7 @@ class WFST(object):
 
 ########################################################################################################################
 
-from .wrapper import FFIObject, _ffi
+from .wrapper import FFIObject, _ffi, de as decode, en as encode
 
 class NativeWFST(FFIObject):
     """
@@ -161,6 +167,7 @@ class NativeWFST(FFIObject):
         DRAGONFLY_API bool fst__destruct(void* fst_vp);
         DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
         DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
+        DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
         DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
         DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
     """
@@ -200,6 +207,7 @@ class NativeWFST(FFIObject):
 
         self.num_states = 1  # Is initialized with a start state
         self.num_arcs = 0
+        self.filename = None
 
     def __del__(self):
         self.destruct()
@@ -213,6 +221,7 @@ class NativeWFST(FFIObject):
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
+        self.filename = None
         if weight is None:
             weight = 1 if final else 0
         else:
@@ -228,6 +237,7 @@ class NativeWFST(FFIObject):
 
     def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
         """ Default weight is 1. None label is replaced by eps. Default olabel of None is replaced by label. """
+        self.filename = None
         if label is None: label = self.eps
         if olabel is None: olabel = label
         if weight is None: weight = 1
@@ -238,6 +248,15 @@ class NativeWFST(FFIObject):
         if not result:
             raise KaldiError("Failed fst__add_arc")
         self.num_arcs += 1
+
+    def compute_hash(self, dependencies_seed_hash_str='0'*32):
+        hash_p = _ffi.new('char[]', 33)  # Length of MD5 hex string + null terminator
+        result = self._lib.fst__compute_md5(self.native_obj, hash_p, encode(dependencies_seed_hash_str))
+        if not result:
+            raise KaldiError("Failed fst__compute_md5")
+        hash_str = decode(_ffi.string(hash_p))
+        self.filename = hash_str + '.fst'
+        return hash_str
 
     ####################################################################################################################
 

@@ -53,7 +53,6 @@ class KaldiRule(object):
 
         # Public
         self.fst = WFST() if not self.compiler.native_fst else NativeWFST()
-        self.filename = None
         self.matcher = None
         self.active = True
 
@@ -64,6 +63,7 @@ class KaldiRule(object):
     decoder = property(lambda self: self.compiler.decoder)
     pending_compile = property(lambda self: (self in self.compiler.compile_queue) or (self in self.compiler.compile_duplicate_filename_queue))
     pending_load = property(lambda self: self in self.compiler.load_queue)
+    filename = property(lambda self: self.fst.filename)
 
     @property
     def filepath(self):
@@ -75,28 +75,37 @@ class KaldiRule(object):
 
     def compile(self, lazy=False, duplicate=None):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+        if self.compiled: return self
 
         if self.fst.native:
-            return self.finish_compile()
+            if not self.filename:
+                self.fst.compute_hash()
+                assert self.filename
+            # else:
+            #     _log.warning("")  # FIXME
 
-        if not self._fst_text:
-            # self.fst.normalize_weights()
-            self._fst_text = self.fst.get_fst_text()
-            self.filename = self.fst_cache.get_fst_filename(self._fst_text)
-        # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
-
-        if self.fst_cache.fst_is_current(self.filepath):
-            _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
-            touch_file(self.filepath)
-            self.compiled = True
-            return self
         else:
-            # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(self._fst_text)))
-            if duplicate:
-                _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
+            # Handle compiling text WFST to binary
+
+            if not self._fst_text:
+                # self.fst.normalize_weights()
+                self._fst_text = self.fst.get_fst_text()
+                assert self.filename
+            # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
+
+            if self.fst_cache.fst_is_current(self.filepath):
+                _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
+                touch_file(self.filepath)
+                self.compiled = True
+                return self
+            else:
+                # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(self._fst_text)))
+                if duplicate:
+                    _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
 
         if lazy:
             if not self.pending_compile:
+                # Special handling for rules that are an exact content match (and hence hash/name) with another (different) rule already in the compile_queue
                 if not any(self.filename == kaldi_rule.filename for kaldi_rule in self.compiler.compile_queue if self != kaldi_rule):
                     self.compiler.compile_queue.add(self)
                 else:
@@ -565,7 +574,7 @@ class Compiler(object):
                     # if kaldi_rule in self.load_queue:
                     #     kaldi_rule.load()
                     #     self.load_queue.remove(kaldi_rule)
-                # Handle rules that were pending compile but were duplicate and so compiled by/for another rule
+                # Handle rules that were pending compile but were duplicate and so compiled by/for another rule. They should be in the cache now
                 for kaldi_rule in list(self.compile_duplicate_filename_queue):
                     kaldi_rule.compile(duplicate=True)
                     assert kaldi_rule.compiled

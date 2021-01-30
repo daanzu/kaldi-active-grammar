@@ -294,12 +294,13 @@ class FSTFileCache(object):
             del self.cache[filename]
             self.dirty = True
 
-    def hash_data(self, data):
+    @staticmethod
+    def hash_data(data):
         if not isinstance(data, binary_type):
             if not isinstance(data, text_type):
                 data = text_type(data)
             data = data.encode('utf-8')
-        return text_type(hashlib.sha1(data).hexdigest())
+        return text_type(hashlib.md5(data).hexdigest())
 
     def add_file(self, filepath, data=None):
         if data is None:
@@ -333,7 +334,3 @@ class FSTFileCache(object):
         """Returns bool whether FST file for fst_text in directory path exists and matches current dependencies."""
         filename = os.path.basename(filepath)
         return (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash']) and os.path.isfile(filepath)
-
-    def get_fst_filename(self, fst_text):
-        hash = self.hash_data(fst_text)
-        return hash + '.fst'
