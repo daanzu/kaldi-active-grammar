@@ -68,7 +68,7 @@ class WFST(object):
         self._arc_table_dict[src_state].append(
             [int(src_state), int(dst_state), text_type(label), text_type(olabel), float(weight)])
 
-    def get_fst_text(self, eps2disambig=False):
+    def get_fst_text(self, fst_cache, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
         arcs_text = u''.join("%d %d %s %s %f\n" % (
                 src_state,
@@ -85,7 +85,7 @@ class WFST(object):
             for (id, weight) in iteritems(self._state_table)
             if weight != 0)
         text = arcs_text + states_text
-        self.filename = FSTFileCache.hash_data(text) + '.fst'
+        self.filename = fst_cache.hash_data(text, mix_dependencies=True) + '.fst'
         return text
 
     ####################################################################################################################

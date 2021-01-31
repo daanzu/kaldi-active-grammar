@@ -67,11 +67,9 @@ class KaldiRule(object):
 
     @property
     def filepath(self):
-        if isinstance(self.fst, WFST):
-            assert self.filename
-            assert self.compiler.tmp_dir
-            return os.path.join(self.compiler.tmp_dir, self.filename)
-        raise KaldiError("Invalid KaldiRule.fst")
+        assert self.filename
+        assert self.compiler.tmp_dir is not None
+        return os.path.join(self.compiler.tmp_dir, self.filename)
 
     def compile(self, lazy=False, duplicate=None):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
@@ -79,28 +77,26 @@ class KaldiRule(object):
 
         if self.fst.native:
             if not self.filename:
-                self.fst.compute_hash()
+                self.fst.compute_hash(self.fst_cache.dependencies_hash)
                 assert self.filename
-            # else:
-            #     _log.warning("")  # FIXME
 
         else:
             # Handle compiling text WFST to binary
-
             if not self._fst_text:
                 # self.fst.normalize_weights()
-                self._fst_text = self.fst.get_fst_text()
+                self._fst_text = self.fst.get_fst_text(fst_cache=self.fst_cache)
                 assert self.filename
             # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
 
-            if self.fst_cache.fst_is_current(self.filepath, touch=True):
-                _log.debug("%s: Skipped full compilation thanks to FileCache" % self)
-                self.compiled = True
-                return self
-            else:
-                # _log.debug("%s: FileCache useless; has %s not %s" % (self, self.fst_cache.cache.get(self.filepath), self.fst_cache.hash_data(self._fst_text)))
-                if duplicate:
-                    _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
+        if self.compiler.cache_fsts and self.fst_cache.fst_is_current(self.filepath, touch=True):
+            _log.debug("%s: Skipped FST compilation thanks to FileCache" % self)
+            if self.compiler.decoding_framework == 'agf' and self.fst.native:
+                self.fst_hclg_cp = self.compiler._agf_compiler.read_compiled_graph(self.filepath)
+            self.compiled = True
+            return self
+        else:
+            if duplicate:
+                _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
 
         if lazy:
             if not self.pending_compile:
@@ -124,11 +120,11 @@ class KaldiRule(object):
         try:
             if self.compiler.decoding_framework == 'agf':
                 if self.fst.native:
-                    self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True)
+                    self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True,
+                        output_filename=(self.filepath if self.compiler.cache_fsts else None))
                 else:
                     self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
                     self._fst_text = None  # Free memory
-                    self.fst_cache.add_fst(self.filepath, save=True)
 
             elif self.compiler.decoding_framework == 'laf':
                 # self.compiler._compile_laf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
@@ -224,7 +220,8 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US', framework='agf-direct', native_fst=True):
+    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US',
+            framework='agf-direct', native_fst=True, cache_fsts=True):
         # Supported parameter combinations:
         #   framework='agf-indirect' native_fst=False (original method)
         #   framework='agf-direct' native_fst=False (no external CLI programs needed)
@@ -243,13 +240,15 @@ class Compiler(object):
             framework = 'agf'
             AGF_INTERNAL_COMPILATION = False
             assert not native_fst, "AGF with NativeWFST not supported"
+            assert cache_fsts, "AGF must cache FSTs"
         self.decoding_framework = framework
         assert self.decoding_framework in ('agf', 'laf')
         self.parsing_framework = 'token'
         assert self.parsing_framework in ('token', 'text')
         self.native_fst = bool(native_fst)
+        self.cache_fsts = bool(cache_fsts)
 
-        tmp_dir_needed = bool(not self.native_fst)
+        tmp_dir_needed = bool(self.cache_fsts)
         self.model = Model(model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed)
         self.alternative_dictation = alternative_dictation
         self.cloud_dictation_lang = cloud_dictation_lang
@@ -348,7 +347,9 @@ class Compiler(object):
         config = { key: value.format(**format_kwargs) for (key, value) in config.items() }
         return KaldiAgfCompiler(config)
 
-    def _compile_agf_graph(self, compile=False, nonterm=False, input_text=None, input_filename=None, input_fst=None, output_filename=None, return_output_fst=False, simplify_lg=True, **kwargs):
+    def _compile_agf_graph(self, compile=False, nonterm=False, simplify_lg=True,
+            input_text=None, input_filename=None, input_fst=None,
+            output_filename=None, return_output_fst=False, **kwargs):
         """
         :param compile: bool whether to compile FST (False if it has already been compiled, like importing dictation FST)
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)

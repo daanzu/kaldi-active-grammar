@@ -5,7 +5,7 @@
 #
 
 import logging, sys, time
-import fnmatch, os
+import fnmatch, glob, os
 import functools
 import hashlib, json
 import threading
@@ -216,15 +216,16 @@ def is_file_up_to_date(filename, *parent_filenames):
 
 class FSTFileCache(object):
 
-    def __init__(self, cache_filename, dependencies_dict=None, invalidate=False):
+    def __init__(self, cache_filename, tmp_dir=None, dependencies_dict=None, invalidate=False):
         """
         Stores mapping filename -> hash of its contents/data, to detect when recalculaion is necessary. Assumes file is in model_dir.
-        FST files are a special case: filename -> hash of its dependencies' hashes, since filename itself is a hash of its text source.
         Also stores an entry ``dependencies_list`` listing filenames of all dependencies.
+        FST files are a special case: they aren't stored in the cache object, because their filename is itself a hash of its content mixed with a hash of its dependencies.
         If ``invalidate``, then initialize a fresh cache.
         """
 
         self.cache_filename = cache_filename
+        self.tmp_dir = tmp_dir
         if dependencies_dict is None: dependencies_dict = dict()
         self.dependencies_dict = dependencies_dict
         self.lock = threading.Lock()
@@ -268,6 +269,8 @@ class FSTFileCache(object):
         self.cache_is_new = False
         self.dirty = False
 
+    dependencies_hash = property(lambda self: self.cache['dependencies_hash'])
+
     def save(self):
         with open(self.cache_filename, 'w', encoding='utf-8') as f:
             # https://stackoverflow.com/a/14870531
@@ -289,34 +292,34 @@ class FSTFileCache(object):
             self.cache = { key: self.cache[key]
                 for key in ['version', 'dependencies_list', 'dependencies_hash'] + self.cache['dependencies_list']
                 if key in self.cache }
+            self.dirty = True
+            if self.tmp_dir is not None:
+                for filename in glob.glob(os.path.join(self.tmp_dir, '*.fst')):
+                    os.remove(filename)
         elif filename in self.cache:
             _log.info("%s: invalidating cache entry for %r", self, filename)
             del self.cache[filename]
             self.dirty = True
 
-    @staticmethod
-    def hash_data(data):
+    def hash_data(self, data, mix_dependencies=False):
         if not isinstance(data, binary_type):
             if not isinstance(data, text_type):
                 data = text_type(data)
             data = data.encode('utf-8')
-        return text_type(hashlib.md5(data).hexdigest())
+        hasher = hashlib.md5()
+        if mix_dependencies:
+            hasher.update(self.dependencies_hash.encode('utf-8'))
+        hasher.update(data)
+        return text_type(hasher.hexdigest())
 
     def add_file(self, filepath, data=None):
+        # Assumes file is a root dependency
         if data is None:
             with open(filepath, 'rb') as f:
                 data = f.read()
         filename = os.path.basename(filepath)
         self.cache[filename] = self.hash_data(data)
         self.dirty = True
-
-    def add_fst(self, filepath, save=True):
-        filename = os.path.basename(filepath)
-        with self.lock:
-            self.cache[filename] = self.cache['dependencies_hash']
-            self.dirty = True
-            if save:
-                self.save()
 
     def contains(self, filename, data):
         return (filename in self.cache) and (self.cache[filename] == self.hash_data(data))
@@ -334,11 +337,8 @@ class FSTFileCache(object):
         return self.contains(filename, data)
 
     def fst_is_current(self, filepath, touch=True):
-        """Returns bool whether FST file for fst_text in directory path exists and matches current dependencies."""
-        filename = os.path.basename(filepath)
-        with self.lock:
-            result = (filename in self.cache) and (self.cache[filename] == self.cache['dependencies_hash'])
-        result = result and os.path.isfile(filepath)
+        """Returns bool whether FST file in directory path exists."""
+        result = os.path.isfile(filepath)
         if result and touch:
             touch_file(filepath)
         return result

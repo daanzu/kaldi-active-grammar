@@ -218,7 +218,7 @@ class Model(object):
         }
         self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
-        self.fst_cache = utils.FSTFileCache(os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict)
+        self.fst_cache = utils.FSTFileCache(os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict, tmp_dir=self.tmp_dir)
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.lexicon = Lexicon(self.phone_to_int_dict.keys())

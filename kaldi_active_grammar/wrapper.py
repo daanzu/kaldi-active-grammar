@@ -549,6 +549,7 @@ class KaldiAgfCompiler(FFIObject):
         DRAGONFLY_API void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph);
         DRAGONFLY_API void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph);
         DRAGONFLY_API void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph);
+        DRAGONFLY_API void* nnet3_agf__read_compiled_graph(char* filename_cp);
     """
 
     def __init__(self, config):
@@ -578,6 +579,12 @@ class KaldiAgfCompiler(FFIObject):
             _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_file=%r", config, grammar_fst_file)
             result = self._lib.nnet3_agf__compile_graph_file(self._compiler, en(json.dumps(config)), en(grammar_fst_file), return_graph)
             return result
+
+    def read_compiled_graph(self, filename):
+        result = self._lib.nnet3_agf__read_compiled_graph(en(filename))
+        if not result:
+            raise KaldiError("failed nnet3_agf__read_compiled_graph")
+        return result
 
 
 ########################################################################################################################
