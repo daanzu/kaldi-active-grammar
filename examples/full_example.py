@@ -9,13 +9,7 @@ tmp_dir = None  # Default
 
 compiler = kaldi_active_grammar.Compiler(model_dir=model_dir, tmp_dir=tmp_dir)
 # compiler.fst_cache.invalidate()
-
-top_fst = compiler.compile_top_fst()
-dictation_fst_file = compiler.dictation_fst_filepath
-decoder = kaldi_active_grammar.KaldiAgfNNet3Decoder(model_dir=compiler.model_dir, tmp_dir=compiler.tmp_dir,
-    top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, save_adaptation_state=False,
-    config={},)
-compiler.decoder = decoder
+decoder = compiler.init_decoder()
 
 ##### Set up a rule
 
