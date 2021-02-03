@@ -152,7 +152,7 @@ class WFST(object):
 
 ########################################################################################################################
 
-from .wrapper import FFIObject, _ffi, de as decode, en as encode
+from .ffi import FFIObject, _ffi, decode, encode
 
 class NativeWFST(FFIObject):
     """

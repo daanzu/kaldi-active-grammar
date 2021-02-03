@@ -8,51 +8,20 @@
 Wrapper classes for Kaldi
 """
 
-import json, os.path, re, time
+import json, os.path
 from io import open
 
-from six import PY3
 from six.moves import zip
-from cffi import FFI
 import numpy as np
 
 from . import _log, KaldiError
-from .utils import exec_dir, find_file, platform, show_donation_message, symbol_table_lookup
+from .ffi import FFIObject, _ffi, decode as de, encode as en
+from .utils import clock, find_file, show_donation_message, symbol_table_lookup
+from .wfst import WFST, NativeWFST
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('wrapper')
 _log_library = _log.getChild('library')
-
-_ffi = FFI()
-_library_binary_path = os.path.join(exec_dir, dict(windows='kaldi-dragonfly.dll', linux='libkaldi-dragonfly.so', macos='libkaldi-dragonfly.dylib')[platform])
-_c_source_ignore_regex = re.compile(r'(\b(extern|DRAGONFLY_API)\b)|("C")|(//.*$)', re.MULTILINE)  # Pattern for extraneous stuff to be removed
-
-def en(text):
-    """ For C interop: encode unicode text -> binary utf-8. """
-    return text.encode('utf-8')
-def de(binary):
-    """ For C interop: decode binary utf-8 -> unicode text. """
-    return binary.decode('utf-8')
-
-if PY3:
-    def clock():
-        return time.perf_counter()
-else:
-    def clock():
-        return time.clock()
-
-
-########################################################################################################################
-
-class FFIObject(object):
-
-    def __init__(self):
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
-
-    @classmethod
-    def _init_ffi(cls):
-        _ffi.cdef(_c_source_ignore_regex.sub(' ', cls._library_header_text))
-        return _ffi.dlopen(_library_binary_path)
 
 
 ########################################################################################################################

@@ -64,6 +64,13 @@ def debug_timer(log, desc, enabled=True, independent=False):
         if _debug_timer_stack and not independent:
             _debug_timer_stack[-1] += spent_time_func()
 
+if not PY2:
+    def clock():
+        return time.perf_counter()
+else:
+    def clock():
+        return time.clock()
+
 
 ########################################################################################################################
 
