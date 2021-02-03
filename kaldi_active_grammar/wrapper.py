@@ -407,7 +407,7 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
     """
 
-    def __init__(self, *, top_fst_cp=None, top_fst_file=None, dictation_fst_file=None, config=None, **kwargs):
+    def __init__(self, *, top_fst=None, dictation_fst_file=None, config=None, **kwargs):
         super(KaldiAgfNNet3Decoder, self).__init__(**kwargs)
 
         phones_file = find_file(self.model_dir, 'phones.txt')
@@ -420,8 +420,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         dictation_phones_offset = symbol_table_lookup(phones_file, '#nonterm:dictation')
         if dictation_phones_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
-        if (top_fst_cp is not None) == (top_fst_file is not None):
-            raise KaldiError("must specify exactly one of top_fst and top_fst_file")
 
         self.config_dict.update({
             'nonterm_phones_offset': nonterm_phones_offset,
@@ -429,8 +427,9 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             'dictation_phones_offset': dictation_phones_offset,
             'dictation_fst_filename': os.path.normpath(dictation_fst_file) if dictation_fst_file is not None else '',
             })
-        if top_fst_cp is not None: self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst_cp))})
-        if top_fst_file is not None: self.config_dict.update({'top_fst_filename': os.path.normpath(top_fst_file)})
+        if isinstance(top_fst, NativeWFST): self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst.compiled_native_obj))})
+        elif isinstance(top_fst, str): self.config_dict.update({'top_fst_filename': os.path.normpath(top_fst)})
+        else: raise KaldiError("unrecognized top_fst type")
         if config: self.config_dict.update(config)
 
         _log.debug("config_dict: %s", self.config_dict)
@@ -445,36 +444,28 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
                 raise KaldiError("failed nnet3_agf__destruct")
             self._model = None
 
-    def add_grammar_fst(self, grammar_fst_cp):
-        _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst_cp)
-        grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(self._model, grammar_fst_cp)
+    def add_grammar_fst(self, grammar_fst):
+        _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
+        if isinstance(grammar_fst, NativeWFST):
+            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(self._model, grammar_fst.compiled_native_obj)
+        elif isinstance(grammar_fst, str):
+            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._model, en(os.path.normpath(grammar_fst)))
+        else: raise KaldiError("unrecognized grammar_fst type")
         if grammar_fst_index < 0:
-            raise KaldiError("error adding grammar %r" % grammar_fst_cp)
-        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
-        self.num_grammars += 1
-        return grammar_fst_index
-
-    def add_grammar_fst_file(self, grammar_fst_file):
-        grammar_fst_file = os.path.normpath(grammar_fst_file)
-        _log.log(8, "%s: adding grammar_fst_file: %r", self, grammar_fst_file)
-        grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._model, en(grammar_fst_file))
-        if grammar_fst_index < 0:
-            raise KaldiError("error adding grammar %r" % grammar_fst_file)
+            raise KaldiError("error adding grammar %r" % grammar_fst)
         assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
         self.num_grammars += 1
         return grammar_fst_index
 
     def reload_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst)
-        result = self._lib.nnet3_agf__reload_grammar_fst_file(self._model, grammar_fst_index, grammar_fst.native_obj)
+        if isinstance(grammar_fst, NativeWFST):
+            result = self._lib.nnet3_agf__reload_grammar_fst(self._model, grammar_fst_index, grammar_fst.compiled_native_obj)
+        elif isinstance(grammar_fst, str):
+            result = self._lib.nnet3_agf__reload_grammar_fst_file(self._model, grammar_fst_index, en(os.path.normpath(grammar_fst)))
+        else: raise KaldiError("unrecognized grammar_fst type")
         if not result:
             raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst))
-
-    def reload_grammar_fst_file(self, grammar_fst_index, grammar_fst_file):
-        _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst_file)
-        result = self._lib.nnet3_agf__reload_grammar_fst_file(self._model, grammar_fst_index, en(grammar_fst_file))
-        if not result:
-            raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst_file))
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
@@ -595,16 +586,6 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
             if not result:
                 raise KaldiError("failed nnet3_laf__destruct")
             self._model = None
-
-    # def add_grammar_fst_file(self, grammar_fst_file):
-    #     grammar_fst_file = os.path.normpath(grammar_fst_file)
-    #     _log.log(8, "%s: adding grammar_fst_file: %r", self, grammar_fst_file)
-    #     grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_file(self._model, en(grammar_fst_file))
-    #     if grammar_fst_index < 0:
-    #         raise KaldiError("error adding grammar %r" % grammar_fst_file)
-    #     assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
-    #     self.num_grammars += 1
-    #     return grammar_fst_index
 
     def add_grammar_fst(self, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)

@@ -208,16 +208,31 @@ class NativeWFST(FFIObject):
         self.num_states = 1  # Is initialized with a start state
         self.num_arcs = 0
         self.filename = None
+        self._compiled_native_obj = None
 
     def __del__(self):
         self.destruct()
 
     def destruct(self):
+        del self.compiled_native_obj
         if self.native_obj is not None:
             result = self._lib.fst__destruct(self.native_obj)
             self.native_obj = None
             if not result:
-                raise KaldiError("Failed fst__destruct")
+                raise KaldiError("Failed fst__destruct on %r" % self.native_obj)
+
+    compiled_native_obj = property(lambda self: self._compiled_native_obj)
+    @compiled_native_obj.setter
+    def compiled_native_obj(self, value):
+        del self.compiled_native_obj
+        self._compiled_native_obj = value
+    @compiled_native_obj.deleter
+    def compiled_native_obj(self):
+        if self._compiled_native_obj is not None:
+            result = self._lib.fst__destruct(self._compiled_native_obj)
+            self._compiled_native_obj = None
+            if not result:
+                raise KaldiError("Failed fst__destruct on %r" % self._compiled_native_obj)
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """

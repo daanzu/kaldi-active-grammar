@@ -91,7 +91,7 @@ class KaldiRule(object):
         if self.compiler.cache_fsts and self.fst_cache.fst_is_current(self.filepath, touch=True):
             _log.debug("%s: Skipped FST compilation thanks to FileCache" % self)
             if self.compiler.decoding_framework == 'agf' and self.fst.native:
-                self.fst_hclg_cp = self.compiler._agf_compiler.read_compiled_graph(self.filepath)
+                self.fst.compiled_native_obj = self.compiler._agf_compiler.read_compiled_graph(self.filepath)
             self.compiled = True
             return self
         else:
@@ -120,7 +120,7 @@ class KaldiRule(object):
         try:
             if self.compiler.decoding_framework == 'agf':
                 if self.fst.native:
-                    self.fst_hclg_cp = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True,
+                    self.fst.compiled_native_obj = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True,
                         output_filename=(self.filepath if self.compiler.cache_fsts else None))
                 else:
                     self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
@@ -149,7 +149,7 @@ class KaldiRule(object):
             self._do_reloading()
         else:
             if self.compiler.decoding_framework == 'agf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self.fst_hclg_cp) if self.fst.native else self.decoder.add_grammar_fst_file(self.filepath)
+                grammar_fst_index = self.decoder.add_grammar_fst(self.fst if self.fst.native else self.filepath)
             elif self.compiler.decoding_framework == 'laf':
                 grammar_fst_index = self.decoder.add_grammar_fst(self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self._fst_text)
             else: raise KaldiError("unknown compiler decoding_framework")
@@ -161,7 +161,7 @@ class KaldiRule(object):
 
     def _do_reloading(self):
         if self.compiler.decoding_framework == 'agf':
-            return self.decoder.reload_grammar_fst(self.id, self.fst_hclg_cp) if self.fst.native else self.decoder.reload_grammar_fst_file(self.id, self.filepath)
+            return self.decoder.reload_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))  # FIXME: not implemented?
         elif self.compiler.decoding_framework == 'laf':
             return self.decoder.reload_grammar_fst(self.id, self.fst) if self.fst.native else self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented?
         else: raise KaldiError("unknown compiler decoding_framework")
@@ -280,8 +280,7 @@ class Compiler(object):
         decoder_kwargs = dict(model_dir=self.model_dir, tmp_dir=self.tmp_dir, dictation_fst_file=dictation_fst_file, max_num_rules=self._max_rule_id+1, config=config)
         if self.decoding_framework == 'agf':
             top_fst_rule = self.compile_top_fst()
-            if top_fst_rule.fst.native: decoder_kwargs.update(top_fst_cp=top_fst_rule.fst_hclg_cp)
-            else: decoder_kwargs.update(top_fst_file=top_fst_rule.filepath)
+            decoder_kwargs.update(top_fst=(top_fst_rule.fst if top_fst_rule.fst.native else top_fst_rule.filepath))
             self.decoder = KaldiAgfNNet3Decoder(**decoder_kwargs)
         elif self.decoding_framework == 'laf':
             self.decoder = KaldiLafNNet3Decoder(**decoder_kwargs)
