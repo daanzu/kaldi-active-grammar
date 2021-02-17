@@ -15,6 +15,7 @@ jobs:
     if: true
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.9
+      MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
     steps:
       - uses: actions/checkout@v2
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
@@ -33,11 +34,13 @@ jobs:
           brew install sox
           brew install libtool
       - run: |
-          wget --no-verbose http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16525/m_mkl_2020.1.216.dmg
-          hdiutil attach m_mkl_2020.1.216.dmg
-          cp /Volumes/m_mkl_2020.1.216/m_mkl_2020.1.216.app/Contents/MacOS/silent.cfg .
+          export MKL_FILE=${MKL_URL##*/}
+          export MKL_FILE=${MKL_FILE%\.dmg}
+          wget --no-verbose $MKL_URL
+          hdiutil attach ${MKL_FILE}.dmg
+          cp /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/silent.cfg .
           sed -i.bak -e 's/decline/accept/g' silent.cfg
-          sudo /Volumes/m_mkl_2020.1.216/m_mkl_2020.1.216.app/Contents/MacOS/install.sh --silent silent.cfg
+          sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
       - run: |
           python3 setup.py bdist_wheel
           ls -al dist/
@@ -49,6 +52,8 @@ jobs:
   build-linux:
     runs-on: ubuntu-18.04
     if: true
+    env:
+      MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz
     steps:
       - uses: actions/checkout@v2
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
@@ -68,7 +73,8 @@ jobs:
           echo "$HOME/bin" >> $GITHUB_PATH
       - run: |
           echo "KALDI_BRANCH: $KALDI_BRANCH"
-          just build-dockcross $KALDI_BRANCH
+          echo "MKL_URL: $MKL_URL"
+          just build-dockcross $KALDI_BRANCH $MKL_URL
           ls -al wheelhouse/
       - uses: actions/upload-artifact@v2
         with:
@@ -78,6 +84,8 @@ jobs:
   build-windows:
     runs-on: windows-2019
     if: true
+    env:
+      MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17173/w_mkl_2020.4.311.exe
     defaults:
       run:
         shell: bash
@@ -102,10 +110,6 @@ jobs:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
           ref: ${{ env.KALDI_BRANCH }}
-      # - name: wget
-      #   uses: wei/wget@v1
-      #   with:
-      #     args: -qO- http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16543/w_mkl_2020.1.216.exe
       - name: Gather information
         run: |
           echo $GITHUB_WORKSPACE
@@ -151,9 +155,10 @@ jobs:
       #   shell: cmd
       - name: Install MKL
         run: |
+          echo "MKL_URL: $MKL_URL"
           mkdir -p mkl
           cd mkl
-          curl -s http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16543/w_mkl_2020.1.216.exe > mkl.exe
+          curl -s $MKL_URL > mkl.exe
           ls -al
           ./mkl.exe --s --a install --output=$GITHUB_WORKSPACE/mkl/output.txt --eula=accept
           cat output.txt

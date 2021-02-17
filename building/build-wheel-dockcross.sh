@@ -3,11 +3,10 @@
 set -e -x
 
 PYTHON_EXE=/opt/python/cp38-cp38/bin/python
-MKL_URL="http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16533/l_mkl_2020.1.217.tgz"
-MKL_FILE=$(basename $MKL_URL)
-# MKL_DIR=${MKL_URL%.*}
 WHEEL_PLAT=$1
 KALDI_BRANCH=$2
+MKL_URL=${3:-"https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz"}
+MKL_FILE=$(basename $MKL_URL)
 
 if [ -z "$WHEEL_PLAT" ] || [ -z "$PYTHON_EXE" ]; then
     echo "ERROR: variable not set!"

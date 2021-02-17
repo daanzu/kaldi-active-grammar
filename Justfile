@@ -17,11 +17,11 @@ build-linux python='python3':
 	rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
 	{{python}} setup.py bdist_wheel
 
-build-dockcross kaldi_branch:
-	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{kaldi_branch}}
+build-dockcross kaldi_branch mkl_url="":
+	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{kaldi_branch}} {{mkl_url}}
 
 setup-dockcross:
-	docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
+	docker run --rm dockcross/manylinux2010-x64:20210127-72b83fc > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
 	@# [ ! -e building/dockcross-manylinux2010-x64 ] && docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64 || true
 
 pip-install-develop:
