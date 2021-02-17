@@ -146,6 +146,7 @@ class KaldiRule(object):
         assert self.compiled
 
         if self.has_been_loaded:
+            # FIXME: why is this necessary?
             self._do_reloading()
         else:
             if self.compiler.decoding_framework == 'agf':
@@ -161,9 +162,11 @@ class KaldiRule(object):
 
     def _do_reloading(self):
         if self.compiler.decoding_framework == 'agf':
-            return self.decoder.reload_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))  # FIXME: not implemented?
+            return self.decoder.reload_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))
         elif self.compiler.decoding_framework == 'laf':
-            return self.decoder.reload_grammar_fst(self.id, self.fst) if self.fst.native else self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented?
+            assert self.fst.native
+            return self.decoder.reload_grammar_fst(self.id, self.fst)
+            if not self.fst.native: return self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented
         else: raise KaldiError("unknown compiler decoding_framework")
 
     @contextmanager
