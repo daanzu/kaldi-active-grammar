@@ -16,7 +16,6 @@ from .utils import ExternalProcess, debug_timer, load_symbol_table, platform, sh
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
 from .wrapper import KaldiAgfCompiler, KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder
-import kaldi_active_grammar.alternative_dictation as alternative_dictation
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('compiler')
@@ -634,10 +633,8 @@ class Compiler(object):
             try:
                 if callable(self.alternative_dictation):
                     alternative_text_func = self.alternative_dictation
-                elif self.alternative_dictation == 'gcloud':
-                    alternative_text_func = alternative_dictation.GCloud.transcribe_data_sync
                 else:
-                    raise KaldiError("Invalid alternative_dictation value: %r" % self.alternative_dictation)
+                    raise TypeError("Invalid alternative_dictation value: %r" % self.alternative_dictation)
 
                 audio_data, word_align = dictation_info_func()
                 self._log.log(5, "alternative_dictation word_align: %s", word_align)
