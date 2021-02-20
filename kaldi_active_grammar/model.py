@@ -17,6 +17,7 @@ except ImportError:
     g2p_en = None
 
 from . import _log, KaldiError, REQUIRED_MODEL_VERSION
+from .wfst import SymbolTable
 from .utils import ExternalProcess, find_file, load_symbol_table, show_donation_message, symbol_table_lookup
 import kaldi_active_grammar.defaults as defaults
 import kaldi_active_grammar.utils as utils
@@ -228,27 +229,21 @@ class Model(object):
         if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
 
         # Update files if needed, before loading words
-        files = ['user_lexicon.txt', 'words.txt', 'align_lexicon.int', 'lexiconp_disambig.txt', 'L_disambig.fst',]
-        if self.fst_cache.cache_is_new or not all(self.fst_cache.file_is_current(self.files_dict[file]) for file in files):
+        necessary_files = ['user_lexicon.txt', 'words.txt',]
+        non_lazy_files = ['align_lexicon.int', 'lexiconp_disambig.txt', 'L_disambig.fst',]
+        files_are_not_current = lambda files: any(not self.fst_cache.file_is_current(self.files_dict[file]) for file in files)
+        if self.fst_cache.cache_is_new or files_are_not_current(necessary_files + non_lazy_files):
             self.generate_lexicon_files()
-            self.fst_cache.update_dependencies()
-            self.fst_cache.save()
 
-        self.load_words(self.files_dict['words.txt'])  # sets self.lexicon_words, self.longest_word
+        self.load_words()
 
     def load_words(self, words_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']
         _log.debug("loading words from %r", words_file)
         invalid_words = "<eps> !SIL <UNK> #0 <s> </s>".lower().split()
-
-        with open(words_file, 'r', encoding='utf-8') as file:
-            word_id_pairs = [line.strip().split() for line in file]
-        self.lexicon_words = set([word for (word, id) in word_id_pairs
-            if word.lower() not in invalid_words and not word.startswith('#nonterm')])
-        assert self.lexicon_words, "Empty lexicon from %r" % words_file
-        self.longest_word = max(self.lexicon_words, key=len)
-
-        return self.lexicon_words
+        self.words_table = SymbolTable(words_file)
+        self.longest_word = max(self.words_table.word_to_id_map.keys(), key=len)
+        return self.words_table
 
     def read_user_lexicon(self, filename=None):
         if filename is None: filename = self.files_dict['user_lexicon.txt']
@@ -262,13 +257,14 @@ class Model(object):
     def write_user_lexicon(self, entries, filename=None):
         if filename is None: filename = self.files_dict['user_lexicon.txt']
         lines = [' '.join(tokens) + '\n' for tokens in entries]
-        lines.sort()
         with open(filename, 'w', encoding='utf-8', newline='\n') as file:
             file.writelines(lines)
 
     def add_word(self, word, phones=None, lazy_compilation=False):
         word = word.strip().lower()
+
         if phones is None:
+            # Generate pronunciations, then call ourselves recursively
             pronunciations = Lexicon.generate_pronunciations(word)
             pronunciations = sum([self.add_word(word, phones, lazy_compilation=True) for phones in pronunciations], [])
             if not lazy_compilation:
@@ -276,6 +272,7 @@ class Model(object):
             return pronunciations
             # FIXME: refactor this function
 
+        # Now just handle single-pronunciation case...
         phones = self.lexicon.cmu_to_xsampa(phones)
         new_entry = [word] + phones
 
@@ -291,7 +288,7 @@ class Model(object):
         self.write_user_lexicon(entries)
 
         if lazy_compilation:
-            self.lexicon_words.add(word)
+            self.words_table.add_word(word)
         else:
             self.generate_lexicon_files()
 
@@ -310,20 +307,25 @@ class Model(object):
         check_file('lexiconp_disambig.txt', 'lexiconp_disambig.base.txt')
 
     def check_user_lexicon(self):
+        """ Checks for a user lexicon file in the CWD, and if found and different than the model's user lexicon, extends the model's. """
         cwd_user_lexicon_filename = os.path.abspath('user_lexicon.txt')
         model_user_lexicon_filename = os.path.abspath(os.path.join(self.model_dir, 'user_lexicon.txt'))
         if (cwd_user_lexicon_filename != model_user_lexicon_filename) and os.path.isfile(cwd_user_lexicon_filename):
-            model_user_lexicon_entries = set(tuple(tokens) for tokens in self.read_user_lexicon(filename=model_user_lexicon_filename))
-            cwd_user_lexicon_entries = set(tuple(tokens) for tokens in self.read_user_lexicon(filename=cwd_user_lexicon_filename))
-            new_user_lexicon_entries = cwd_user_lexicon_entries - model_user_lexicon_entries
+            cwd_user_lexicon_entries = [tuple(tokens) for tokens in self.read_user_lexicon(filename=cwd_user_lexicon_filename)]
+            model_user_lexicon_entries = [tuple(tokens) for tokens in self.read_user_lexicon(filename=model_user_lexicon_filename)]
+            model_user_lexicon_entries_set = set(model_user_lexicon_entries)
+            new_user_lexicon_entries = [tokens for tokens in cwd_user_lexicon_entries if tokens not in model_user_lexicon_entries_set]
             if new_user_lexicon_entries:
                 _log.info("adding new user lexicon entries from %r", cwd_user_lexicon_filename)
-                entries = model_user_lexicon_entries | cwd_user_lexicon_entries
+                entries = model_user_lexicon_entries + new_user_lexicon_entries
                 self.write_user_lexicon(entries, filename=model_user_lexicon_filename)
 
     def generate_lexicon_files(self):
         """ Generates: words.txt, align_lexicon.int, lexiconp_disambig.txt, L_disambig.fst """
         _log.info("generating lexicon files")
+        self.fst_cache.invalidate()
+
+        # FIXME: refactor this to use words_table/SymbolTable
         max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
 
         user_lexicon_entries = []
@@ -342,7 +344,7 @@ class Model(object):
                     max_word_id += 1
                     user_lexicon_entries.append((word, max_word_id, phones))
 
-        def generate_file_from_base(filename, write_func):
+        def generate_file_from_base_with_user_lexicon(filename, write_func):
             filepath = self.files_dict[filename]
             with open(base_filepath(filepath), 'r', encoding='utf-8') as file:
                 base_data = file.read()
@@ -351,13 +353,14 @@ class Model(object):
                 for word, word_id, phones in user_lexicon_entries:
                     file.write(write_func(word, word_id, phones) + '\n')
 
-        generate_file_from_base('words.txt', lambda word, word_id, phones:
+        generate_file_from_base_with_user_lexicon('words.txt', lambda word, word_id, phones:
             str_space_join([word, word_id]))
-        generate_file_from_base('align_lexicon.int', lambda word, word_id, phones:
+        generate_file_from_base_with_user_lexicon('align_lexicon.int', lambda word, word_id, phones:
             str_space_join([word_id, word_id] + [self.phone_to_int_dict[phone] for phone in phones]))
-        generate_file_from_base('lexiconp_disambig.txt', lambda word, word_id, phones:
+        generate_file_from_base_with_user_lexicon('lexiconp_disambig.txt', lambda word, word_id, phones:
             '%s\t1.0 %s' % (word, ' '.join(phones)))
 
+        # FIXME: internalize this
         format = ExternalProcess.get_list_formatter(self.files_dict)
         command = ExternalProcess.make_lexicon_fst(*format(
             '--left-context-phones={left_context_phones_txt}',
@@ -377,6 +380,11 @@ class Model(object):
         command |= ExternalProcess.fstarcsort(*format('--sort_type=olabel'))
         command |= self.files_dict['L_disambig.fst']
         command()
+
+        # FIXME: generate_words_relabeled_file(self.files_dict['words.txt'], self.files_dict['relabel_ilabels.int'], self.files_dict['words.relabeled.txt'])
+
+        self.fst_cache.update_dependencies()
+        self.fst_cache.save()
 
     def reset_user_lexicon(self):
         utils.clear_file(self.files_dict['user_lexicon.txt'])

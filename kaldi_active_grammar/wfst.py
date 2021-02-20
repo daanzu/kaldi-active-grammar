@@ -307,3 +307,18 @@ class SymbolTable(object):
             word_id_pairs = [line.strip().split() for line in file]
         self.word_to_id_map = { word: int(id) for (word, id) in word_id_pairs }
         self.id_to_word_map = { id: word for (word, id) in self.word_to_id_map.items() }
+        self.max_term_word_id = max(id for (word, id) in self.word_to_id_map.items() if not word.startswith('#nonterm'))
+
+    def add_word(self, word, id=None):
+        if id is None:
+            self.max_term_word_id += 1
+            id = self.max_term_word_id
+        else:
+            id = int(id)
+        self.word_to_id_map[word] = id
+        self.id_to_word_map[id] = word
+
+    words = property(lambda self: self.word_to_id_map.keys())
+
+    def __contains__(self, word):
+        return (word in self.word_to_id_map)

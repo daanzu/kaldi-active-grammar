@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0; see LICENSE.txt file.
 #
 
-import collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess
+import collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess, threading
 import concurrent.futures
 from contextlib import contextmanager
 from io import open
@@ -12,7 +12,7 @@ from io import open
 from six.moves import range, zip
 
 from . import _log, KaldiError
-from .utils import ExternalProcess, debug_timer, load_symbol_table, platform, show_donation_message, symbol_table_lookup, touch_file
+from .utils import ExternalProcess, debug_timer, platform, show_donation_message
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
 from .wrapper import KaldiAgfCompiler, KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder
@@ -24,6 +24,8 @@ _log = _log.getChild('compiler')
 ########################################################################################################################
 
 class KaldiRule(object):
+
+    cls_lock = threading.Lock()
 
     def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
         """
@@ -110,6 +112,8 @@ class KaldiRule(object):
 
     def finish_compile(self):
         # Must be thread-safe!
+        with self.cls_lock:
+            self.compiler.prepare_for_compilation()
         _log.log(15, "%s: Compiling %sstate/%sarc FST%s%s" % (self, self.fst.num_states, self.fst.num_arcs,
                 (" (%dbyte)" % len(self._fst_text)) if self._fst_text else "",
                 (" to " + self.filename) if self.filename else ""))
@@ -222,7 +226,7 @@ class KaldiRule(object):
 
 class Compiler(object):
 
-    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None, cloud_dictation_lang='en-US',
+    def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None,
             framework='agf-direct', native_fst=True, cache_fsts=True):
         # Supported parameter combinations:
         #   framework='agf-indirect' native_fst=False (original method)
@@ -249,32 +253,30 @@ class Compiler(object):
         assert self.parsing_framework in ('token', 'text')
         self.native_fst = bool(native_fst)
         self.cache_fsts = bool(cache_fsts)
+        self.alternative_dictation = alternative_dictation
 
         tmp_dir_needed = bool(self.cache_fsts)
         self.model = Model(model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed)
-        self.alternative_dictation = alternative_dictation
-        self.cloud_dictation_lang = cloud_dictation_lang
+        self._lexicon_files_stale = False
+
+        if self.native_fst:
+            NativeWFST.init(
+                osymbol_table=self.model.words_table,
+                isymbol_table=self.model.words_table if self.decoding_framework != 'laf' else SymbolTable(self.files_dict['words.relabeled.txt']),
+                wildcard_nonterms=self.wildcard_nonterms)
+        self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
         self.decoder = None
 
         self._num_kaldi_rules = 0
-        self._max_rule_id = load_symbol_table(self.files_dict['phones.txt'])[-1][1] - symbol_table_lookup(self.files_dict['phones.txt'], '#nonterm:rule0')  # FIXME: inaccuracy
         self._max_rule_id = 999
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
-
-        words = frozenset(word for (word, id) in load_symbol_table(self.files_dict['words.txt']))
-        self._oov_word = '<unk>' if '<unk>' in words else None  # FIXME: make this configurable, for different models
-        self._noise_words = frozenset(['<unk>', '!SIL']) & words  # FIXME: make this configurable, for different models
+        self._oov_word = '<unk>' if ('<unk>' in self.model.words_table) else None  # FIXME: make this configurable, for different models
+        self._noise_words = frozenset(['<unk>', '!SIL']) & frozenset(self.model.words_table.words)  # FIXME: make this configurable, for different models
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self.compile_queue = set()  # KaldiRule
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
-
-        if self.native_fst:
-            NativeWFST.init(isymbol_table=SymbolTable(self.files_dict['words.relabeled.txt' if self.decoding_framework == 'laf' else 'words.txt']),
-                osymbol_table=SymbolTable(self.files_dict['words.txt']),
-                wildcard_nonterms=self.wildcard_nonterms)
-        self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
 
     def init_decoder(self, config=None, dictation_fst_file=None):
         if self.decoder: raise KaldiError("Decoder already initialized")
@@ -297,7 +299,7 @@ class Compiler(object):
     fst_cache = property(lambda self: self.model.fst_cache)
 
     num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
-    lexicon_words = property(lambda self: self.model.lexicon_words)
+    lexicon_words = property(lambda self: self.model.words_table.word_to_id_map)
     _longest_word = property(lambda self: self.model.longest_word)
 
     _default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_G_FILENAME))
@@ -317,6 +319,22 @@ class Compiler(object):
 
     ####################################################################################################################
     # Methods for compiling graphs.
+
+    def add_word(self, word, phones=None, lazy_compilation=False):
+        self._lexicon_files_stale = True
+        pronunciations = self.model.add_word(word, phones=phones, lazy_compilation=lazy_compilation)
+        return pronunciations
+
+    def prepare_for_compilation(self):
+        if self._lexicon_files_stale:
+            self.model.generate_lexicon_files()
+            self.model.load_words()
+            self.decoder.load_lexicon()
+            if self._agf_compiler:
+                # TODO: Just update the necessary files in the config
+                self._agf_compiler.destroy()
+                self._agf_compiler = self._init_agf_compiler()
+            self._lexicon_files_stale = False
 
     def _compile_laf_graph(self, input_text=None, input_filename=None, output_filename=None, **kwargs):
         # FIXME: documentation
@@ -515,7 +533,7 @@ class Compiler(object):
     #     :param number: (0,None) or (1,None) or (1,1), where None is infinity.
     #     """
     #     # unweighted=0.01
-    #     if words is None: words = self._lexicon_words
+    #     if words is None: words = self.lexicon_words
     #     word_probs = self._lexicon_word_probs
     #     backoff_state = fst.add_state()
     #     fst.add_arc(src_state, backoff_state, None, weight=start_weight)
@@ -531,7 +549,7 @@ class Compiler(object):
     def compile_universal_grammar(self, words=None):
         """recognizes any sequence of words"""
         kaldi_rule = KaldiRule(self, 'universal', nonterm=False)
-        if words is None: words = self._lexicon_words
+        if words is None: words = self.lexicon_words
         fst = kaldi_rule.fst
         backoff_state = fst.add_state(initial=True, final=True)
         for word in words:

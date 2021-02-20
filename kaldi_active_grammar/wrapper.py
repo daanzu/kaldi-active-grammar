@@ -284,6 +284,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
     def saving_adaptation_state(self, value): self._saving_adaptation_state = value
 
     def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
+        """ Only necessary when you update the lexicon after initialization. """
         if words_file is None: words_file = self.words_file
         if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
         result = self._lib.nnet3_base__load_lexicon(self._model, en(words_file), en(word_align_lexicon_file))
