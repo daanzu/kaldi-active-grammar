@@ -170,6 +170,7 @@ class NativeWFST(FFIObject):
         DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
         DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
         DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
+        DRAGONFLY_API void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp);
     """
 
     zero = float('inf')  # Weight of non-final states; a state is final if and only if its weight is not equal to self.zero
@@ -296,6 +297,17 @@ class NativeWFST(FFIObject):
                 for symbol in output_p[0:output_len_p[0]]
                 if include_silent or symbol not in self.silent_olabels)
         return False
+
+    ####################################################################################################################
+
+    @classmethod
+    def compile_text(cls, fst_text, isymbols_filename, osymbols_filename):
+        super(NativeWFST, cls).__init__()
+        native_obj = cls._lib.fst__compile_text(encode(fst_text), encode(isymbols_filename), encode(osymbols_filename))
+        if not native_obj:
+            raise KaldiError("Failed fst__compile_text")
+        # FIXME: memory leak!
+        return native_obj
 
 
 ########################################################################################################################
