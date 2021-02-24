@@ -260,7 +260,7 @@ class Compiler(object):
         self._lexicon_files_stale = False
 
         if self.native_fst:
-            NativeWFST.init(
+            NativeWFST.init_class(
                 osymbol_table=self.model.words_table,
                 isymbol_table=self.model.words_table if self.decoding_framework != 'laf' else SymbolTable(self.files_dict['words.relabeled.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)

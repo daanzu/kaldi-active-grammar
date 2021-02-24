@@ -28,7 +28,11 @@ def decode(binary):
 class FFIObject(object):
 
     def __init__(self):
-        self._lib = _ffi.init_once(self._init_ffi, self.__class__.__name__ + '._init_ffi')
+        self.init_ffi()
+
+    @classmethod
+    def init_ffi(cls):
+        cls._lib = _ffi.init_once(cls._init_ffi, cls.__name__ + '._init_ffi')
 
     @classmethod
     def _init_ffi(cls):

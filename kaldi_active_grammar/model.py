@@ -18,6 +18,7 @@ except ImportError:
 
 from . import _log, KaldiError, REQUIRED_MODEL_VERSION
 from .wfst import SymbolTable
+from .wrapper import KaldiModelBuildUtils
 from .utils import ExternalProcess, find_file, load_symbol_table, show_donation_message, symbol_table_lookup
 import kaldi_active_grammar.defaults as defaults
 import kaldi_active_grammar.utils as utils
@@ -360,26 +361,41 @@ class Model(object):
         generate_file_from_base_with_user_lexicon('lexiconp_disambig.txt', lambda word, word_id, phones:
             '%s\t1.0 %s' % (word, ' '.join(phones)))
 
-        # FIXME: internalize this
-        format = ExternalProcess.get_list_formatter(self.files_dict)
-        command = ExternalProcess.make_lexicon_fst(*format(
-            '--left-context-phones={left_context_phones_txt}',
-            '--nonterminals={nonterminals_txt}',
-            '--sil-prob=0.5',
-            '--sil-phone=SIL',
-            '--sil-disambig=#14',  # FIXME: lookup correct value
-            '{lexiconp_disambig_txt}',
-        ))
-        command |= ExternalProcess.fstcompile(*format(
-            '--isymbols={phones_txt}',
-            '--osymbols={words_txt}',
-            '--keep_isymbols=false',
-            '--keep_osymbols=false',
-        ))
-        command |= ExternalProcess.fstaddselfloops(*format('{wdisambig_phones_int}', '{wdisambig_words_int}'), **ExternalProcess.get_debug_stderr_kwargs(_log))
-        command |= ExternalProcess.fstarcsort(*format('--sort_type=olabel'))
-        command |= self.files_dict['L_disambig.fst']
-        command()
+        if True:
+            lexicon_fst_text = KaldiModelBuildUtils.make_lexicon_fst(
+                left_context_phones=self.files_dict['left_context_phones_txt'],
+                nonterminals=self.files_dict['nonterminals_txt'],
+                sil_prob=0.5,
+                sil_phone='SIL',
+                sil_disambig='#14',  # FIXME: lookup correct value
+                lexiconp=self.files_dict['lexiconp_disambig_txt'],
+            )
+            KaldiModelBuildUtils.build_L_disambig(
+                lexicon_fst_text.encode(encoding='latin-1'),
+                phones_file=self.files_dict['phones_txt'], words_file=self.files_dict['words_txt'],
+                wdisambig_phones_file=self.files_dict['wdisambig_phones_int'], wdisambig_words_file=self.files_dict['wdisambig_words_int'],
+                fst_out_file=self.files_dict['L_disambig_fst'])
+
+        else:
+            format = ExternalProcess.get_list_formatter(self.files_dict)
+            command = ExternalProcess.make_lexicon_fst(*format(
+                '--left-context-phones={left_context_phones_txt}',
+                '--nonterminals={nonterminals_txt}',
+                '--sil-prob=0.5',
+                '--sil-phone=SIL',
+                '--sil-disambig=#14',  # FIXME: lookup correct value
+                '{lexiconp_disambig_txt}',
+            ))
+            command |= ExternalProcess.fstcompile(*format(
+                '--isymbols={phones_txt}',
+                '--osymbols={words_txt}',
+                '--keep_isymbols=false',
+                '--keep_osymbols=false',
+            ))
+            command |= ExternalProcess.fstaddselfloops(*format('{wdisambig_phones_int}', '{wdisambig_words_int}'), **ExternalProcess.get_debug_stderr_kwargs(_log))
+            command |= ExternalProcess.fstarcsort(*format('--sort_type=olabel'))
+            command |= self.files_dict['L_disambig.fst']
+            command()
 
         # FIXME: generate_words_relabeled_file(self.files_dict['words.txt'], self.files_dict['relabel_ilabels.int'], self.files_dict['words.relabeled.txt'])
 

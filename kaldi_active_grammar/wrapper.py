@@ -8,8 +8,8 @@
 Wrapper classes for Kaldi
 """
 
-import json, os.path
-from io import open
+import argparse, json, os.path, sys
+from io import open, StringIO
 
 from six.moves import zip
 import numpy as np
@@ -17,7 +17,7 @@ import numpy as np
 from . import _log, KaldiError
 from .ffi import FFIObject, _ffi, decode as de, encode as en
 from .utils import clock, find_file, show_donation_message, symbol_table_lookup
-from .wfst import WFST, NativeWFST
+from .wfst import NativeWFST
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('wrapper')
@@ -640,3 +640,29 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
         if not result:
             raise KaldiError("decoding error")
         return finalize
+
+
+########################################################################################################################
+
+class KaldiModelBuildUtils(FFIObject):
+
+    _library_header_text = """
+        DRAGONFLY_API bool utils__build_L_disambig(char* lexicon_fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp, char* wdisambig_phones_file_cp, char* wdisambig_words_file_cp, char* fst_out_file_cp);
+    """
+
+    @classmethod
+    def build_L_disambig(cls, lexicon_fst_text_bytes, phones_file, words_file, wdisambig_phones_file, wdisambig_words_file, fst_out_file):
+        cls.init_ffi()
+        result = cls._lib.utils__build_L_disambig(lexicon_fst_text_bytes, en(phones_file), en(words_file), en(wdisambig_phones_file), en(wdisambig_words_file), en(fst_out_file))
+        if not result: raise KaldiError("failed utils__build_L_disambig")
+
+    @staticmethod
+    def make_lexicon_fst(**kwargs):
+        try:
+            from .kaldi.make_lexicon_fst import main
+            old_stdout = sys.stdout
+            sys.stdout = output = StringIO()
+            main(argparse.Namespace(**kwargs))
+            return output.getvalue()
+        finally:
+            sys.stdout = old_stdout

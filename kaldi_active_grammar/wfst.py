@@ -182,7 +182,7 @@ class NativeWFST(FFIObject):
     native = property(lambda self: True)
 
     @classmethod
-    def init(cls, isymbol_table, wildcard_nonterms, osymbol_table=None):
+    def init_class(cls, isymbol_table, wildcard_nonterms, osymbol_table=None):
         if osymbol_table is None: osymbol_table = isymbol_table
         cls.word_to_ilabel_map = isymbol_table.word_to_id_map
         cls.word_to_olabel_map = osymbol_table.word_to_id_map
@@ -196,7 +196,7 @@ class NativeWFST(FFIObject):
         assert cls.word_to_ilabel_map[cls.eps] == 0
 
     def __init__(self):
-        super(NativeWFST, self).__init__()
+        super().__init__()
         self.native_obj = self._lib.fst__construct()
         if self.native_obj == _ffi.NULL:
             raise KaldiError("Failed fst__construct")
@@ -303,7 +303,7 @@ class NativeWFST(FFIObject):
 
     @classmethod
     def load_file(cls, fst_filename):
-        super(NativeWFST, cls).__init__()
+        cls.init_ffi()
         native_obj = cls._lib.fst__load_file(encode(fst_filename))
         if not native_obj:
             raise KaldiError("Failed fst__load_file")
@@ -312,7 +312,7 @@ class NativeWFST(FFIObject):
 
     @classmethod
     def compile_text(cls, fst_text, isymbols_filename, osymbols_filename):
-        super(NativeWFST, cls).__init__()
+        cls.init_ffi()
         native_obj = cls._lib.fst__compile_text(encode(fst_text), encode(isymbols_filename), encode(osymbols_filename))
         if not native_obj:
             raise KaldiError("Failed fst__compile_text")
