@@ -320,6 +320,7 @@ class Compiler(object):
         self._num_kaldi_rules -= 1
         return id
 
+
     ####################################################################################################################
     # Methods for compiling graphs.
 
@@ -497,30 +498,31 @@ class Compiler(object):
     #         self.fst_cache.add(filepath)
 
     def compile_top_fst(self):
-        kaldi_rule = KaldiRule(self, 'top', nonterm=False)
-        fst = kaldi_rule.fst
-        state_initial = fst.add_state(initial=True)
-        state_return = fst.add_state()
-        state_final = fst.add_state(final=True)
-        for word in self._noise_words:
-            fst.add_arc(state_initial, state_final, word)  # FIXME: loop?
-        for i in range(self._max_rule_id + 1):
-            # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i), olabel=WFST.eps)
-            # fst.add_arc(state_initial, state_final, '#nonterm:rule'+str(i))
-            fst.add_arc(state_initial, state_return, '#nonterm:rule'+str(i))
-        fst.add_arc(state_return, state_final, None, '#nonterm:end')
-        kaldi_rule.compile()
-        return kaldi_rule
+        return self._build_top_fst(nonterms=['#nonterm:rule'+str(i) for i in range(self._max_rule_id + 1)], noise_words=self._noise_words).compile()
 
     def compile_top_fst_dictation_only(self):
+        return self._build_top_fst(nonterms=['#nonterm:dictation'], noise_words=self._noise_words).compile()
+
+    def _build_top_fst(self, nonterms, noise_words):
         kaldi_rule = KaldiRule(self, 'top', nonterm=False)
         fst = kaldi_rule.fst
         state_initial = fst.add_state(initial=True)
-        state_return = fst.add_state()
         state_final = fst.add_state(final=True)
-        fst.add_arc(state_initial, state_return, '#nonterm:dictation')
+
+        state_return = fst.add_state()
+        for nonterm in nonterms:
+            fst.add_arc(state_initial, state_return, nonterm)
         fst.add_arc(state_return, state_final, None, '#nonterm:end')
-        kaldi_rule.compile()
+
+        if noise_words:
+            for (state_from, state_to) in [
+                    (state_initial, state_final),
+                    # (state_initial, state_initial),  # FIXME: test this
+                    # (state_final, state_final),
+                    ]:
+                for word in noise_words:
+                    fst.add_arc(state_from, state_to, word)
+
         return kaldi_rule
 
     def _get_dictation_fst_filepath(self):
@@ -607,6 +609,7 @@ class Compiler(object):
                     kaldi_rule.load()
                     assert kaldi_rule.loaded
                     self.load_queue.remove(kaldi_rule)
+
 
     ####################################################################################################################
     # Methods for recognition.
