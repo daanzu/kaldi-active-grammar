@@ -38,10 +38,10 @@ class PlainDictationRecognizer(object):
 
         else:
             self._compiler = Compiler(model_dir, tmp_dir)
-            top_fst = self._compiler.compile_top_fst_dictation_only()
+            top_fst_rule = self._compiler.compile_top_fst_dictation_only()
             dictation_fst_file = self._compiler.dictation_fst_filepath
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
-                top_fst_file=top_fst.filepath, dictation_fst_file=dictation_fst_file, **kwargs)
+                top_fst=top_fst_rule.fst_wrapper, dictation_fst_file=dictation_fst_file, **kwargs)
 
 
     def decode_utterance(self, samples_data, chunk_size=None):

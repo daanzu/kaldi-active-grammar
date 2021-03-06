@@ -62,8 +62,11 @@ class KaldiRule(object):
 
     fst_cache = property(lambda self: self.compiler.fst_cache)
     decoder = property(lambda self: self.compiler.decoder)
+
     pending_compile = property(lambda self: (self in self.compiler.compile_queue) or (self in self.compiler.compile_duplicate_filename_queue))
     pending_load = property(lambda self: self in self.compiler.load_queue)
+
+    fst_wrapper = property(lambda self: self.fst if self.fst.native else self.filepath)
     filename = property(lambda self: self.fst.filename)
 
     @property
@@ -284,7 +287,7 @@ class Compiler(object):
         decoder_kwargs = dict(model_dir=self.model_dir, tmp_dir=self.tmp_dir, dictation_fst_file=dictation_fst_file, max_num_rules=self._max_rule_id+1, config=config)
         if self.decoding_framework == 'agf':
             top_fst_rule = self.compile_top_fst()
-            decoder_kwargs.update(top_fst=(top_fst_rule.fst if top_fst_rule.fst.native else top_fst_rule.filepath))
+            decoder_kwargs.update(top_fst=top_fst_rule.fst_wrapper)
             self.decoder = KaldiAgfNNet3Decoder(**decoder_kwargs)
         elif self.decoding_framework == 'laf':
             self.decoder = KaldiLafNNet3Decoder(**decoder_kwargs)
