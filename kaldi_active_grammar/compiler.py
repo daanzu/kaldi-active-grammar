@@ -27,19 +27,21 @@ class KaldiRule(object):
 
     cls_lock = threading.Lock()
 
-    def __init__(self, compiler, name, nonterm=True, has_dictation=None, is_complex=None):
+    def __init__(self, compiler, name, nonterm=True, exported=True, has_dictation=None, is_complex=None):
         """
-        :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
+        :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST).
+        :param exported: bool whether rule is a top-level rule (with an arc to it from the top_fst), rather than needing to be referenced from another rule.
         """
         self.compiler = compiler
         self.name = name
-        self.nonterm = nonterm
+        assert nonterm or not exported
+        self.nonterm = bool(nonterm)
+        self.exported = bool(exported)
         self.has_dictation = has_dictation
         self.is_complex = is_complex
 
         # id: matches "nonterm:rule__"; 0-based; can/will change due to rule unloading!
-        self.id = int(self.compiler.alloc_rule_id() if nonterm else -1)
-        if self.id > self.compiler._max_rule_id: raise KaldiError("KaldiRule id > compiler._max_rule_id")
+        self.id = int(self.compiler._kaldi_rule_id_allocator.alloc_id(self.exported) if self.nonterm else -1)
         if self.id in self.compiler.kaldi_rule_by_id_dict: raise KaldiError("KaldiRule id already in use")
         if self.id >= 0:
             self.compiler.kaldi_rule_by_id_dict[self.id] = self
@@ -156,9 +158,9 @@ class KaldiRule(object):
             self._do_reloading()
         else:
             if self.compiler.decoding_framework == 'agf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self.fst if self.fst.native else self.filepath)
+                grammar_fst_index = self.decoder.add_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))
             elif self.compiler.decoding_framework == 'laf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self._fst_text)
+                grammar_fst_index = self.decoder.add_grammar_fst(self.id, self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self.id, self._fst_text)
             else: raise KaldiError("unknown compiler decoding_framework")
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d != %d for %s" % (grammar_fst_index, self.id, self)
 
@@ -213,15 +215,9 @@ class KaldiRule(object):
             if self in self.compiler.compile_duplicate_filename_queue: self.compiler.compile_duplicate_filename_queue.remove(self)
             if self in self.compiler.load_queue: self.compiler.load_queue.remove(self)
 
-        # Adjust other kaldi_rules ids down, if above self.id, then rebuild dict
-        other_kaldi_rules = list(self.compiler.kaldi_rule_by_id_dict.values())
-        other_kaldi_rules.remove(self)
-        for kaldi_rule in other_kaldi_rules:
-            if kaldi_rule.id > self.id:
-                kaldi_rule.id -= 1
-        self.compiler.kaldi_rule_by_id_dict = { kaldi_rule.id: kaldi_rule for kaldi_rule in other_kaldi_rules }
+        del self.compiler.kaldi_rule_by_id_dict[self.id]
+        self.compiler._kaldi_rule_id_allocator.free_id(self.id)
 
-        self.compiler.free_rule_id()
         self.destroyed = True
 
 
@@ -267,12 +263,10 @@ class Compiler(object):
                 osymbol_table=self.model.words_table,
                 isymbol_table=self.model.words_table if self.decoding_framework != 'laf' else SymbolTable(self.files_dict['words.relabeled.txt']),
                 wildcard_nonterms=self.wildcard_nonterms)
+        self._kaldi_rule_id_allocator = IdAllocator(max_num_exported_rules=1000, max_num_nonexported_rules=9000)
         self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
         self.decoder = None
 
-        self._num_kaldi_rules = 0
-        self._max_rule_id = 999
-        self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
         self._oov_word = '<unk>' if ('<unk>' in self.model.words_table) else None  # FIXME: make this configurable, for different models
         self._noise_words = frozenset(['<unk>', '!SIL']) & frozenset(self.model.words_table.words)  # FIXME: make this configurable, for different models
 
@@ -284,7 +278,8 @@ class Compiler(object):
     def init_decoder(self, config=None, dictation_fst_file=None):
         if self.decoder: raise KaldiError("Decoder already initialized")
         if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath
-        decoder_kwargs = dict(model_dir=self.model_dir, tmp_dir=self.tmp_dir, dictation_fst_file=dictation_fst_file, max_num_rules=self._max_rule_id+1, config=config)
+        decoder_kwargs = dict(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
+            dictation_fst_file=dictation_fst_file, max_num_rules=self._kaldi_rule_id_allocator.max_num_rules, config=config)
         if self.decoding_framework == 'agf':
             top_fst_rule = self.compile_top_fst()
             decoder_kwargs.update(top_fst=top_fst_rule.fst_wrapper)
@@ -301,7 +296,6 @@ class Compiler(object):
     files_dict = property(lambda self: self.model.files_dict)
     fst_cache = property(lambda self: self.model.fst_cache)
 
-    num_kaldi_rules = property(lambda self: self._num_kaldi_rules)
     lexicon_words = property(lambda self: self.model.words_table.word_to_id_map)
     _longest_word = property(lambda self: self.model.longest_word)
 
@@ -309,16 +303,6 @@ class Compiler(object):
     _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir,
         (defaults.DEFAULT_DICTATION_FST_FILENAME if self.decoding_framework == 'agf' else 'Gr.fst')))  # FIXME: generalize
     _plain_dictation_hclg_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME))
-
-    def alloc_rule_id(self):
-        id = self._num_kaldi_rules
-        self._num_kaldi_rules += 1
-        return id
-
-    def free_rule_id(self):
-        id = self._num_kaldi_rules
-        self._num_kaldi_rules -= 1
-        return id
 
 
     ####################################################################################################################
@@ -498,13 +482,13 @@ class Compiler(object):
     #         self.fst_cache.add(filepath)
 
     def compile_top_fst(self):
-        return self._build_top_fst(nonterms=['#nonterm:rule'+str(i) for i in range(self._max_rule_id + 1)], noise_words=self._noise_words).compile()
+        return self._build_top_fst(nonterms=['#nonterm:rule'+str(i) for i in range(self._kaldi_rule_id_allocator.max_num_exported_rules)], noise_words=self._noise_words).compile()
 
     def compile_top_fst_dictation_only(self):
         return self._build_top_fst(nonterms=['#nonterm:dictation'], noise_words=self._noise_words).compile()
 
     def _build_top_fst(self, nonterms, noise_words):
-        kaldi_rule = KaldiRule(self, 'top', nonterm=False)
+        kaldi_rule = KaldiRule(self, 'top', nonterm=False, exported=False)
         fst = kaldi_rule.fst
         state_initial = fst.add_state(initial=True)
         state_final = fst.add_state(final=True)
@@ -754,3 +738,32 @@ def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=No
         subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
         if format_kwargs_update:
             format_kwargs.update(format_kwargs_update)
+
+class IdAllocator(object):
+
+    def __init__(self, max_num_exported_rules, max_num_nonexported_rules):
+        self.max_num_exported_rules = int(max_num_exported_rules)
+        self.max_num_nonexported_rules = int(max_num_nonexported_rules)
+
+        self.max_num_rules = self.max_num_exported_rules + self.max_num_nonexported_rules
+        self.num_exported_rules = 0
+        self.num_nonexported_rules = 0
+
+    num_rules = property(lambda self: self.num_exported_rules + self.num_nonexported_rules)
+
+    def alloc_id(self, is_exported):
+        if is_exported:
+            assert self.num_exported_rules < self.max_num_exported_rules
+            id = self.num_exported_rules
+            self.num_exported_rules += 1
+        else:
+            assert self.num_nonexported_rules < self.max_num_nonexported_rules
+            id = self.num_nonexported_rules + self.max_num_exported_rules  # Must offset by all exported rules
+            self.num_nonexported_rules += 1
+        return id
+
+    def free_id(self, id):
+        is_exported = (id < self.num_exported_rules)
+        # FIXME!!!!!
+        # if is_exported:
+        return id

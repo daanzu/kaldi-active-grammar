@@ -399,13 +399,13 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
-        DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, void* grammar_fst_cp);
-        DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, char* grammar_fst_filename_cp);
+        DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+        DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
-        DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-            bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
+        DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
+            int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state);
     """
 
     def __init__(self, *, top_fst=None, dictation_fst_file=None, config=None, **kwargs):
@@ -445,16 +445,15 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
                 raise KaldiError("failed nnet3_agf__destruct")
             self._model = None
 
-    def add_grammar_fst(self, grammar_fst):
+    def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
         if isinstance(grammar_fst, NativeWFST):
-            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(self._model, grammar_fst.compiled_native_obj)
+            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(self._model, grammar_fst_index, grammar_fst.compiled_native_obj)
         elif isinstance(grammar_fst, str):
-            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._model, en(os.path.normpath(grammar_fst)))
+            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._model, grammar_fst_index, en(os.path.normpath(grammar_fst)))
         else: raise KaldiError("unrecognized grammar_fst type")
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst)
-        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
         self.num_grammars += 1
         return grammar_fst_index
 
@@ -477,15 +476,11 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def decode(self, frames, finalize, grammars_activity=None):
         """Continue decoding with given new audio data."""
-        # grammars_activity = [True] * self.num_grammars
-        # grammars_activity = np.random.choice([True, False], len(grammars_activity)).tolist(); print grammars_activity; time.sleep(5)
         if grammars_activity is None:
             grammars_activity = []
         else:
             # Start of utterance
-            _log.log(5, "decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
-            if len(grammars_activity) != self.num_grammars:
-                _log.error("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
+            _log.log(5, "decode: grammars_activity = %s", grammars_activity)
 
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
@@ -551,12 +546,12 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
-        DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, void* grammar_fst_cp);
-        DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, char* grammar_fst_cp);
+        DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+        DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_text_cp);
         DRAGONFLY_API bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_laf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
-        DRAGONFLY_API bool nnet3_laf__decode(void* model_vp, float samp_freq, int32_t num_frames, float* frames, bool finalize,
-            bool* grammars_activity_cp, int32_t grammars_activity_cp_size, bool save_adaptation_state);
+        DRAGONFLY_API bool nnet3_laf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
+            int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state);
     """
 
     def __init__(self, dictation_fst_file=None, config=None, **kwargs):
@@ -583,22 +578,20 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
                 raise KaldiError("failed nnet3_laf__destruct")
             self._model = None
 
-    def add_grammar_fst(self, grammar_fst):
+    def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
-        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst(self._model, grammar_fst.native_obj)
+        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst)
-        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
         self.num_grammars += 1
         return grammar_fst_index
 
-    def add_grammar_fst_text(self, grammar_fst_text):
+    def add_grammar_fst_text(self, grammar_fst_index, grammar_fst_text):
         assert grammar_fst_text
         _log.log(8, "%s: adding grammar_fst_text: %r", self, grammar_fst_text[:512])
-        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_text(self._model, en(grammar_fst_text))
+        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_text(self._model, grammar_fst_index, en(grammar_fst_text))
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst_text[:512])
-        assert grammar_fst_index == self.num_grammars, "add_grammar_fst allocated invalid grammar_fst_index"
         self.num_grammars += 1
         return grammar_fst_index
 
@@ -617,15 +610,11 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
 
     def decode(self, frames, finalize, grammars_activity=None):
         """Continue decoding with given new audio data."""
-        # grammars_activity = [True] * self.num_grammars
-        # grammars_activity = np.random.choice([True, False], len(grammars_activity)).tolist(); print grammars_activity; time.sleep(5)
         if grammars_activity is None:
             grammars_activity = []
         else:
             # Start of utterance
-            _log.log(5, "decode: grammars_activity = %s", ''.join('1' if a else '0' for a in grammars_activity))
-            if len(grammars_activity) != self.num_grammars:
-                _log.error("wrong len(grammars_activity) = %d != %d = num_grammars" % (len(grammars_activity), self.num_grammars))
+            _log.log(5, "decode: grammars_activity = %s", grammars_activity)
 
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
