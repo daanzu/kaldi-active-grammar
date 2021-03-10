@@ -94,7 +94,7 @@ class KaldiRule(object):
                 assert self.filename
             # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
 
-        if self.compiler.cache_fsts and self.fst_cache.fst_is_current(self.filepath, touch=True):
+        if self.compiler.cache_fsts and self.fst_cache.fst_is_current(self.filepath, touch=False):
             _log.debug("%s: Skipped FST compilation thanks to FileCache" % self)
             if self.compiler.decoding_framework == 'agf' and self.fst.native:
                 self.fst.compiled_native_obj = NativeWFST.load_file(self.filepath)
