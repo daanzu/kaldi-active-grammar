@@ -745,25 +745,35 @@ class IdAllocator(object):
         self.max_num_exported_rules = int(max_num_exported_rules)
         self.max_num_nonexported_rules = int(max_num_nonexported_rules)
 
-        self.max_num_rules = self.max_num_exported_rules + self.max_num_nonexported_rules
         self.num_exported_rules = 0
         self.num_nonexported_rules = 0
+        self.free_exported_ids = set()  # Free IDs below num_exported_rules
+        self.free_nonexported_ids = set()  # Free IDs below num_nonexported_rules
 
-    num_rules = property(lambda self: self.num_exported_rules + self.num_nonexported_rules)
+    max_num_rules = property(lambda self: self.max_num_exported_rules + self.max_num_nonexported_rules)
+    num_rules = property(lambda self: self.num_exported_rules + self.num_nonexported_rules - len(self.free_exported_ids) - len(self.free_nonexported_ids))
 
-    def alloc_id(self, is_exported):
-        if is_exported:
-            assert self.num_exported_rules < self.max_num_exported_rules
-            id = self.num_exported_rules
-            self.num_exported_rules += 1
+    def alloc_id(self, exported):
+        if exported:
+            if self.free_exported_ids:
+                id = self.free_exported_ids.pop()
+            else:
+                assert self.num_exported_rules < self.max_num_exported_rules
+                id = self.num_exported_rules
+                self.num_exported_rules += 1
         else:
-            assert self.num_nonexported_rules < self.max_num_nonexported_rules
-            id = self.num_nonexported_rules + self.max_num_exported_rules  # Must offset by all exported rules
-            self.num_nonexported_rules += 1
+            if self.free_nonexported_ids:
+                id = self.free_nonexported_ids.pop()
+            else:
+                assert self.num_nonexported_rules < self.max_num_nonexported_rules
+                id = self.num_nonexported_rules + self.max_num_exported_rules  # Must offset by all exported rules
+                self.num_nonexported_rules += 1
         return id
 
     def free_id(self, id):
-        is_exported = (id < self.num_exported_rules)
-        # FIXME!!!!!
-        # if is_exported:
+        exported = (id < self.max_num_exported_rules)
+        if exported:
+            self.free_exported_ids.add(id)
+        else:
+            self.free_nonexported_ids.add(id)
         return id
