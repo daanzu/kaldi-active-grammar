@@ -127,7 +127,7 @@ class WFST(object):
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
         """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. Used for parsing by KaldiAG.compiler. """
-        queue = collections.deque()  # entries: (state, path of ilabels of arcs to state, index into target_words of remaining words)
+        queue = collections.deque()  # entries: (state, path of olabels of arcs to state, index into target_words of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
             state, path, target_word_index = queue.popleft()
@@ -171,6 +171,8 @@ class NativeWFST(FFIObject):
         DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
         DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
         DRAGONFLY_API void* fst__load_file(char* filename_cp);
+        DRAGONFLY_API bool fst__write_file(void* fst_vp, char* filename_cp);
+        DRAGONFLY_API bool fst__write_file_const(void* fst_vp, char* filename_cp);
         DRAGONFLY_API bool fst__print(void* fst_vp, char* filename_cp);
         DRAGONFLY_API void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp);
     """
@@ -301,6 +303,16 @@ class NativeWFST(FFIObject):
         return False
 
     ####################################################################################################################
+
+    def write_file(self, fst_filename):
+        result = self._lib.fst__write_file(self.native_obj, encode(fst_filename))
+        if not result:
+            raise KaldiError("Failed fst__write_file")
+
+    def write_file_const(self, fst_filename):
+        result = self._lib.fst__write_file_const(self.native_obj, encode(fst_filename))
+        if not result:
+            raise KaldiError("Failed fst__write_file")
 
     def print(self, fst_filename=None):
         result = self._lib.fst__print(self.native_obj, (encode(fst_filename) if fst_filename is not None else _ffi.NULL))
