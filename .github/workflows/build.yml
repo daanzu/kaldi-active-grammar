@@ -15,7 +15,7 @@ jobs:
     if: true
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.9
-      MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
+      # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
     steps:
       - uses: actions/checkout@v2
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
@@ -33,7 +33,11 @@ jobs:
           brew install autoconf
           brew install sox
           brew install libtool
-      - run: |
+          brew reinstall gfortran  # for openblas
+      - name: MKL
+        if: ${{ env.MKL_URL != 0 }}
+        run: |
+          echo "Installing MKL from: $MKL_URL"
           export MKL_FILE=${MKL_URL##*/}
           export MKL_FILE=${MKL_FILE%\.dmg}
           wget --no-verbose $MKL_URL
@@ -52,8 +56,8 @@ jobs:
   build-linux:
     runs-on: ubuntu-18.04
     if: true
-    env:
-      MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz
+    # env:
+      # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz
     steps:
       - uses: actions/checkout@v2
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
@@ -154,6 +158,7 @@ jobs:
       #     zzzzz
       #   shell: cmd
       - name: Install MKL
+        if: ${{ env.MKL_URL != 0 }}
         run: |
           echo "MKL_URL: $MKL_URL"
           mkdir -p mkl
