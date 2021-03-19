@@ -610,18 +610,29 @@ class Compiler(object):
             if self.fst_cache.dirty:
                 self.fst_cache.save()
 
+    def parse_output_for_rule(self, output, kaldi_rule):
+        for kr in self.kaldi_rule_by_id_dict.values():
+            self.decoder.set_mimic_grammar_fst(kr.id, kr.fst)
+        words = output.split()
+        labels = self.decoder.mimic_grammar([NativeWFST.word_to_ilabel_map[word] for word in words], kaldi_rule.id)
+        if labels is False:
+            return None
+        # words = [NativeWFST.olabel_to_word_map[label] for label in labels]  # FIXME: actually do the mapping?
+        return words
+
     wildcard_nonterms = ('#nonterm:dictation', '#nonterm:dictation_cloud')
 
-    def parse_output_for_rule(self, kaldi_rule, output):
+    def parse_output_for_rule_token(self, kaldi_rule, output):
         """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
-        labels = kaldi_rule.fst.does_match(output.split(), wildcard_nonterms=self.wildcard_nonterms)
+        words = output.split()
+        labels = self.mimic_for_rule(words, kaldi_rule)
         self._log.log(5, "parse_output_for_rule(%s, %r) got %r", kaldi_rule, output, labels)
         if labels is False:
             return None
-        words = [label for label in labels if not label.startswith('#nonterm:')]
-        parsed_output = ' '.join(words)
-        if parsed_output.lower() != output:
-            self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
+        # words = [label for label in labels if not label.startswith('#nonterm:')]
+        # parsed_output = ' '.join(words)
+        # if parsed_output.lower() != output:
+        #     self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
         return words
 
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
@@ -720,6 +731,7 @@ class Compiler(object):
                 words_are_dictation_mask.append(in_dictation)
 
         return kaldi_rule, words, words_are_dictation_mask, in_dictation
+
 
 ########################################################################################################################
 # Utility functions.
