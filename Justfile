@@ -14,7 +14,9 @@ build-docker:
 build-linux python='python3':
 	mkdir -p _skbuild
 	rm -rf kaldi_active_grammar/exec
-	rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
+	rm -rf _skbuild/*/cmake-build/ _skbuild/*/cmake-install/ _skbuild/*/setuptools/
+	# {{python}} -m pip install -r requirements-build.txt
+	# MKL with INTEL_MKL_DIR=/opt/intel/mkl/
 	{{python}} setup.py bdist_wheel
 
 build-dockcross kaldi_branch mkl_url="":

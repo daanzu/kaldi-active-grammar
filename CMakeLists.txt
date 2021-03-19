@@ -61,23 +61,20 @@ if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   # FIXME: copy files?
   # https://cmake.org/cmake/help/latest/command/foreach.html
   # https://stackoverflow.com/questions/34799916/copy-file-from-source-directory-to-binary-directory-using-cmake
-endif()
-
-if(DEFINED ENV{INTEL_MKL_DIR})
-  set(INTEL_MKL_DIR $ENV{INTEL_MKL_DIR})
-else()
-  set(INTEL_MKL_DIR "/opt/intel/mkl/")
-endif()
-if(EXISTS "${INTEL_MKL_DIR}")
-  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mkl-root=${INTEL_MKL_DIR})
-else()
-  message(WARNING "cannot find INTEL_MKL_DIR: ${INTEL_MKL_DIR}")
-  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no)
-endif()
-
-# set(KALDI_CXXFLAGS -O2 -g0)
+endif()  
 
 find_program(MAKE_EXE NAMES make gmake nmake)
+
+if(DEFINED ENV{INTEL_MKL_DIR})
+  # Default: INTEL_MKL_DIR=/opt/intel/mkl/
+  message("Compiling with MKL in: $ENV{INTEL_MKL_DIR}")
+  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=MKL --mkl-root=$ENV{INTEL_MKL_DIR})
+  set(MATHLIB_BUILD_COMMAND true)
+else()  
+  message("Compiling with OpenBLAS")
+  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
+  set(MATHLIB_BUILD_COMMAND cd tools && ${MAKE_EXE} ${MAKE_FLAGS} openblas && cd ..)
+endif()
 
 if(DEFINED ENV{KALDI_BRANCH})
   set(KALDI_BRANCH $ENV{KALDI_BRANCH})
@@ -86,13 +83,15 @@ else()
   # set(KALDI_BRANCH "origin/master")
 endif()
 
-message("   MAKE_EXE              = ${MAKE_EXE}")
-message("   PYTHON_EXECUTABLE     = ${PYTHON_EXECUTABLE}")
-message("   PYTHON_INCLUDE_DIR    = ${PYTHON_INCLUDE_DIR}")
-message("   PYTHON_LIBRARY        = ${PYTHON_LIBRARY}")
-message("   PYTHON_VERSION_STRING = ${PYTHON_VERSION_STRING}")
-message("   SKBUILD               = ${SKBUILD}")
-message("   KALDI_BRANCH          = ${KALDI_BRANCH}")
+message("MAKE_EXE              = ${MAKE_EXE}")
+message("PYTHON_EXECUTABLE     = ${PYTHON_EXECUTABLE}")
+message("PYTHON_INCLUDE_DIR    = ${PYTHON_INCLUDE_DIR}")
+message("PYTHON_LIBRARY        = ${PYTHON_LIBRARY}")
+message("PYTHON_VERSION_STRING = ${PYTHON_VERSION_STRING}")
+message("SKBUILD               = ${SKBUILD}")
+message("KALDI_BRANCH          = ${KALDI_BRANCH}")
+
+# CXXFLAGS are set and exported in kaldi-configure-wrapper.sh
 
 if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   set(STRIP_LIBS_COMMAND find src/lib tools/openfst/lib -name *${CMAKE_SHARED_LIBRARY_SUFFIX} | xargs strip)
@@ -108,7 +107,7 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
     GIT_SHALLOW       TRUE
     CONFIGURE_COMMAND sed -i.bak -e "s/status=0/exit 0/g" tools/extras/check_dependencies.sh && cp ${PROJECT_SOURCE_DIR}/building/kaldi-configure-wrapper.sh src/
     BUILD_IN_SOURCE   TRUE
-    BUILD_COMMAND     cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
+    BUILD_COMMAND     ${MATHLIB_BUILD_COMMAND} && cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
     LIST_SEPARATOR    " "
     INSTALL_COMMAND   ${STRIP_LIBS_COMMAND} && mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST}
     )
