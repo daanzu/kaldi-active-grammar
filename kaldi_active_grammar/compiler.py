@@ -286,6 +286,7 @@ class Compiler(object):
             tmp_dir=self.tmp_dir,
             dictation_fst_file=dictation_fst_file,
             max_num_rules=self._kaldi_rule_id_allocator.max_num_rules,
+            max_num_exported_rules=self._kaldi_rule_id_allocator.max_num_exported_rules,
             config=config,
             )
         if self.decoding_framework == 'agf':
