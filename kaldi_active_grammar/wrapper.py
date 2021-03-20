@@ -407,8 +407,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
             int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state);
         DRAGONFLY_API bool nnet3_agf__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
-        DRAGONFLY_API bool nnet3_agf__mimic(void* model_vp, int32_t target_labels_cp[], uint32_t target_labels_len,
-            int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, int32_t grammar_fst_index, int32_t output_labels_cp[], uint32_t* output_labels_len);
+        DRAGONFLY_API bool nnet3_agf__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
+            int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
     """
 
     def __init__(self, *, top_fst=None, dictation_fst_file=None, config=None, **kwargs):
@@ -502,18 +502,15 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("set_mimic_grammar_fst error: %r, %r" % (grammar_fst_index, grammar_fst))
         return True
 
-    def mimic(self, target_labels, grammars_activity, grammar_fst_index=None, output_max_length=1024):
+    def mimic(self, input, grammars_activity, grammar_fst_index=None, output_max_length=4*1024):
         assert (grammar_fst_index is None) or (isinstance(grammar_fst_index, int) and grammar_fst_index >= 0)
-        output_p = _ffi.new('int32_t[]', output_max_length) if output_max_length else 0
-        output_len_p = _ffi.new('uint32_t*', output_max_length) if output_max_length else 0
+        output_p = _ffi.new('char[]', output_max_length) if output_max_length else _ffi.NULL
         if grammar_fst_index is None: grammar_fst_index = -1  # No given grammar.
-        result = self._lib.nnet3_agf__mimic(self._model, target_labels, len(target_labels),
+        result = self._lib.nnet3_agf__mimic(self._model, en(input),
             (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
-            grammar_fst_index, output_p, output_len_p)
-        if output_len_p[0] > output_max_length:
-            raise KaldiError("nnet3_agf__mimic needed too much output length")
+            grammar_fst_index, output_p, output_max_length)
         if result:
-            return tuple(output_p[0:output_len_p[0]]) if output_max_length else True
+            return de(_ffi.string(output_p)) if output_max_length else True
         return False
 
 

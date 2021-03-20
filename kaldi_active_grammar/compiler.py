@@ -610,24 +610,13 @@ class Compiler(object):
             if self.fst_cache.dirty:
                 self.fst_cache.save()
 
-    def mimic(self, output, grammars_activity):
+    def mimic(self, text, grammars_activity):
         for kr in self.kaldi_rule_by_id_dict.values():
             self.decoder.set_mimic_grammar_fst(kr.id, kr.fst)
-        labels = self.decoder.mimic([NativeWFST.word_to_ilabel_map[word] for word in output.split()], grammars_activity)
-        if labels is False:
+        output = self.decoder.mimic(text, grammars_activity)
+        if output is False:
             return None
-        words = [NativeWFST.olabel_to_word_map[label] for label in labels]
-        return words
-
-    def parse_output_for_rule(self, output, kaldi_rule):
-        for kr in self.kaldi_rule_by_id_dict.values():
-            self.decoder.set_mimic_grammar_fst(kr.id, kr.fst)
-        words = output.split()
-        labels = self.decoder.mimic([NativeWFST.word_to_ilabel_map[word] for word in words], None, kaldi_rule.id)
-        if labels is False:
-            return None
-        # words = [NativeWFST.olabel_to_word_map[label] for label in labels]  # FIXME: actually do the mapping?
-        return words
+        return output
 
     def parse_output_for_rule_token(self, kaldi_rule, output):
         """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
@@ -648,7 +637,7 @@ class Compiler(object):
     def parse_output(self, output, dictation_info_func=None):
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
-        if (output == '') or (output in self._noise_words):
+        if (output is None) or (output == '') or (output in self._noise_words):
             return None, [], []
 
         nonterm_token, _, parsed_output = output.partition(' ')
