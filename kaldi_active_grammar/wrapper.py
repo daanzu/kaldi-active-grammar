@@ -393,10 +393,41 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
 
 ########################################################################################################################
 
-class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
-    """docstring for KaldiAgfNNet3Decoder"""
+class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
+    """ Abstract base class for nnet3 active decoders. """
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
+        DRAGONFLY_API bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+        DRAGONFLY_API bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
+            int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
+    """
+
+    def set_mimic_grammar_fst(self, grammar_fst_index, grammar_fst):
+        if isinstance(grammar_fst, NativeWFST):
+            result = self._lib.nnet3_active_base__set_mimic_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
+        else: raise KaldiError("unrecognized grammar_fst type")
+        if not result:
+            raise KaldiError("set_mimic_grammar_fst error: %r, %r" % (grammar_fst_index, grammar_fst))
+        return True
+
+    def mimic(self, input, grammars_activity, grammar_fst_index=None, output_max_length=4*1024):
+        assert (grammar_fst_index is None) or (isinstance(grammar_fst_index, int) and grammar_fst_index >= 0)
+        output_p = _ffi.new('char[]', output_max_length) if output_max_length else _ffi.NULL
+        if grammar_fst_index is None: grammar_fst_index = -1  # No given grammar.
+        result = self._lib.nnet3_active_base__mimic(self._model, en(input),
+            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
+            grammar_fst_index, output_p, output_max_length)
+        if result:
+            return de(_ffi.string(output_p)) if output_max_length else True
+        return False
+
+
+########################################################################################################################
+
+class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
+    """docstring for KaldiAgfNNet3Decoder"""
+
+    _library_header_text = KaldiActiveNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
@@ -406,9 +437,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
         DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
             int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state);
-        DRAGONFLY_API bool nnet3_agf__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
-        DRAGONFLY_API bool nnet3_agf__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
-            int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
     """
 
     def __init__(self, *, top_fst=None, dictation_fst_file=None, config=None, **kwargs):
@@ -494,25 +522,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("decoding error")
         return finalize
 
-    def set_mimic_grammar_fst(self, grammar_fst_index, grammar_fst):
-        if isinstance(grammar_fst, NativeWFST):
-            result = self._lib.nnet3_agf__set_mimic_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
-        else: raise KaldiError("unrecognized grammar_fst type")
-        if not result:
-            raise KaldiError("set_mimic_grammar_fst error: %r, %r" % (grammar_fst_index, grammar_fst))
-        return True
-
-    def mimic(self, input, grammars_activity, grammar_fst_index=None, output_max_length=4*1024):
-        assert (grammar_fst_index is None) or (isinstance(grammar_fst_index, int) and grammar_fst_index >= 0)
-        output_p = _ffi.new('char[]', output_max_length) if output_max_length else _ffi.NULL
-        if grammar_fst_index is None: grammar_fst_index = -1  # No given grammar.
-        result = self._lib.nnet3_agf__mimic(self._model, en(input),
-            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
-            grammar_fst_index, output_p, output_max_length)
-        if result:
-            return de(_ffi.string(output_p)) if output_max_length else True
-        return False
-
 
 ########################################################################################################################
 
@@ -557,10 +566,10 @@ class KaldiAgfCompiler(FFIObject):
 
 ########################################################################################################################
 
-class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
+class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
     """docstring for KaldiLafNNet3Decoder"""
 
-    _library_header_text = KaldiNNet3Decoder._library_header_text + """
+    _library_header_text = KaldiActiveNNet3Decoder._library_header_text + """
         DRAGONFLY_API void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
