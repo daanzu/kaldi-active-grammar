@@ -398,6 +398,7 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
 
     _library_header_text = KaldiNNet3Decoder._library_header_text + """
         DRAGONFLY_API bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+        DRAGONFLY_API bool nnet3_active_base__set_mimic_dictation_fst_file(void* model_vp, const char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
             int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
     """
@@ -408,6 +409,12 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         else: raise KaldiError("unrecognized grammar_fst type")
         if not result:
             raise KaldiError("set_mimic_grammar_fst error: %r, %r" % (grammar_fst_index, grammar_fst))
+        return True
+
+    def set_mimic_dictation_fst_file(self, grammar_fst_filename):
+        result = self._lib.nnet3_active_base__set_mimic_dictation_fst_file(self._model, en(grammar_fst_filename))
+        if not result:
+            raise KaldiError("set_mimic_dictation_fst_file error: %r, %r" % (grammar_fst_filename,))
         return True
 
     def mimic(self, input, grammars_activity, grammar_fst_index=None, output_max_length=4*1024):

@@ -275,11 +275,19 @@ class Compiler(object):
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
-    def init_decoder(self, config=None, dictation_fst_file=None):
+    def init_decoder(self, config=None, dictation_fst_file=None, dictation_g_fst_file=None):
         if self.decoder: raise KaldiError("Decoder already initialized")
+        assert (dictation_fst_file is not None) or (dictation_fst_file == dictation_g_fst_file)
         if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath
-        decoder_kwargs = dict(model_dir=self.model_dir, tmp_dir=self.tmp_dir,
-            dictation_fst_file=dictation_fst_file, max_num_rules=self._kaldi_rule_id_allocator.max_num_rules, config=config)
+        if dictation_g_fst_file is None: dictation_g_fst_file = self.dictation_g_fst_filepath
+
+        decoder_kwargs = dict(
+            model_dir=self.model_dir,
+            tmp_dir=self.tmp_dir,
+            dictation_fst_file=dictation_fst_file,
+            max_num_rules=self._kaldi_rule_id_allocator.max_num_rules,
+            config=config,
+            )
         if self.decoding_framework == 'agf':
             top_fst_rule = self.compile_top_fst()
             decoder_kwargs.update(top_fst=top_fst_rule.fst_wrapper)
@@ -288,6 +296,9 @@ class Compiler(object):
             self.decoder = KaldiLafNNet3Decoder(**decoder_kwargs)
         else:
             raise KaldiError("Invalid Compiler.decoding_framework: %r" % self.decoding_framework)
+
+        if dictation_g_fst_file:
+            self.decoder.set_mimic_dictation_fst_file(dictation_g_fst_file)
         return self.decoder
 
     exec_dir = property(lambda self: self.model.exec_dir)
@@ -299,10 +310,24 @@ class Compiler(object):
     lexicon_words = property(lambda self: self.model.words_table.word_to_id_map)
     _longest_word = property(lambda self: self.model.longest_word)
 
-    _default_dictation_g_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_G_FILENAME))
-    _dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir,
+    _default_dictation_g_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_DICTATION_G_FILENAME))
+    _default_dictation_fst_filepath = property(lambda self: os.path.join(self.model_dir,
         (defaults.DEFAULT_DICTATION_FST_FILENAME if self.decoding_framework == 'agf' else 'Gr.fst')))  # FIXME: generalize
     _plain_dictation_hclg_fst_filepath = property(lambda self: os.path.join(self.model_dir, defaults.DEFAULT_PLAIN_DICTATION_HCLG_FST_FILENAME))
+
+    @property
+    def dictation_fst_filepath(self):
+        if os.path.exists(self._default_dictation_fst_filepath):
+            return self._default_dictation_fst_filepath
+        self._log.error("cannot find dictation fst: %s", self._default_dictation_fst_filepath)
+        # FIXME: Fall back to universal dictation?
+
+    @property
+    def dictation_g_fst_filepath(self):
+        if os.path.exists(self._default_dictation_g_fst_filepath):
+            return self._default_dictation_g_fst_filepath
+        self._log.error("cannot find dictation G fst: %s", self._default_dictation_g_fst_filepath)
+        # FIXME: Fall back to universal dictation?
 
 
     ####################################################################################################################
@@ -452,7 +477,7 @@ class Compiler(object):
                 + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {output_filename}")
 
     def compile_plain_dictation_fst(self, g_filename=None, output_filename=None):
-        if g_filename is None: g_filename = self._default_dictation_g_filepath
+        if g_filename is None: g_filename = self._default_dictation_g_fst_filepath
         if output_filename is None: output_filename = self._plain_dictation_hclg_fst_filepath
         verbose_level = 5 if self._log.isEnabledFor(5) else 0
         format_kwargs = dict(self.files_dict, g_filename=g_filename, output_filename=output_filename, verbose=verbose_level)
@@ -463,8 +488,8 @@ class Compiler(object):
         compile_command()
 
     def compile_agf_dictation_fst(self, g_filename=None):
-        if g_filename is None: g_filename = self._default_dictation_g_filepath
-        self._compile_agf_graph(input_filename=g_filename, output_filename=self._dictation_fst_filepath, nonterm=True, simplify_lg=False)
+        if g_filename is None: g_filename = self._default_dictation_g_fst_filepath
+        self._compile_agf_graph(input_filename=g_filename, output_filename=self._default_dictation_fst_filepath, nonterm=True, simplify_lg=False)
 
     # def _compile_base_fsts(self):
     #     filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
@@ -508,13 +533,6 @@ class Compiler(object):
                     fst.add_arc(state_from, state_to, word)
 
         return kaldi_rule
-
-    def _get_dictation_fst_filepath(self):
-        if os.path.exists(self._dictation_fst_filepath):
-            return self._dictation_fst_filepath
-        self._log.error("cannot find dictation fst: %s", self._dictation_fst_filepath)
-        # FIXME: Fall back to universal dictation?
-    dictation_fst_filepath = property(_get_dictation_fst_filepath)
 
     # def _construct_dictation_states(self, fst, src_state, dst_state, number=(1,None), words=None, start_weight=None):
     #     """
