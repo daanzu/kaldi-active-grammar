@@ -287,6 +287,7 @@ class Compiler(object):
             dictation_fst_file=dictation_fst_file,
             max_num_rules=self._kaldi_rule_id_allocator.max_num_rules,
             max_num_exported_rules=self._kaldi_rule_id_allocator.max_num_exported_rules,
+            eps_disambig_sym=NativeWFST.eps_disambig,
             config=config,
             )
         if self.decoding_framework == 'agf':
