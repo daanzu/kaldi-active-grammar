@@ -476,12 +476,6 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
     def decode(self, frames, finalize, grammars_activity=None):
         """Continue decoding with given new audio data."""
-        if grammars_activity is None:
-            grammars_activity = []
-        else:
-            # Start of utterance
-            _log.log(5, "decode: grammars_activity = %s", grammars_activity)
-
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
         frames_char = _ffi.from_buffer(frames)
@@ -489,7 +483,8 @@ class KaldiAgfNNet3Decoder(KaldiNNet3Decoder):
 
         self._start_decode_time(len(frames))
         result = self._lib.nnet3_agf__decode(self._model, self.sample_rate, len(frames), frames_float, finalize,
-            grammars_activity, len(grammars_activity), self._saving_adaptation_state)
+            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
+            self._saving_adaptation_state)
         self._stop_decode_time(finalize)
 
         if not result:
@@ -610,12 +605,6 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
 
     def decode(self, frames, finalize, grammars_activity=None):
         """Continue decoding with given new audio data."""
-        if grammars_activity is None:
-            grammars_activity = []
-        else:
-            # Start of utterance
-            _log.log(5, "decode: grammars_activity = %s", grammars_activity)
-
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
         frames_char = _ffi.from_buffer(frames)
@@ -623,7 +612,8 @@ class KaldiLafNNet3Decoder(KaldiNNet3Decoder):
 
         self._start_decode_time(len(frames))
         result = self._lib.nnet3_laf__decode(self._model, self.sample_rate, len(frames), frames_float, finalize,
-            grammars_activity, len(grammars_activity), self._saving_adaptation_state)
+            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
+            self._saving_adaptation_state)
         self._stop_decode_time(finalize)
 
         if not result:
