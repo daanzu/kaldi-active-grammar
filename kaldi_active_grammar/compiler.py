@@ -102,7 +102,7 @@ class KaldiRule(object):
             return self
         else:
             if duplicate:
-                _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache")
+                _log.warning("%s was supposed to be a duplicate compile, but was not found in FileCache", self)
 
         if lazy:
             if not self.pending_compile:
@@ -162,6 +162,7 @@ class KaldiRule(object):
             elif self.compiler.decoding_framework == 'laf':
                 grammar_fst_index = self.decoder.add_grammar_fst(self.id, self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self.id, self._fst_text)
             else: raise KaldiError("unknown compiler decoding_framework")
+            self.decoder.set_mimic_grammar_fst(self.id, self.fst)
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d != %d for %s" % (grammar_fst_index, self.id, self)
 
         self.loaded = True
@@ -170,12 +171,13 @@ class KaldiRule(object):
 
     def _do_reloading(self):
         if self.compiler.decoding_framework == 'agf':
-            return self.decoder.reload_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))
+            self.decoder.reload_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))
         elif self.compiler.decoding_framework == 'laf':
             assert self.fst.native
-            return self.decoder.reload_grammar_fst(self.id, self.fst)
-            if not self.fst.native: return self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented
+            self.decoder.reload_grammar_fst(self.id, self.fst)
+            # if not self.fst.native: self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented
         else: raise KaldiError("unknown compiler decoding_framework")
+        self.decoder.set_mimic_grammar_fst(self.id, self.fst)
 
     @contextmanager
     def reload(self):
@@ -631,8 +633,6 @@ class Compiler(object):
                 self.fst_cache.save()
 
     def mimic(self, text, grammars_activity):
-        for kr in self.kaldi_rule_by_id_dict.values():
-            self.decoder.set_mimic_grammar_fst(kr.id, kr.fst)
         output = self.decoder.mimic(text, grammars_activity)
         if output is False:
             return None
