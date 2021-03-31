@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.0...master)
 
+## [2.0.2](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.2) - 2020-09-05 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.0...v2.0.2) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.0...kag-v2.0.2)
+
+### Changed
+
+* Minor fix for OpenBLAS compilation for some architectures on linux/mac
+
 ## [2.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0) - 2020-09-05 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v1.8.0...v2.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v1.8.0...kag-v2.0.0)
 
 ### Added

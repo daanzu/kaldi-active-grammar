@@ -248,6 +248,16 @@ If you have trouble downloading, try using `wget --continue`.
 
 
 
+V2.0.0: Faster Grammar Compilation; Cleaner Codebase; Preparation For New Features
+
+
+V2.0.2
+
+Minor fix for OpenBLAS compilation for some architectures on linux/mac.
+
+See [major changes introduced in V2.0.0 and associated downloads](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0).
+
+
 
 
 You can subscribe to announcements on GitHub (see Watch panel above), or on Gitter (see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements) [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community))
@@ -255,19 +265,20 @@ You can subscribe to announcements on GitHub (see Watch panel above), or on Gitt
 #### Donations are appreciated to encourage development.
 
 [![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
-[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
 
 
 ### Artifacts
 
 * **Models are available [here](https://github.com/daanzu/kaldi-active-grammar/blob/master/docs/models.md)**
-* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
-* **`kaldi-caster-winpython-dev`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
+* **`kaldi-dragonfly-winpython`**: A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython`**: A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
 
 If you have trouble downloading, try using `wget --continue`.
 
 
 
 
+* **`kaldi-dragonfly-winpython`**: [*stable release version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
+* **`kaldi-caster-winpython`**: [*more recent development version*] A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
 
 This should be included the next dragonfly version, or you can try a self-contained distribution available below.
