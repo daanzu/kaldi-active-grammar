@@ -199,17 +199,21 @@ class NativeWFST(FFIObject):
         cls.wildcard_olabels = tuple(cls.word_to_olabel_map[word] for word in cls.wildcard_nonterms)
         assert cls.word_to_ilabel_map[cls.eps] == 0
 
+        cls.init_ffi()
+        result = cls._lib.fst__init(len(cls.eps_like_ilabels), cls.eps_like_ilabels,
+            len(cls.silent_olabels), cls.silent_olabels,
+            len(cls.wildcard_olabels), cls.wildcard_olabels)
+        if not result:
+            raise KaldiError("Failed fst__init")
+
     def __init__(self):
         super().__init__()
+        self._construct()
+
+    def _construct(self):
         self.native_obj = self._lib.fst__construct()
         if self.native_obj == _ffi.NULL:
             raise KaldiError("Failed fst__construct")
-
-        result = self._lib.fst__init(len(self.eps_like_ilabels), self.eps_like_ilabels,
-            len(self.silent_olabels), self.silent_olabels,
-            len(self.wildcard_olabels), self.wildcard_olabels)
-        if not result:
-            raise KaldiError("Failed fst__init")
 
         self.num_states = 1  # Is initialized with a start state
         self.num_arcs = 0
@@ -239,6 +243,10 @@ class NativeWFST(FFIObject):
             self._compiled_native_obj = None
             if not result:
                 raise KaldiError("Failed fst__destruct on %r" % self._compiled_native_obj)
+
+    def clear(self):
+        self.destruct()
+        self._construct()
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
