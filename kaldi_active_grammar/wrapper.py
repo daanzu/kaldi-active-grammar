@@ -438,7 +438,7 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
         DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
-        DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
+        DRAGONFLY_API bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,

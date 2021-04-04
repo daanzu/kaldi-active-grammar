@@ -37,7 +37,7 @@ class PlainDictationRecognizer(object):
                 fst_file=fst_file, **kwargs)
 
         else:
-            self._compiler = Compiler(model_dir, tmp_dir)
+            self._compiler = Compiler(model_dir, tmp_dir, cache_fsts=False)
             top_fst_rule = self._compiler.compile_top_fst_dictation_only()
             dictation_fst_file = self._compiler.dictation_fst_filepath
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,

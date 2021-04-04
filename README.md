@@ -76,7 +76,7 @@ Otherwise...
 ### Setup
 
 **Requirements**:
-* Python 2.7 or 3.6+; *64-bit required!*
+* Python 3.6+; *64-bit required!*
 * OS: Windows/Linux/MacOS all supported
 * Only supports Kaldi left-biphone models, specifically *nnet3 chain* models, with specific modifications
 * ~1GB+ disk space for model plus temporary storage and cache, depending on your grammar complexity

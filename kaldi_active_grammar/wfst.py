@@ -168,11 +168,13 @@ class NativeWFST(FFIObject):
         DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
         DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
         DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
+        DRAGONFLY_API bool fst__has_path(void* fst_vp);
         DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
         DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
         DRAGONFLY_API void* fst__load_file(char* filename_cp);
         DRAGONFLY_API bool fst__write_file(void* fst_vp, char* filename_cp);
         DRAGONFLY_API bool fst__write_file_const(void* fst_vp, char* filename_cp);
+        DRAGONFLY_API bool fst__print(void* fst_vp, char* filename_cp);
         DRAGONFLY_API void* fst__compile_text(char* fst_text_cp, char* isymbols_file_cp, char* osymbols_file_cp);
     """
 
@@ -197,17 +199,21 @@ class NativeWFST(FFIObject):
         cls.wildcard_olabels = tuple(cls.word_to_olabel_map[word] for word in cls.wildcard_nonterms)
         assert cls.word_to_ilabel_map[cls.eps] == 0
 
+        cls.init_ffi()
+        result = cls._lib.fst__init(len(cls.eps_like_ilabels), cls.eps_like_ilabels,
+            len(cls.silent_olabels), cls.silent_olabels,
+            len(cls.wildcard_olabels), cls.wildcard_olabels)
+        if not result:
+            raise KaldiError("Failed fst__init")
+
     def __init__(self):
         super().__init__()
+        self._construct()
+
+    def _construct(self):
         self.native_obj = self._lib.fst__construct()
         if self.native_obj == _ffi.NULL:
             raise KaldiError("Failed fst__construct")
-
-        result = self._lib.fst__init(len(self.eps_like_ilabels), self.eps_like_ilabels,
-            len(self.silent_olabels), self.silent_olabels,
-            len(self.wildcard_olabels), self.wildcard_olabels)
-        if not result:
-            raise KaldiError("Failed fst__init")
 
         self.num_states = 1  # Is initialized with a start state
         self.num_arcs = 0
@@ -237,6 +243,10 @@ class NativeWFST(FFIObject):
             self._compiled_native_obj = None
             if not result:
                 raise KaldiError("Failed fst__destruct on %r" % self._compiled_native_obj)
+
+    def clear(self):
+        self.destruct()
+        self._construct()
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
@@ -279,6 +289,11 @@ class NativeWFST(FFIObject):
 
     ####################################################################################################################
 
+    def has_path(self):
+        """ Returns True iff there is a path (from start state to a final state). Uses ShortestPath. Assumes can nonterminals succeed. """
+        result = self._lib.fst__has_path(self.native_obj)
+        return result
+
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
         assert not eps_like_labels
@@ -312,6 +327,11 @@ class NativeWFST(FFIObject):
         result = self._lib.fst__write_file_const(self.native_obj, encode(fst_filename))
         if not result:
             raise KaldiError("Failed fst__write_file")
+
+    def print(self, fst_filename=None):
+        result = self._lib.fst__print(self.native_obj, (encode(fst_filename) if fst_filename is not None else _ffi.NULL))
+        if not result:
+            raise KaldiError("Failed fst__print")
 
     @classmethod
     def load_file(cls, fst_filename):
