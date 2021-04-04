@@ -168,6 +168,7 @@ class NativeWFST(FFIObject):
         DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
         DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
         DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
+        DRAGONFLY_API bool fst__has_path(void* fst_vp);
         DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
         DRAGONFLY_API bool fst__does_match(void* fst_vp, int32_t target_labels_len, int32_t target_labels_cp[], int32_t output_labels_cp[], int32_t* output_labels_len);
         DRAGONFLY_API void* fst__load_file(char* filename_cp);
@@ -279,6 +280,11 @@ class NativeWFST(FFIObject):
         return hash_str
 
     ####################################################################################################################
+
+    def has_path(self):
+        """ Returns True iff there is a path (from start state to a final state). Uses ShortestPath. Assumes can nonterminals succeed. """
+        result = self._lib.fst__has_path(self.native_obj)
+        return result
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
