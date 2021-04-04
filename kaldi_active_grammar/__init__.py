@@ -5,7 +5,7 @@
 #
 
 _name = 'kaldi_active_grammar'
-__version__ = '2.0.2'
+__version__ = '2.1.0'
 # __dev_version__ = __version__ + '.dev0'
 REQUIRED_MODEL_VERSION = '0.5.0'
 
