@@ -121,7 +121,9 @@ class KaldiRule(object):
                 (" (%dbyte)" % len(self._fst_text)) if self._fst_text else "",
                 (" to " + self.filename) if self.filename else ""))
         assert self.fst.native or self._fst_text
-        if self._fst_text and _log.isEnabledFor(2): _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
+        if _log.isEnabledFor(2):
+            if self._fst_text: _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
+            elif self.fst.native: self.fst.print()
 
         try:
             if self.compiler.decoding_framework == 'agf':
