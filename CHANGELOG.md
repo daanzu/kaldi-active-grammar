@@ -6,15 +6,30 @@ Note that the project (and python wheel) is built from a duorepo (2 separate rep
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) since v1.0.0.
 
-## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.0...master)
+## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...master)
 
-## [2.0.2](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.2) - 2020-09-05 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.0...v2.0.2) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.0...kag-v2.0.2)
+## [2.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.1.0) - 2021-04-04 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.2...v2.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.2...kag-v2.1.0)
+
+### Added
+
+* NativeWFST support for checking for impossible graphs (no successful path), which can then fail to compile.
+* Debugging info for NativeWFST.
+
+### Changed
+
+* `lattice_beam` default value reduced from `8.0` to `6.0`, to hopefully avoid occasional errors.
+
+### Fixed
+
+* Reloading grammars with NativeWFST.
+
+## [2.0.2](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.2) - 2021-03-30 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.0...v2.0.2) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.0...kag-v2.0.2)
 
 ### Changed
 
 * Minor fix for OpenBLAS compilation for some architectures on linux/mac
 
-## [2.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0) - 2020-09-05 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v1.8.0...v2.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v1.8.0...kag-v2.0.0)
+## [2.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0) - 2021-03-21 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v1.8.0...v2.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v1.8.0...kag-v2.0.0)
 
 ### Added
 
