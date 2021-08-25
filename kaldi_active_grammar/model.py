@@ -61,6 +61,7 @@ class LextoolResponseParser(HTMLParser):
     def handle_data(self, data):
         if False not in self.error_criteria.values() and self.current_tag is self.P_TAG:
             self.error_text.append(data)
+            return
 
         if self.current_tag in self.error_criteria.keys() and data.lower() == self.error_criteria[self.current_tag]:
             self.error_criteria_results[self.current_tag] = True
