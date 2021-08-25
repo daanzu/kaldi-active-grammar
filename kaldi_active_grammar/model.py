@@ -9,6 +9,7 @@ from io import open
 
 from six import PY2, text_type
 import requests
+from html.parser import HTMLParser
 
 try:
     # g2p_en==2.0.0
@@ -27,6 +28,42 @@ _log = _log.getChild('model')
 
 
 ########################################################################################################################
+
+class LextoolError(KaldiError):
+    pass
+
+class LextoolResponseParser(HTMLParser):
+    TITLE_TAG = 'title'
+    H1_TAG = 'h1'
+    P_TAG = 'p'
+    TAGS = {
+        TITLE_TAG: TITLE_TAG,
+        H1_TAG: H1_TAG,
+        P_TAG: P_TAG
+    }
+
+    def __init__(self, *args, **kwargs):
+        super(LextoolResponseParser, self).__init__(*args, **kwargs)
+        self.error_text = []
+        self.current_tag = None
+        self.error_criteria = {
+            self.TITLE_TAG: 'lextool error',
+            self.H1_TAG: 'lextool error'
+        }
+        self.error_criteria_results = { key: False for key in self.error_criteria.keys() }
+
+    def handle_starttag(self, tag, attrs):
+        self.current_tag = self.TAGS.get(tag, None)
+
+    def handle_endtag(self, tag):
+        self.current_tag = None
+
+    def handle_data(self, data):
+        if False not in self.error_criteria.values() and self.current_tag is self.P_TAG:
+            self.error_text.append(data)
+
+        if self.current_tag in self.error_criteria.keys() and data.lower() == self.error_criteria[self.current_tag]:
+            self.error_criteria_results[self.current_tag] = True
 
 class Lexicon(object):
 
@@ -138,6 +175,12 @@ class Lexicon(object):
                 files = {'wordfile': ('wordfile', word)}
                 req = requests.post('http://www.speech.cs.cmu.edu/cgi-bin/tools/logios/lextool.pl', files=files)
                 req.raise_for_status()
+
+                response_parser = LextoolResponseParser()
+                response_parser.feed(req.text)
+                if response_parser.error_text:
+                    raise LextoolError('  '.join(response_parser.error_text))
+
                 # FIXME: handle network failures
                 match = re.search(r'<!-- DICT (.*)  -->', req.text)
                 if match:
@@ -155,6 +198,8 @@ class Lexicon(object):
                     return pronunciations
             except Exception as e:
                 _log.exception("generate_pronunciations exception accessing www.speech.cs.cmu.edu")
+            except KaldiError as e:
+                raise e
 
         raise KaldiError("cannot generate word pronunciation")
 
