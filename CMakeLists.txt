@@ -19,11 +19,6 @@ else()
 endif()
 
 set(BINARIES
-  tools/openfst/bin/fstarcsort${CMAKE_EXECUTABLE_SUFFIX}
-  tools/openfst/bin/fstcompile${CMAKE_EXECUTABLE_SUFFIX}
-  tools/openfst/bin/fstinfo${CMAKE_EXECUTABLE_SUFFIX}
-  src/fstbin/fstaddselfloops${CMAKE_EXECUTABLE_SUFFIX}
-  src/dragonflybin/compile-graph-agf${CMAKE_EXECUTABLE_SUFFIX}
   )
 set(LIBRARIES
   src/lib/libkaldi-dragonfly${CMAKE_SHARED_LIBRARY_SUFFIX}
@@ -113,7 +108,7 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
     GIT_SHALLOW       TRUE
     CONFIGURE_COMMAND sed -i.bak -e "s/status=0/exit 0/g" tools/extras/check_dependencies.sh && sed -i.bak -e "s/openfst_add_CXXFLAGS = -g -O2/openfst_add_CXXFLAGS = -g0 -O3/g" tools/Makefile && cp ${PROJECT_SOURCE_DIR}/building/kaldi-configure-wrapper.sh src/
     BUILD_IN_SOURCE   TRUE
-    BUILD_COMMAND     ${MATHLIB_BUILD_COMMAND} && cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly dragonflybin bin fstbin lmbin
+    BUILD_COMMAND     ${MATHLIB_BUILD_COMMAND} && cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly
     LIST_SEPARATOR    " "
     INSTALL_COMMAND   ${STRIP_LIBS_COMMAND} && mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST}
     )
