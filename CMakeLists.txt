@@ -96,13 +96,13 @@ message("CMAKE_CURRENT_BINARY_DIR  = ${CMAKE_CURRENT_BINARY_DIR}")
 
 if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   set(STRIP_LIBS_COMMAND find src/lib tools/openfst/lib -name *${CMAKE_SHARED_LIBRARY_SUFFIX} | xargs strip)
-  set(STRIP_DST_COMMAND find ${DST} | xargs strip)
+  # set(STRIP_DST_COMMAND find ${DST} [[[other specifiers]]] | xargs strip)
   if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
     list(APPEND STRIP_LIBS_COMMAND -x)
-    list(APPEND STRIP_DST_COMMAND -x)
+    # list(APPEND STRIP_DST_COMMAND -x)
   endif()
   # set(STRIP_LIBS_COMMAND true)
-  # set(STRIP_DST_COMMAND true)
+  set(STRIP_DST_COMMAND true)
   ExternalProject_Add(kaldi
     GIT_CONFIG        advice.detachedHead=false
     GIT_REPOSITORY    https://github.com/daanzu/kaldi-fork-active-grammar.git

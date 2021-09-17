@@ -79,6 +79,7 @@ jobs:
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           just build-dockcross $KALDI_BRANCH $MKL_URL
+          # cp dist/* wheelhouse/
           ls -al wheelhouse/
       - uses: actions/upload-artifact@v2
         with:
