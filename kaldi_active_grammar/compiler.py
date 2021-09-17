@@ -277,8 +277,10 @@ class Compiler(object):
         self._num_kaldi_rules = 0
         self._max_rule_id = 999
         self.nonterminals = tuple(['#nonterm:dictation'] + ['#nonterm:rule%i' % i for i in range(self._max_rule_id + 1)])
+        words_set = frozenset(self.model.words_table.words)
         self._oov_word = '<unk>' if ('<unk>' in self.model.words_table) else None  # FIXME: make this configurable, for different models
-        self._noise_words = frozenset(['<unk>', '!SIL']) & frozenset(self.model.words_table.words)  # FIXME: make this configurable, for different models
+        self._silence_words = frozenset(['!SIL']) & words_set  # FIXME: make this configurable, for different models
+        self._noise_words = frozenset(['<unk>', '!SIL']) & words_set  # FIXME: make this configurable, for different models
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self.compile_queue = set()  # KaldiRule
@@ -744,11 +746,17 @@ class Compiler(object):
 ########################################################################################################################
 # Utility functions.
 
+def remove_words_in_words(words, remove_words_func):
+    return [word for word in words if not remove_words_func(word)]
+
+def remove_words_in_text(text, remove_words_func):
+    return ' '.join(word for word in text.split() if not remove_words_func(word))
+
 def remove_nonterms_in_words(words):
-    return [word for word in words if not word.startswith('#nonterm:')]
+    return remove_words_in_words(words, lambda word: word.startswith('#nonterm:'))
 
 def remove_nonterms_in_text(text):
-    return ' '.join(word for word in text.split() if not word.startswith('#nonterm:'))
+    return remove_words_in_text(text, lambda word: word.startswith('#nonterm:'))
 
 def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=None, **kwargs):
     with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'wb') as devnull:
