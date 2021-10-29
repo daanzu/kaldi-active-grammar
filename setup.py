@@ -17,7 +17,7 @@ from io import open
 if os.environ.get('KALDIAG_SETUP_RAW'):
     from setuptools import setup
     import site, sys
-    site.ENABLE_USER_SITE = ("--user" in sys.argv[1:])  # Fix stupid pip https://github.com/pypa/pip/issues/7953
+    site.ENABLE_USER_SITE = ("--user" in sys.argv[1:])  # Fix pip https://github.com/pypa/pip/issues/7953
 else:
     from skbuild import setup
 
@@ -179,6 +179,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
 
     # This field adds keywords for your project which will appear on the
@@ -215,7 +216,6 @@ setup(
         'cffi ~= 1.12',
         'numpy ~= 1.16, != 1.19.4',
         'ush ~= 3.1',
-        'requests >= 2',
         'six',
         'futures; python_version == "2.7"',
     ],  # Optional
@@ -229,6 +229,8 @@ setup(
     # Similar to `install_requires` above, these must be valid existing
     # projects.
     extras_require={  # Optional
+        'g2p_en': ['g2p_en ~= 2.1.0'],
+        'online': ['requests ~= 2.18'],
         # 'dev': ['check-manifest'],
         # 'test': ['coverage'],
     },
