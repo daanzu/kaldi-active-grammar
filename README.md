@@ -19,11 +19,12 @@
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
 [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
-[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
 
 Normally, Kaldi decoding graphs are **monolithic**, require **expensive up-front off-line** compilation, and are **static during decoding**. Kaldi's new grammar framework allows **multiple independent** grammars with nonterminals, to be compiled separately and **stitched together dynamically** at decode-time, but all the grammars are **always active** and capable of being recognized.
 
 This project extends that to allow each grammar/rule to be **independently marked** as active/inactive **dynamically** on a **per-utterance** basis (set at the beginning of each utterance). Dragonfly is then capable of activating **only the appropriate grammars for the current environment**, resulting in increased accuracy due to fewer possible recognitions. Furthermore, the dictation grammar can be **shared** between all the command grammars, which can be **compiled quickly** without needing to include large-vocabulary dictation directly.
+
+See the [Changelog](CHANGELOG.md) for the latest updates.
 
 ### Features
 
@@ -53,7 +54,6 @@ This project extends that to allow each grammar/rule to be **independently marke
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
 [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
-[**GitHub** is currently matching all my donations $-for-$.]
 
 ### Related Repositories
 
@@ -89,6 +89,10 @@ Otherwise...
     * The easy way to use kaldi-active-grammar is as a backend to dragonfly, which makes it easy to define grammars and resultant actions.
         * For this, simply run `pip install 'dragonfly2[kaldi]'` to install all necessary packages. See the [dragonfly documentation for details on installation](https://dragonfly2.readthedocs.io/en/latest/kaldi_engine.html#setup), plus how to define grammars and actions.
     * Alternatively, if you only want to use it directly (via a more low level interface), you can just run `pip install kaldi-active-grammar`
+1. To support automatic generation of pronunciations for unknown words (not in the lexicon), you have two choices:
+    * Local generation: Install the `g2p_en` package with `pip install 'kaldi-active-grammar[g2p_en]'`
+    * Online/cloud generation: Install the `requests` package with `pip install 'kaldi-active-grammar[online]'` **AND** pass `allow_online_pronunciations=True` to `Compiler.add_word()` or `Model.add_word()`
+    * If both are available, the former is preferentially used.
 
 ### Troubleshooting
 
@@ -120,7 +124,6 @@ The KaldiAG API is fairly low level, but basically: you define a set of grammar 
     * They are built in public by automated Continuous Integration run on GitHub Actions: [see manifest](.github/workflows/build.yml).
 * Alternatively, to build for use locally:
     * Linux/MacOS:
-        1. Install [Intel Math Kernel Library](https://software.intel.com/en-us/mkl)
         1. `python -m pip install -r requirements-build.txt`
         1. `python setup.py bdist_wheel` (see [`CMakeLists.txt`](CMakeLists.txt) for details)
     * Windows:
@@ -140,7 +143,6 @@ Donations are appreciated to encourage development.
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
 [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
-[**GitHub** is currently matching all my donations $-for-$.]
 
 ## Author
 
@@ -154,5 +156,4 @@ This project is licensed under the GNU Affero General Public License v3 (AGPL-3.
 
 * Based on and including code from [Kaldi ASR](https://github.com/kaldi-asr/kaldi), under the Apache-2.0 license.
 * Code from [OpenFST](http://www.openfst.org/) and [OpenFST port for Windows](https://github.com/kkm000/openfst), under the Apache-2.0 license.
-* [Intel Math Kernel Library](https://software.intel.com/en-us/mkl), copyright (c) 2018 Intel Corporation, under the [Intel Simplified Software License](https://software.intel.com/en-us/license/intel-simplified-software-license).
-* Modified generic English Kaldi nnet3 chain model from [Zamia Speech](https://github.com/gooofy/zamia-speech), under the LGPL-3.0 license.
+* [Intel Math Kernel Library](https://software.intel.com/en-us/mkl), copyright (c) 2018 Intel Corporation, under the [Intel Simplified Software License](https://software.intel.com/en-us/license/intel-simplified-software-license), currently only used for Windows build.
