@@ -6,7 +6,22 @@ Note that the project (and python wheel) is built from a duorepo (2 separate rep
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) since v1.0.0.
 
-## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...master)
+## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...master)
+
+## [3.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.0.0) - 2021-04-04 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...v3.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...kag-v3.0.0)
+
+### Changed
+
+* Pronunciation generation for lexicon now better supports local mode (using the `g2p_en` package), which is now also the default mode. It is also preferred over the online mode (using CMU's web service), which is now disabled by default. See the Setup section of the README for details.
+* `PlainDictation` output now discards any silence words from transcript.
+* `lattice_beam` default value reduced from `6.0` to `5.0`, to hopefully avoid occasional errors.
+* Removed deprecated CLI binaries from build for linux/mac.
+
+### Fixed
+
+* Whitespace in the model path is once again handled properly (thanks [@matthewmcintire](https://github.com/matthewmcintire)).
+* `NativeWFST.has_path()` now handles loops.
+* Linux/Mac binaries are now more stripped.
 
 ## [2.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.1.0) - 2021-04-04 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.2...v2.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.2...kag-v2.1.0)
 

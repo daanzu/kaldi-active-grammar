@@ -91,6 +91,7 @@ Otherwise...
     * Alternatively, if you only want to use it directly (via a more low level interface), you can just run `pip install kaldi-active-grammar`
 1. To support automatic generation of pronunciations for unknown words (not in the lexicon), you have two choices:
     * Local generation: Install the `g2p_en` package with `pip install 'kaldi-active-grammar[g2p_en]'`
+        * The necessary data files are now included in the latest speech models I released with `v3.0.0`.
     * Online/cloud generation: Install the `requests` package with `pip install 'kaldi-active-grammar[online]'` **AND** pass `allow_online_pronunciations=True` to `Compiler.add_word()` or `Model.add_word()`
     * If both are available, the former is preferentially used.
 
