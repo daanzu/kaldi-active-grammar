@@ -4,11 +4,13 @@
 [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu)
 [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu)
 [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
-[**GitHub** is matching (only) my **GitHub Sponsors** donations.]
 
 ## Available Models
 
 * For **kaldi-active-grammar**
+    * [kaldi_model_daanzu_20211030p-biglm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030p-biglm.zip) (1.05 GB)
+    * [kaldi_model_daanzu_20211030p-mediumlm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030p-mediumlm.zip) (651 MB)
+    * [kaldi_model_daanzu_20211030p-smalllm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030p-smalllm.zip) (400 MB)
     * [kaldi_model_daanzu_20200905_1ep-biglm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v1.8.0/kaldi_model_daanzu_20200905_1ep-biglm.zip) (1.05 GB)
     * [kaldi_model_daanzu_20200905_1ep-mediumlm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v1.8.0/kaldi_model_daanzu_20200905_1ep-mediumlm.zip) (651 MB)
     * [kaldi_model_daanzu_20200905_1ep-smalllm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v1.8.0/kaldi_model_daanzu_20200905_1ep-smalllm.zip) (400 MB)
@@ -40,7 +42,6 @@
 |        vosk-model-en-us-aspire-0.2 [carpa]         |     17.90     |   69.76   |           |           |    55.90    |
 |             vosk-model-small-en-us-0.3             |     19.30     |           |           |           |    45.57    |
 |                Zamia LibriSpeech LM                |   **4.56**    |   34.28   |           |   10.34   |    30.16    |
-|                wav2letter-talonweb                 |     10.03     |           |           |   16.27   |    16.21    |
 |             Amazon Transcribe **\*\***             |     8.21%     |           |           |           |             |
 |         CMU PocketSphinx (0.1.15) **\*\***         |    31.82%     |           |           |           |             |
 |           Google Speech-to-Text **\*\***           |    12.23%     |           |           |           |             |
@@ -49,8 +50,6 @@
 | Picovoice Cheetah LibriSpeech LM (v1.2.0) **\*\*** |     8.25%     |           |           |           |             |
 |        Picovoice Leopard (v1.0.0) **\*\***         |     8.34%     |           |           |           |             |
 | Picovoice Leopard LibriSpeech LM (v1.0.0) **\*\*** |     6.58%     |           |           |           |             |
-
-<!-- |         KaldiAG dgesr-f-1ep LibriSpeech LM         |     5.07      |          |               | **10.23** | **13.75**  | -->
 
 **\*\***: not tested by me; from [Picovoice speech-to-text-benchmark](https://github.com/Picovoice/speech-to-text-benchmark#results)
 

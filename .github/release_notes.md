@@ -269,7 +269,7 @@ You can subscribe to announcements on GitHub (see Watch panel above), or on Gitt
 
 ### Artifacts
 
-* **Models are available [here](https://github.com/daanzu/kaldi-active-grammar/blob/master/docs/models.md)**
+* **Models are available [here](https://github.com/daanzu/kaldi-active-grammar/blob/master/docs/models.md)** and below.
 * **`kaldi-dragonfly-winpython`**: A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2. Just unzip and run!
 * **`kaldi-caster-winpython`**: A self-contained, portable, batteries-included (python & libraries & model) distribution of kaldi-active-grammar + dragonfly2 + caster. Just unzip and run!
 

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Pronunciation generation for lexicon now better supports local mode (using the `g2p_en` package), which is now also the default mode. It is also preferred over the online mode (using CMU's web service), which is now disabled by default. See the Setup section of the README for details.
+* Pronunciation generation for lexicon now better supports local mode (using the `g2p_en` package), which is now also the default mode. It is also preferred over the online mode (using CMU's web service), which is now disabled by default. See the Setup section of the README for details. The new models now include the data files for `g2p_en`.
 * `PlainDictation` output now discards any silence words from transcript.
 * `lattice_beam` default value reduced from `6.0` to `5.0`, to hopefully avoid occasional errors.
 * Removed deprecated CLI binaries from build for linux/mac.
