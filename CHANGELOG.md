@@ -6,9 +6,15 @@ Note that the project (and python wheel) is built from a duorepo (2 separate rep
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) since v1.0.0.
 
-## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...master)
+<!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...master) -->
 
-## [3.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.0.0) - 2021-04-04 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...v3.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...kag-v3.0.0)
+## [3.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.1.0) - 2021-11-05 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...v3.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...kag-v3.1.0)
+
+### Changed
+
+* Removed deprecated CLI binaries from Windows build, reducing wheel size by ~65%.
+
+## [3.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.0.0) - 2021-10-31 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...v3.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...kag-v3.0.0)
 
 ### Changed
 
