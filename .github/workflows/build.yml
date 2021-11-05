@@ -195,11 +195,8 @@ jobs:
           python -m pip install --upgrade setuptools wheel scikit-build cmake ninja
           # ls -alR ../
           mkdir -p kaldi_active_grammar/exec/windows
-          cp ../openfst/build_output/x64/Release/bin/{fstarcsort,fstcompile,fstinfo}.exe \
-            ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll \
-            ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/compile-graph-agf/x64/Release/compile-graph-agf.exe \
-            ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/fstaddselfloops/x64/Release/fstaddselfloops.exe \
-            kaldi_active_grammar/exec/windows/
+          cp ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll kaldi_active_grammar/exec/windows/
+          # ../openfst/build_output/x64/Release/bin/{fstarcsort,fstcompile,fstinfo}.exe ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/compile-graph-agf/x64/Release/compile-graph-agf.exe ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/fstaddselfloops/x64/Release/fstaddselfloops.exe
           env KALDIAG_SETUP_RAW=1 python setup.py bdist_wheel
           ls -al dist/
       - uses: actions/upload-artifact@v2
