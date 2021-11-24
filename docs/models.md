@@ -8,9 +8,9 @@
 ## Available Models
 
 * For **kaldi-active-grammar**
-    * [kaldi_model_daanzu_20211030p-biglm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030p-biglm.zip) (1.05 GB)
-    * [kaldi_model_daanzu_20211030p-mediumlm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030p-mediumlm.zip) (651 MB)
-    * [kaldi_model_daanzu_20211030p-smalllm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030p-smalllm.zip) (400 MB)
+    * [kaldi_model_daanzu_20211030-biglm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030-biglm.zip) (1.05 GB)
+    * [kaldi_model_daanzu_20211030-mediumlm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030-mediumlm.zip) (651 MB)
+    * [kaldi_model_daanzu_20211030-smalllm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030-smalllm.zip) (400 MB)
     * [kaldi_model_daanzu_20200905_1ep-biglm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v1.8.0/kaldi_model_daanzu_20200905_1ep-biglm.zip) (1.05 GB)
     * [kaldi_model_daanzu_20200905_1ep-mediumlm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v1.8.0/kaldi_model_daanzu_20200905_1ep-mediumlm.zip) (651 MB)
     * [kaldi_model_daanzu_20200905_1ep-smalllm](https://github.com/daanzu/kaldi-active-grammar/releases/download/v1.8.0/kaldi_model_daanzu_20200905_1ep-smalllm.zip) (400 MB)
