@@ -8,10 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...master) -->
 
-## [3.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.1.0) - 2021-11-05 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...v3.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...kag-v3.1.0)
+## [3.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.1.0) - 2021-11-24 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...v3.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...kag-v3.1.0)
+
+### Fixed
+
+* Fix updating of SymbolTable multiple times for new words, so that there is only one instance for a single Model.
 
 ### Changed
 
+* Only mark lexicon stale if it was successfully modified.
 * Removed deprecated CLI binaries from Windows build, reducing wheel size by ~65%.
 
 ## [3.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.0.0) - 2021-10-31 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...v3.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...kag-v3.0.0)
