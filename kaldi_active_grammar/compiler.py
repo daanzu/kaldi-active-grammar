@@ -331,8 +331,8 @@ class Compiler(object):
     # Methods for compiling graphs.
 
     def add_word(self, word, phones=None, lazy_compilation=False, allow_online_pronunciations=False):
-        self._lexicon_files_stale = True
         pronunciations = self.model.add_word(word, phones=phones, lazy_compilation=lazy_compilation, allow_online_pronunciations=allow_online_pronunciations)
+        self._lexicon_files_stale = True  # Only mark lexicon stale if it was successfully modified (not an exception)
         return pronunciations
 
     def prepare_for_compilation(self):
