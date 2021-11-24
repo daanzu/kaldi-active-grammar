@@ -338,7 +338,7 @@ class Compiler(object):
     def prepare_for_compilation(self):
         if self._lexicon_files_stale:
             self.model.generate_lexicon_files()
-            self.model.load_words()
+            self.model.load_words()  # FIXME: This re-loading from the words.txt file may be unnecessary now that we have/use NativeWFST + SymbolTable, but it's not clear if it's safe to remove it.
             self.decoder.load_lexicon()
             if self._agf_compiler:
                 # TODO: Just update the necessary files in the config
