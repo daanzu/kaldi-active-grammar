@@ -16,6 +16,7 @@ from .utils import ExternalProcess, debug_timer, platform, show_donation_message
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
 from .wrapper import KaldiAgfCompiler, KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder
+import kaldi_active_grammar.whisper_dictation as whisper_dictation
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('compiler')
@@ -663,6 +664,8 @@ class Compiler(object):
             try:
                 if callable(self.alternative_dictation):
                     alternative_text_func = self.alternative_dictation
+                elif self.alternative_dictation == 'whisper':
+                    alternative_text_func = whisper_dictation.Whisper.transcribe_data_sync
                 else:
                     raise TypeError("Invalid alternative_dictation value: %r" % self.alternative_dictation)
 
@@ -691,6 +694,10 @@ class Compiler(object):
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                    if self.alternative_dictation == 'whisper':
+                        self.cloud_dictation_lang = "en-US" # FIXME: hardcoded language!
+                        # FIXME: Whisper dictation backend currently requires the wav file to be stored here!
+                        whisper_dictation.write_wav('/tmp/whisper.wav', dictation_audio)
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'alternative_dictation call'):
                         alternative_text = alternative_text_func(dictation_audio, **kwargs)
