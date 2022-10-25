@@ -647,6 +647,7 @@ class Compiler(object):
             self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
         return words
 
+    plain_dictation_regex = re.compile(r'(?<=#nonterm:dictation )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
@@ -660,7 +661,11 @@ class Compiler(object):
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
-        if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
+        # Debug dictation settings
+        #print("DEBUG: ", self.alternative_dictation, "B", dictation_info_func, "C", kaldi_rule.has_dictation, "D", parsed_output)
+
+        #if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
+        if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation' in parsed_output:
             try:
                 if callable(self.alternative_dictation):
                     alternative_text_func = self.alternative_dictation
@@ -680,7 +685,8 @@ class Compiler(object):
                         'offset_end': times[words.index('#nonterm:end', index)],
                     }
                     for index, (word, time, length) in enumerate(word_align)
-                    if word.startswith('#nonterm:dictation_cloud')]
+                    if word.startswith('#nonterm:dictation')]
+                    #if word.startswith('#nonterm:dictation_cloud')]
 
                 # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
                 dictation_span = dictation_spans[-1]
@@ -706,6 +712,7 @@ class Compiler(object):
                     return (alternative_text or orig_text)
 
                 parsed_output = self.alternative_dictation_regex.sub(replace_dictation, parsed_output)
+                parsed_output = self.plain_dictation_regex.sub(replace_dictation, parsed_output)
             except Exception as e:
                 self._log.exception("Exception performing alternative dictation")
 
