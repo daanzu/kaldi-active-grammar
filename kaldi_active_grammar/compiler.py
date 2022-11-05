@@ -697,13 +697,13 @@ class Compiler(object):
                     dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) // 2
 
                 def replace_dictation(matchobj):
-                    orig_text = matchobj.group(1)
+                    orig_text = matchobj.group(1)    # "orig_text" holds the dictation result from Kaldi dictation.
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
                     if self.alternative_dictation == 'whisper':
                         self.cloud_dictation_lang = "en-US" # FIXME: hardcoded language!
-                        # FIXME: Whisper dictation backend currently requires the wav file to be stored here!
-                        whisper_dictation.write_wav('/tmp/whisper.wav', dictation_audio)
+                        # Whisper dictation backend can take audio data in a wav file.
+                        #whisper_dictation.write_wav('/tmp/whisper.wav', dictation_audio)
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'alternative_dictation call'):
                         alternative_text = alternative_text_func(dictation_audio, **kwargs)
