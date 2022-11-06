@@ -28,6 +28,9 @@ import subprocess
 import time
 from threading import Timer
 import numpy as np
+import tempfile
+import os
+import io
 
 
 # Choose between Whisper models: "tiny.en", "base.en", "small.en", "medium.en" or "large".
@@ -37,8 +40,9 @@ import numpy as np
 #model_filename = "tiny.en"
 model_filename = "medium.en"
 
-# FIXME: Hard-coded file that's used for transferring audio from Kaldi/Dragonfly to Whisper, and probably isn't portable to Windows!
-audio_filename = "/tmp/whisper.wav"
+# If the audio data is being transferred from Kaldi/Dragonfly to Whisper using a wav file, look for it in the system temp folder.
+temp_dir = tempfile.TemporaryDirectory().name
+audio_filename = os.path.join(temp_dir,"whisper.wav")
 
 # Whisper allows passing "prompt" that is intended to be the previous sentence or some similar related text, to give a hint
 # about what it should expect. This includes formatting, so for example giving a hint of "40's" can push whisper closer to
@@ -51,9 +55,6 @@ verbose = False
 
 WHISPER_SERVER_ADDRESS = ("127.0.0.1", 8002)     # Set up our server address. Note that Shervin's KaldiAG setup already runs RPC servers on ports 8000 and 8001
 
-
-import io
-import os
 
 try:
     import whisper
@@ -265,8 +266,8 @@ def xmlrpc_kill():
 def die():
     print(datetime.now(), "[Closing the whisper_server]")
     server_quit = 1
+    temp_dir.cleanup()      # Remove the tmp audio file that we created.
     os.kill(os.getpid(), 9)
-    import sys
     sys.exit()
 
 

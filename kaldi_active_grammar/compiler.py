@@ -703,6 +703,10 @@ class Compiler(object):
                     if self.alternative_dictation == 'whisper':
                         self.cloud_dictation_lang = "en-US" # FIXME: hardcoded language!
                         # Whisper dictation backend can take audio data in a wav file.
+                        # Store a file in the system temp folder (this should work on Linux and Windows, and probably OS X)
+                        #import tempfile
+                        #temp_dir = tempfile.TemporaryDirectory().name
+                        #audio_filename = os.path.join(temp_dir,"whisper.wav")
                         #whisper_dictation.write_wav('/tmp/whisper.wav', dictation_audio)
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'alternative_dictation call'):

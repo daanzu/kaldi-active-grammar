@@ -31,9 +31,12 @@ whisper_client = ServerProxy(WHISPER_SERVER_ACCESS, allow_none=True)
 EXIT_IF_WHISPER_FAILED = True
 
 
-# Create a new process, for the whisper_server to run in the background.
+# Create a new process, for the whisper_server to run in the background. It expects "whisper_server.py" to be in the same folder as this Python file.
 import subprocess
-subprocess.Popen(["whisper_server.py"])
+import os
+pardir = os.path.abspath(os.path.join(__file__, os.pardir))
+whisper_server = os.path.abspath(os.path.join(pardir, "whisper_server.py"))
+subprocess.Popen([sys.executable, whisper_server])
 
 
 
@@ -98,9 +101,7 @@ class Whisper(object):
         # If we've gotten to this line here, then whisper dictation failed.
         if EXIT_IF_WHISPER_FAILED:
             print("Exiting the speech recognition engine, since whisper failed.")
-            import os
             os.kill(os.getpid(), 9)
-            import sys
             sys.exit(1)
 
         return None
