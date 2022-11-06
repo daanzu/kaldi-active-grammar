@@ -16,6 +16,7 @@ from .utils import ExternalProcess, debug_timer, platform, show_donation_message
 from .wfst import WFST, NativeWFST, SymbolTable
 from .model import Model
 from .wrapper import KaldiAgfCompiler, KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder
+import kaldi_active_grammar.whisper_dictation as whisper_dictation
 import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('compiler')
@@ -646,6 +647,7 @@ class Compiler(object):
             self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
         return words
 
+    plain_dictation_regex = re.compile(r'(?<=#nonterm:dictation )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
@@ -659,10 +661,16 @@ class Compiler(object):
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
-        if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
+        # Debug dictation settings
+        #print("DEBUG: ", self.alternative_dictation, "B", dictation_info_func, "C", kaldi_rule.has_dictation, "D", parsed_output)
+
+        #if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation_cloud' in parsed_output:
+        if self.alternative_dictation and dictation_info_func and kaldi_rule.has_dictation and '#nonterm:dictation' in parsed_output:
             try:
                 if callable(self.alternative_dictation):
                     alternative_text_func = self.alternative_dictation
+                elif self.alternative_dictation == 'whisper':
+                    alternative_text_func = whisper_dictation.Whisper.transcribe_data_sync
                 else:
                     raise TypeError("Invalid alternative_dictation value: %r" % self.alternative_dictation)
 
@@ -677,7 +685,8 @@ class Compiler(object):
                         'offset_end': times[words.index('#nonterm:end', index)],
                     }
                     for index, (word, time, length) in enumerate(word_align)
-                    if word.startswith('#nonterm:dictation_cloud')]
+                    if word.startswith('#nonterm:dictation')]
+                    #if word.startswith('#nonterm:dictation_cloud')]
 
                 # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
                 dictation_span = dictation_spans[-1]
@@ -688,9 +697,17 @@ class Compiler(object):
                     dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) // 2
 
                 def replace_dictation(matchobj):
-                    orig_text = matchobj.group(1)
+                    orig_text = matchobj.group(1)    # "orig_text" holds the dictation result from Kaldi dictation.
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
+                    if self.alternative_dictation == 'whisper':
+                        self.cloud_dictation_lang = "en-US" # FIXME: hardcoded language!
+                        # Whisper dictation backend can take audio data in a wav file.
+                        # Store a file in the system temp folder (this should work on Linux and Windows, and probably OS X)
+                        #import tempfile
+                        #temp_dir = tempfile.TemporaryDirectory().name
+                        #audio_filename = os.path.join(temp_dir,"whisper.wav")
+                        #whisper_dictation.write_wav('/tmp/whisper.wav', dictation_audio)
                     kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'alternative_dictation call'):
                         alternative_text = alternative_text_func(dictation_audio, **kwargs)
@@ -699,6 +716,7 @@ class Compiler(object):
                     return (alternative_text or orig_text)
 
                 parsed_output = self.alternative_dictation_regex.sub(replace_dictation, parsed_output)
+                parsed_output = self.plain_dictation_regex.sub(replace_dictation, parsed_output)
             except Exception as e:
                 self._log.exception("Exception performing alternative dictation")
 
