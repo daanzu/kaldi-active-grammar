@@ -67,9 +67,13 @@ if(DEFINED ENV{INTEL_MKL_DIR})
   set(MATHLIB_BUILD_COMMAND true)
 else()  
   message("Compiling with OpenBLAS")
+  set(OPENBLAS_BRANCH "v0.3.13")
+  if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64).*")
+    set(OPENBLAS_BRANCH "develop")
+  endif()
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
   set(MATHLIB_BUILD_COMMAND cd tools
-    && git clone -b v0.3.13 --single-branch https://github.com/xianyi/OpenBLAS
+    && git clone -b ${OPENBLAS_BRANCH} --single-branch https://github.com/xianyi/OpenBLAS
     && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0 all
     && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS PREFIX=install install
     && cd ..)
