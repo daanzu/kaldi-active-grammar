@@ -691,7 +691,7 @@ class Compiler(object):
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
-                    kwargs = dict(language_code=self.cloud_dictation_lang)
+                    kwargs = dict()
                     with debug_timer(self._log.debug, 'alternative_dictation call'):
                         alternative_text = alternative_text_func(dictation_audio, **kwargs)
                         self._log.debug("alternative_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), alternative_text)  # FIXME: hardcoded sample_rate!
