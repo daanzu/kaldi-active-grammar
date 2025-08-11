@@ -7,6 +7,8 @@ on:
     branches: [ build ]
   workflow_dispatch:
     # gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref=master
+    # gh workflow run build.yml --ref develop
+    # gh workflow run build.yml
 
 jobs:
 
@@ -149,15 +151,6 @@ jobs:
           perl get_version.pl
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v1.0.2
-      # - run: |
-      #     setx VCTargetsPath "C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\v140" /M
-      #   shell: cmd
-      # find /c -name 'MSBuild.exe'
-      # - run: |
-      #     rem dir "C:\Program Files (x86)\"
-      #     vswhere.exe -find VC\Redist\**\VC_redist.x64.exe
-      #     zzzzz
-      #   shell: cmd
       - name: Install MKL
         if: ${{ env.MKL_URL != 0 }}
         run: |
@@ -168,26 +161,13 @@ jobs:
           ls -al
           ./mkl.exe --s --a install --output=$GITHUB_WORKSPACE/mkl/output.txt --eula=accept
           cat output.txt
-        # continue-on-error: true
-        # installdir=
       - name: Build OpenFST
-        run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -maxCpuCount -verbosity:minimal openfst/openfst.sln
         shell: cmd
+        run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -maxCpuCount -verbosity:minimal openfst/openfst.sln
       - name: Build Kaldi
+        shell: cmd
         run: |
           msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -p:WindowsTargetPlatformVersion=10.0.16299.0 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
-          msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -p:WindowsTargetPlatformVersion=10.0.16299.0 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/compile-graph-agf/compile-graph-agf.vcxproj
-          msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -p:WindowsTargetPlatformVersion=10.0.16299.0 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/fstaddselfloops/fstaddselfloops.vcxproj
-        shell: cmd
-        # msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -p:WindowsTargetPlatformVersion=10.0.16299.0 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin_vs2019.sln
-        # set
-        # call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
-        # which msbuild.exe
-        # set VCTargetsPath=C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\v140
-        # set
-        # "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\amd64\MSBuild.exe"
-        # dotenv openfst/openfst.sln /build "Release|x64"
-        # dotenv kaldi/kaldiwin_vs2019_MKL/kaldiwin_vs2019.sln /build "Release|x64"
       - name: Build Python wheel
         run: |
           cd main
@@ -196,7 +176,6 @@ jobs:
           # ls -alR ../
           mkdir -p kaldi_active_grammar/exec/windows
           cp ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll kaldi_active_grammar/exec/windows/
-          # ../openfst/build_output/x64/Release/bin/{fstarcsort,fstcompile,fstinfo}.exe ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/compile-graph-agf/x64/Release/compile-graph-agf.exe ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/fstaddselfloops/x64/Release/fstaddselfloops.exe
           env KALDIAG_SETUP_RAW=1 python setup.py bdist_wheel
           ls -al dist/
       - uses: actions/upload-artifact@v2

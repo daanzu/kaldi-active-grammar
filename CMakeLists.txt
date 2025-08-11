@@ -56,7 +56,7 @@ if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   # FIXME: copy files?
   # https://cmake.org/cmake/help/latest/command/foreach.html
   # https://stackoverflow.com/questions/34799916/copy-file-from-source-directory-to-binary-directory-using-cmake
-endif()  
+endif()
 
 find_program(MAKE_EXE NAMES make gmake nmake)
 
@@ -65,11 +65,14 @@ if(DEFINED ENV{INTEL_MKL_DIR})
   message("Compiling with MKL in: $ENV{INTEL_MKL_DIR}")
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=MKL --mkl-root=$ENV{INTEL_MKL_DIR})
   set(MATHLIB_BUILD_COMMAND true)
-else()  
-  message("Compiling with OpenBLAS")
+else()
+  if(NOT DEFINED OPENBLAS_REF)
+    set(OPENBLAS_REF "v0.3.13")
+  endif()
+  message("Compiling with OpenBLAS git ref: ${OPENBLAS_REF}")
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
   set(MATHLIB_BUILD_COMMAND cd tools
-    && git clone -b v0.3.13 --single-branch https://github.com/xianyi/OpenBLAS
+    && git clone -b ${OPENBLAS_REF} --single-branch https://github.com/OpenMathLib/OpenBLAS
     && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0 all
     && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS PREFIX=install install
     && cd ..)
