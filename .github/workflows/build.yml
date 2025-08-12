@@ -88,15 +88,18 @@ jobs:
           path: wheelhouse/*
 
   build-windows:
-    runs-on: windows-2019
+    runs-on: windows-2025
     if: true
     env:
-      MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17173/w_mkl_2020.4.311.exe
+      VS_VERSION: vs2022
+      PLATFORM_TOOLSET: v143
+      WINDOWS_TARGET_PLATFORM_VERSION: 10.0
+      MKL_VERSION: 2025.1.0
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           path: main
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
@@ -107,11 +110,11 @@ jobs:
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           repository: daanzu/openfst
           path: openfst
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
@@ -120,53 +123,45 @@ jobs:
         run: |
           echo $GITHUB_WORKSPACE
           df -h
-          ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/'
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'
-          ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/v142'
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.16.27012/x64/Microsoft.VC141.CRT'
-          ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/'*/x64/Microsoft.*.CRT
-          # ls -alR /c/Program\ Files\ \(x86\)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/
-          # ls -alR '/c/Program Files (x86)/Microsoft Visual Studio/'2019/Enterprise/VC/Redist/MSVC/
+          echo "Windows SDK Versions:"
+          ls -al '/c/Program Files (x86)/Windows Kits/10/Include/'
+          echo "Visual Studio Redistributables:"
+          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/'
+          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'
+          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/v142'
+          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.16.27012/x64/Microsoft.VC141.CRT'
+          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/'*/x64/Microsoft.*.CRT
+          # ls -alR /c/Program\ Files\ \(x86\)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/
+          # ls -alR '/c/Program Files (x86)/Microsoft Visual Studio/'2022/Enterprise/VC/Redist/MSVC/
           vswhere
           vswhere -find 'VC\Redist\**\VC_redist.x64.exe'
       - name: Setup Kaldi build configuration
         run: |
           cd kaldi/windows
           cp kaldiwin_mkl.props kaldiwin.props
-          # Add MKL static libraries to build
-          perl -pi -e 's/<AdditionalDependencies>.*<\/AdditionalDependencies>/<AdditionalDependencies>mkl_sequential.lib;mkl_intel_thread.lib;mkl_core.lib;mkl_intel_lp64.lib;%(AdditionalDependencies)<\/AdditionalDependencies>/g' kaldiwin.props
           cp variables.props.dev variables.props
-          # Add openfst location
+          # Set openfst location
           perl -pi -e 's/<OPENFST>.*<\/OPENFST>/<OPENFST>$ENV{GITHUB_WORKSPACE}\\openfst<\/OPENFST>/g' variables.props
           perl -pi -e 's/<OPENFSTLIB>.*<\/OPENFSTLIB>/<OPENFSTLIB>$ENV{GITHUB_WORKSPACE}\\openfst\\build_output<\/OPENFSTLIB>/g' variables.props
-          perl generate_solution.pl --vsver vs2019 --enable-mkl --noportaudio
+          perl generate_solution.pl --vsver ${VS_VERSION} --enable-mkl --noportaudio
           # Add additional libfstscript library to dragonfly build file
           sed -i.bak '$i\
             <ItemDefinitionGroup>\
               <Link>\
                 <AdditionalDependencies>libfstscript.lib;%(AdditionalDependencies)</AdditionalDependencies>\
               </Link>\
-            </ItemDefinitionGroup>' ../kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
+            </ItemDefinitionGroup>' ../kaldiwin_${VS_VERSION}_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
           perl get_version.pl
       - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.0.2
+        uses: microsoft/setup-msbuild@v2
       - name: Install MKL
-        if: ${{ env.MKL_URL != 0 }}
-        run: |
-          echo "MKL_URL: $MKL_URL"
-          mkdir -p mkl
-          cd mkl
-          curl -s $MKL_URL > mkl.exe
-          ls -al
-          ./mkl.exe --s --a install --output=$GITHUB_WORKSPACE/mkl/output.txt --eula=accept
-          cat output.txt
+        run: winget install --id=Intel.oneMKL -v "${MKL_VERSION}" -e --accept-package-agreements --accept-source-agreements --disable-interactivity
       - name: Build OpenFST
         shell: cmd
-        run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -maxCpuCount -verbosity:minimal openfst/openfst.sln
+        run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=%PLATFORM_TOOLSET% -maxCpuCount -verbosity:minimal openfst/openfst.sln
       - name: Build Kaldi
         shell: cmd
-        run: |
-          msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v141 -p:WindowsTargetPlatformVersion=10.0.16299.0 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
+        run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=%PLATFORM_TOOLSET% -p:WindowsTargetPlatformVersion=%WINDOWS_TARGET_PLATFORM_VERSION% -maxCpuCount -verbosity:minimal kaldi/kaldiwin_%VS_VERSION%_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
       - name: Build Python wheel
         run: |
           cd main
@@ -174,19 +169,19 @@ jobs:
           python -m pip install --upgrade setuptools wheel scikit-build cmake ninja
           # ls -alR ../
           mkdir -p kaldi_active_grammar/exec/windows
-          cp ../kaldi/kaldiwin_vs2019_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll kaldi_active_grammar/exec/windows/
+          cp ../kaldi/kaldiwin_${VS_VERSION}_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll kaldi_active_grammar/exec/windows/
           env KALDIAG_SETUP_RAW=1 python setup.py bdist_wheel
           ls -al dist/
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-windows
           path: main/dist/*
       # - name: Copy Windows vc_redist
       #   run: |
       #     mkdir -p vc_redist
-      #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'/vc_redist.x64.exe vc_redist/
-      #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Redist/MSVC/14.26.28720'/x64/Microsoft.*.CRT/* vc_redist/
-      # - uses: actions/upload-artifact@v2
+      #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'/vc_redist.x64.exe vc_redist/
+      #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'/x64/Microsoft.*.CRT/* vc_redist/
+      # - uses: actions/upload-artifact@v4
       #   with:
-      #     name: vc_redist
+      #     name: windows_vc_redist
       #     path: vc_redist/*
