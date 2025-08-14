@@ -56,7 +56,7 @@ if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   # FIXME: copy files?
   # https://cmake.org/cmake/help/latest/command/foreach.html
   # https://stackoverflow.com/questions/34799916/copy-file-from-source-directory-to-binary-directory-using-cmake
-endif()  
+endif()
 
 find_program(MAKE_EXE NAMES make gmake nmake)
 
@@ -65,11 +65,18 @@ if(DEFINED ENV{INTEL_MKL_DIR})
   message("Compiling with MKL in: $ENV{INTEL_MKL_DIR}")
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=MKL --mkl-root=$ENV{INTEL_MKL_DIR})
   set(MATHLIB_BUILD_COMMAND true)
-else()  
-  message("Compiling with OpenBLAS")
+else()
+  if(NOT DEFINED OPENBLAS_REF)
+    if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
+      set(OPENBLAS_REF "v0.3.30")
+    else()
+      set(OPENBLAS_REF "v0.3.13")
+    endif()
+  endif()
+  message("Compiling with OpenBLAS git ref: ${OPENBLAS_REF}")
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
   set(MATHLIB_BUILD_COMMAND cd tools
-    && git clone -b v0.3.13 --single-branch https://github.com/OpenMathLib/OpenBLAS
+    && git clone -b ${OPENBLAS_REF} --single-branch https://github.com/OpenMathLib/OpenBLAS
     && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0 all
     && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS PREFIX=install install
     && cd ..)
@@ -110,7 +117,7 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
     GIT_SHALLOW       TRUE
     CONFIGURE_COMMAND sed -i.bak -e "s/status=0/exit 0/g" tools/extras/check_dependencies.sh && sed -i.bak -e "s/openfst_add_CXXFLAGS = -g -O2/openfst_add_CXXFLAGS = -g0 -O3/g" tools/Makefile && cp ${PROJECT_SOURCE_DIR}/building/kaldi-configure-wrapper.sh src/
     BUILD_IN_SOURCE   TRUE
-    BUILD_COMMAND     ${MATHLIB_BUILD_COMMAND} && cd tools && ${MAKE_EXE} ${MAKE_FLAGS} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly
+    BUILD_COMMAND     ${MATHLIB_BUILD_COMMAND} && cd tools && ${MAKE_EXE} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly
     LIST_SEPARATOR    " "
     INSTALL_COMMAND   ${STRIP_LIBS_COMMAND} && mkdir -p ${DST} && cp ${BINARIES} ${LIBRARIES} ${DST} && ${STRIP_DST_COMMAND}
     )
