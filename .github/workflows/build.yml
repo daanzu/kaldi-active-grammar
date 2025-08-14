@@ -12,52 +12,9 @@ on:
 
 jobs:
 
-  build-macos:
-    runs-on: macos-10.15
-    if: true
-    env:
-      MACOSX_DEPLOYMENT_TARGET: 10.9
-      # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
-    steps:
-      - uses: actions/checkout@v2
-      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
-        run: |
-          export TAG=$(git tag --points-at HEAD)
-          if [[ $TAG ]]; then
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
-          else
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
-          fi
-      - name: Dependencies
-        run: |
-          python3 -m pip install --upgrade setuptools wheel scikit-build cmake ninja
-          brew install automake
-          brew install autoconf
-          brew install sox
-          brew install libtool
-          brew reinstall gfortran  # for openblas
-      - name: MKL
-        if: ${{ env.MKL_URL != 0 }}
-        run: |
-          echo "Installing MKL from: $MKL_URL"
-          export MKL_FILE=${MKL_URL##*/}
-          export MKL_FILE=${MKL_FILE%\.dmg}
-          wget --no-verbose $MKL_URL
-          hdiutil attach ${MKL_FILE}.dmg
-          cp /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/silent.cfg .
-          sed -i.bak -e 's/decline/accept/g' silent.cfg
-          sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
-      - run: |
-          python3 setup.py bdist_wheel
-          ls -al dist/
-      - uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist/*
-          
   build-linux:
-    if: true
     runs-on: ubuntu-latest
+    if: true
     steps:
       - uses: actions/checkout@v5
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
@@ -185,3 +142,104 @@ jobs:
       #   with:
       #     name: windows_vc_redist
       #     path: vc_redist/*
+
+  build-macos-arm:
+    runs-on: macos-15
+    if: true
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+      # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
+    steps:
+      - uses: actions/checkout@v5
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        run: |
+          export TAG=$(git tag --points-at HEAD)
+          if [[ $TAG ]]; then
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
+          else
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
+          fi
+      - name: Dependencies
+        run: |
+          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
+          brew install automake
+          # brew install autoconf
+          brew install sox
+          brew install libtool
+          brew reinstall gfortran  # for openblas
+      - name: MKL
+        if: ${{ env.MKL_URL != 0 }}
+        run: |
+          echo "Installing MKL from: $MKL_URL"
+          export MKL_FILE=${MKL_URL##*/}
+          export MKL_FILE=${MKL_FILE%\.dmg}
+          wget --no-verbose $MKL_URL
+          hdiutil attach ${MKL_FILE}.dmg
+          cp /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/silent.cfg .
+          sed -i.bak -e 's/decline/accept/g' silent.cfg
+          sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
+      - run: |
+          python3 setup.py bdist_wheel
+          ls -al dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-arm
+          path: dist/*
+
+  build-macos-intel:
+    runs-on: macos-13
+    if: true
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "10.9"
+      # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
+    steps:
+      - uses: actions/checkout@v5
+      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        run: |
+          export TAG=$(git tag --points-at HEAD)
+          if [[ $TAG ]]; then
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
+          else
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
+          fi
+      - name: Dependencies
+        run: |
+          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
+          brew install automake
+          # brew install autoconf
+          brew install sox
+          # brew install libtool
+          brew reinstall gfortran  # for openblas
+      - name: MKL
+        if: ${{ env.MKL_URL != 0 }}
+        run: |
+          echo "Installing MKL from: $MKL_URL"
+          export MKL_FILE=${MKL_URL##*/}
+          export MKL_FILE=${MKL_FILE%\.dmg}
+          wget --no-verbose $MKL_URL
+          hdiutil attach ${MKL_FILE}.dmg
+          cp /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/silent.cfg .
+          sed -i.bak -e 's/decline/accept/g' silent.cfg
+          sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
+      - run: |
+          python3 setup.py bdist_wheel
+          ls -al dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-intel
+          path: dist/*
+
+  merge-wheels:
+    runs-on: ubuntu-latest
+    needs: [
+      build-linux,
+      build-windows,
+      build-macos-arm,
+      build-macos-intel,
+    ]
+    steps:
+      - uses: actions/upload-artifact/merge@v4
+        with:
+          name: wheels
+          pattern: wheels-*
+          delete-merged: false  # Optional: removes the individual artifacts
