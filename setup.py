@@ -152,7 +152,7 @@ setup(
     # above.
     author_email='daanzu@gmail.com',  # Optional
 
-    license='AGPL-3.0',
+    license='AGPL-3.0-or-later',
 
     # Classifiers help users find your project by categorizing it.
     #
