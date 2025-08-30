@@ -1,0 +1,4 @@
+-e .
+piper-tts~=1.0
+pytest>=8.0
+pytest-cov

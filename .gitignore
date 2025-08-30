@@ -1,11 +1,14 @@
+_cmake_test_compile/
 kaldi_active_grammar/exec
+examples/*.fst
 portable/
+tests/*.onnx
+tests/*.onnx.json
+tests/**/*.wav
 tmp/
 wheels
-examples/*.fst
 */kaldi_model*/
-*/kaldi_tmp*/
-_cmake_test_compile/
+*/kaldi_model*.zip
 
 # general things to ignore
 venv*/
@@ -26,3 +29,4 @@ pip-wheel-metadata/
 # due to using tox and pytest
 .tox
 .cache
+.coverage

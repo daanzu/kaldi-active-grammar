@@ -1,5 +1,7 @@
 
 docker_repo := 'daanzu/kaldi-fork-active-grammar-manylinux'
+piper_voice := 'en_US-ryan-low'
+kaldi_model_url := 'https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030-smalllm.zip'
 
 _default:
 	just --list
@@ -48,3 +50,10 @@ test-model model_dir:
 
 trigger-build ref='master':
 	gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref={{ref}}
+
+setup-tests:
+	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
+	cd tests && [ ! -e kaldi_model ] && curl -L -C - -o kaldi_model.zip '{{kaldi_model_url}}' && unzip -o kaldi_model.zip || true
+
+test *args='':
+    uv run --no-project --with-requirements requirements-test.txt -m pytest {{args}}

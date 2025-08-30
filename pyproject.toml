@@ -1,2 +1,14 @@
 [build-system]
 requires = ["setuptools", "wheel", "scikit-build", "cmake", "ninja"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+    "-ra",  # extra summary for skips/xfails
+    "--strict-markers",  # fail on unknown markers
+    "--strict-config",  # fail on bad config
+    "--cov=kaldi_active_grammar", "--no-cov-on-fail", "--cov-branch", "--cov-report=term-missing",
+]
+xfail_strict = true

@@ -236,7 +236,9 @@ setup(
         'g2p_en': ['g2p_en ~= 2.1.0'],
         'online': ['requests ~= 2.18'],
         # 'dev': ['check-manifest'],
-        # 'test': ['coverage'],
+        # "test": [
+        #     # See requirements-test.txt
+        # ]
     },
 
     # package_dir={
