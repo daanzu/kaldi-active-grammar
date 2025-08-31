@@ -4,11 +4,10 @@ from pathlib import Path
 import pytest
 
 from kaldi_active_grammar import Compiler, KaldiRule
+from tests.helpers import *
 
 
 class TestGrammar:
-
-    expected_info_keys = ('likelihood', 'am_score', 'lm_score', 'confidence', 'expected_error_rate')
 
     @pytest.fixture(autouse=True)
     def setup(self, monkeypatch):
@@ -37,8 +36,7 @@ class TestGrammar:
         output, info = self.decoder.get_output()
         assert isinstance(output, str)
         assert len(output) > 0
-        assert isinstance(info, dict)
-        assert all(key in info and isinstance(info[key], float) for key in self.expected_info_keys)
+        assert_info_shape(info)
 
         recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
         assert recognized_rule == rule
