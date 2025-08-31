@@ -19,6 +19,6 @@ class KaldiError(Exception):
 
 from .compiler import Compiler, KaldiRule
 from .wrapper import KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder, KaldiPlainNNet3Decoder
-from .wfst import WFST
+from .wfst import NativeWFST, WFST
 from .plain_dictation import PlainDictationRecognizer
 from .utils import disable_donation_message
