@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+# This script builds a Python wheel for kaldi-active-grammar using dockcross,
+# and is to be RUN WITHIN THE DOCKCROSS CONTAINER. It optionally installs Intel
+# MKL if MKL_URL is provided, then builds the wheel and repairs it for the
+# specified platform using auditwheel.
+#
+# Usage: ./build-wheel-dockcross.sh <WHEEL_PLAT> <KALDI_BRANCH> [MKL_URL]
+# - WHEEL_PLAT: The platform tag for the wheel (e.g., manylinux2014_x86_64)
+# - KALDI_BRANCH: The Kaldi branch to use for building
+# - MKL_URL: Optional URL to download and install Intel MKL
+
 set -e -x
 
 PYTHON_EXE=/opt/python/cp38-cp38/bin/python

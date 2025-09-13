@@ -251,7 +251,6 @@ setup(
     # If using Python 2.6 or earlier, then these have to be included in
     # MANIFEST.in as well.
     package_data={  # Optional
-        # 'kaldi_active_grammar': ['exec/windows/*'],
         'kaldi_active_grammar': ['exec/*/*'],
         '': ['LICENSE.txt'],
     },
