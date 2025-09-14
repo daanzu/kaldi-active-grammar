@@ -16,7 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     if: true
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
@@ -26,20 +28,25 @@ jobs:
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
+
       - name: Setup just
         run: |
           ls -al $HOME
           mkdir $HOME/bin
           curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to $HOME/bin/
           echo "$HOME/bin" >> $GITHUB_PATH
-      - run: |
+
+      - name: Build with dockcross
+        run: |
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           # Example MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz
           just build-dockcross $KALDI_BRANCH $MKL_URL
           # cp dist/* wheelhouse/
           ls -al wheelhouse/
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload Linux wheels
+        uses: actions/upload-artifact@v4
         with:
           name: wheels-linux
           path: wheelhouse/*
@@ -56,9 +63,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout main repository
+        uses: actions/checkout@v5
         with:
           path: main
+
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
@@ -67,16 +76,21 @@ jobs:
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
-      - uses: actions/checkout@v5
+
+      - name: Checkout OpenFST repository
+        uses: actions/checkout@v5
         with:
           repository: daanzu/openfst
           path: openfst
-      - uses: actions/checkout@v5
+
+      - name: Checkout Kaldi repository
+        uses: actions/checkout@v5
         with:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
           ref: ${{ env.KALDI_BRANCH }}
-      - name: Gather information
+
+      - name: Gather system information
         run: |
           echo $GITHUB_WORKSPACE
           df -h
@@ -92,6 +106,7 @@ jobs:
           # ls -alR '/c/Program Files (x86)/Microsoft Visual Studio/'2022/Enterprise/VC/Redist/MSVC/
           vswhere
           vswhere -find 'VC\Redist\**\VC_redist.x64.exe'
+
       - name: Setup Kaldi build configuration
         run: |
           cd kaldi/windows
@@ -109,16 +124,21 @@ jobs:
               </Link>\
             </ItemDefinitionGroup>' ../kaldiwin_${VS_VERSION}_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
           perl get_version.pl
+
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
+
       - name: Install MKL
         run: winget install --id=Intel.oneMKL -v "${MKL_VERSION}" -e --accept-package-agreements --accept-source-agreements --disable-interactivity
+
       - name: Build OpenFST
         shell: cmd
         run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=%PLATFORM_TOOLSET% -maxCpuCount -verbosity:minimal openfst/openfst.sln
+
       - name: Build Kaldi
         shell: cmd
         run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=%PLATFORM_TOOLSET% -p:WindowsTargetPlatformVersion=%WINDOWS_TARGET_PLATFORM_VERSION% -maxCpuCount -verbosity:minimal kaldi/kaldiwin_%VS_VERSION%_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
+
       - name: Build Python wheel
         run: |
           cd main
@@ -129,10 +149,13 @@ jobs:
           cp ../kaldi/kaldiwin_${VS_VERSION}_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll kaldi_active_grammar/exec/windows/
           env KALDIAG_SETUP_RAW=1 python setup.py bdist_wheel
           ls -al dist/
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload Windows wheels
+        uses: actions/upload-artifact@v4
         with:
           name: wheels-windows
           path: main/dist/*
+
       # - name: Copy Windows vc_redist
       #   run: |
       #     mkdir -p vc_redist
@@ -150,7 +173,9 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
@@ -159,7 +184,8 @@ jobs:
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
-      - name: Dependencies
+
+      - name: Install dependencies
         run: |
           python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
           brew install automake
@@ -167,7 +193,8 @@ jobs:
           brew install sox
           brew install libtool
           brew reinstall gfortran  # for openblas
-      - name: MKL
+
+      - name: Install MKL (if enabled)
         if: ${{ env.MKL_URL != 0 }}
         run: |
           echo "Installing MKL from: $MKL_URL"
@@ -178,10 +205,14 @@ jobs:
           cp /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/silent.cfg .
           sed -i.bak -e 's/decline/accept/g' silent.cfg
           sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
-      - run: |
+
+      - name: Build Python wheel
+        run: |
           python3 setup.py bdist_wheel
           ls -al dist/
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload MacOS ARM wheels
+        uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-arm
           path: dist/*
@@ -193,7 +224,9 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "10.9"
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
           export TAG=$(git tag --points-at HEAD)
@@ -202,7 +235,8 @@ jobs:
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
           fi
-      - name: Dependencies
+
+      - name: Install dependencies
         run: |
           python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
           brew install automake
@@ -210,7 +244,8 @@ jobs:
           brew install sox
           # brew install libtool
           brew reinstall gfortran  # for openblas
-      - name: MKL
+
+      - name: Install MKL (if enabled)
         if: ${{ env.MKL_URL != 0 }}
         run: |
           echo "Installing MKL from: $MKL_URL"
@@ -221,10 +256,14 @@ jobs:
           cp /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/silent.cfg .
           sed -i.bak -e 's/decline/accept/g' silent.cfg
           sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
-      - run: |
+
+      - name: Build Python wheel
+        run: |
           python3 setup.py bdist_wheel
           ls -al dist/
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload MacOS Intel wheels
+        uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-intel
           path: dist/*
@@ -238,7 +277,8 @@ jobs:
       build-macos-intel,
     ]
     steps:
-      - uses: actions/upload-artifact/merge@v4
+      - name: Merge all wheel artifacts
+        uses: actions/upload-artifact/merge@v4
         with:
           name: wheels
           pattern: wheels-*
