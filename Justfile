@@ -15,15 +15,15 @@ build-linux python='python3':
 	# MKL with INTEL_MKL_DIR=/opt/intel/mkl/
 	{{python}} setup.py bdist_wheel
 
-build-dockcross kaldi_branch mkl_url="":
-	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{kaldi_branch}} {{mkl_url}}
+build-dockcross *args='':
+	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{args}}
 
 setup-dockcross:
 	docker run --rm dockcross/manylinux2010-x64:20210127-72b83fc > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
 	@# [ ! -e building/dockcross-manylinux2010-x64 ] && docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64 || true
 
 pip-install-develop:
-	KALDIAG_SETUP_RAW=1 pip3 install --user -e .
+	KALDIAG_BUILD_SKIP_NATIVE=1 pip3 install --user -e .
 
 # Setup an editable development environment on linux
 setup-linux-develop kaldi_root_dir:

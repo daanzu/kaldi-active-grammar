@@ -14,12 +14,14 @@ import os, re, datetime
 # Python 3 only projects can skip this import
 from io import open
 
-if os.environ.get('KALDIAG_SETUP_RAW'):
+# Optionally skip native code build by using standard setuptools; otherwise build native code with scikit-build
+if os.environ.get('KALDIAG_BUILD_SKIP_NATIVE') or os.environ.get('KALDIAG_SETUP_RAW'):
     from setuptools import setup
-    import site, sys
-    site.ENABLE_USER_SITE = ("--user" in sys.argv[1:])  # Fix pip https://github.com/pypa/pip/issues/7953
 else:
     from skbuild import setup
+
+import site, sys
+site.ENABLE_USER_SITE = bool("--user" in sys.argv[1:])  # Fix pip bug breaking editable install to user directory: https://github.com/pypa/pip/issues/7953
 
 
 # Force wheel to be platform specific

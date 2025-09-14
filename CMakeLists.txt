@@ -130,7 +130,8 @@ endif()
 # binaries.  After package installation is done, these directories are
 # deleted and the dynamic libraries cannot be loaded.  The following
 # commands generate a shell script that fixes the paths to the dynamic
-# libraries in the built executables and the libraries themselves.
+# libraries in the built executables and the libraries themselves, so
+# that they can be loaded when placed in the same directory.
 # Also the commands add a custom target to invoke the generated script
 # after the external project (kaldi) has been built.  An alternative
 # would be to change the kaldi engine build system to accept a path to

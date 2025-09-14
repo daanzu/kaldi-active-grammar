@@ -15,6 +15,9 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     if: true
+    env:
+      MKL_URL: ""
+      # MKL_URL: "https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -26,12 +29,30 @@ jobs:
           export TAG=$(git tag --points-at HEAD)
           echo "TAG: $TAG"
           if [[ $TAG ]]; then
+            echo "KALDI_BRANCH: kag-$TAG"
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
+            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Get Kaldi commit hash
+        id: get-kaldi-commit
+        run: |
+          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
+          echo "KALDI_COMMIT: $KALDI_COMMIT"
+          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Restore cached native binaries
+        id: cache-native-binaries-restore
+        uses: actions/cache/restore@v4
+        with:
+          key: native-${{ runner.os }}-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.MKL_URL }}-v1
+          path: |
+            kaldi_active_grammar/exec/linux
+            kaldi_active_grammar.libs
 
       - name: Setup just
         run: |
@@ -40,20 +61,59 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to $HOME/bin/
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Build with dockcross
+      - name: Build with dockcross (native binaries & python wheel)
         run: |
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
-          # Example MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz
-          just build-dockcross $KALDI_BRANCH $MKL_URL
-          # cp dist/* wheelhouse/
-          ls -al wheelhouse/
+          just build-dockcross ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && '--skip-native' || '' }} $KALDI_BRANCH $MKL_URL
+          # ls -al wheelhouse/
+
+      - name: Extract native binaries from wheel after auditwheel repair, to save to cache
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        run: |
+          # Assert there is only one wheel
+          WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
+          if [ "$WHEEL_COUNT" -ne 1 ]; then
+            echo "Error: Expected exactly 1 wheel, found $WHEEL_COUNT"
+            ls -al wheelhouse/
+            exit 1
+          fi
+          WHEEL_FILE=$(ls wheelhouse/*.whl)
+          echo "Extracting from wheel: $WHEEL_FILE"
+          unzip -j -o $WHEEL_FILE 'kaldi_active_grammar/exec/linux/*' -d kaldi_active_grammar/exec/linux/
+          unzip -o $WHEEL_FILE 'kaldi_active_grammar.libs/*'
+          ls -al kaldi_active_grammar/exec/linux/
+          readelf -d kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so | egrep 'NEEDED|RUNPATH|RPATH'
+
+      - name: Save cached native binaries
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
+          path: |
+            kaldi_active_grammar/exec/linux
+            kaldi_active_grammar.libs
+
+      - name: Upload native binaries to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux
+          path: |
+            kaldi_active_grammar/exec/linux
+            kaldi_active_grammar.libs
 
       - name: Upload Linux wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-linux
           path: wheelhouse/*
+
+      - name: Examine results
+        run: |
+          for whl in wheelhouse/*.whl; do
+            echo "Wheel: $whl"
+            unzip -l $whl
+          done
 
   build-windows:
     runs-on: windows-2025
@@ -74,33 +134,54 @@ jobs:
           path: main
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
-        id: get_kaldi_branch
+        id: get-kaldi-branch
+        working-directory: main
         run: |
           # Fetch tags on the one fetched commit (shallow clone)
           git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
+          echo "TAG: $TAG"
           if [[ $TAG ]]; then
+            echo "KALDI_BRANCH: kag-$TAG"
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
+            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Get Kaldi commit hash
+        id: get-kaldi-commit
+        run: |
+          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
+          echo "KALDI_COMMIT: $KALDI_COMMIT"
+          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Restore cached native binaries
+        id: cache-native-binaries-restore
+        uses: actions/cache/restore@v4
+        with:
+          key: native-${{ runner.os }}-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.VS_VERSION }}-${{ env.PLATFORM_TOOLSET }}-${{ env.WINDOWS_TARGET_PLATFORM_VERSION }}-${{ env.MKL_VERSION }}-v1
+          path: main/kaldi_active_grammar/exec/windows
+
       - name: Checkout OpenFST repository
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         uses: actions/checkout@v5
         with:
           repository: daanzu/openfst
           path: openfst
 
       - name: Checkout Kaldi repository
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         uses: actions/checkout@v5
         with:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
-          ref: ${{ steps.get_kaldi_branch.outputs.KALDI_BRANCH }}
+          ref: ${{ steps.get-kaldi-branch.outputs.KALDI_BRANCH }}
 
       - name: Gather system information
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         run: |
           echo $GITHUB_WORKSPACE
           df -h
@@ -118,6 +199,7 @@ jobs:
           vswhere -find 'VC\Redist\**\VC_redist.x64.exe'
 
       - name: Setup Kaldi build configuration
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         run: |
           cd kaldi/windows
           cp kaldiwin_mkl.props kaldiwin.props
@@ -136,28 +218,49 @@ jobs:
           perl get_version.pl
 
       - name: Add msbuild to PATH
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         uses: microsoft/setup-msbuild@v2
 
       - name: Install MKL
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         run: winget install --id=Intel.oneMKL -v "${MKL_VERSION}" -e --accept-package-agreements --accept-source-agreements --disable-interactivity
 
       - name: Build OpenFST
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         shell: cmd
         run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=%PLATFORM_TOOLSET% -maxCpuCount -verbosity:minimal openfst/openfst.sln
 
       - name: Build Kaldi
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         shell: cmd
         run: msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=%PLATFORM_TOOLSET% -p:WindowsTargetPlatformVersion=%WINDOWS_TARGET_PLATFORM_VERSION% -maxCpuCount -verbosity:minimal kaldi/kaldiwin_%VS_VERSION%_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
 
-      - name: Build Python wheel
+      - name: Copy native binaries
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         run: |
-          cd main
+          mkdir -p main/kaldi_active_grammar/exec/windows
+          cp kaldi/kaldiwin_${VS_VERSION}_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll main/kaldi_active_grammar/exec/windows/
+
+      - name: Save cached native binaries
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
+          path: main/kaldi_active_grammar/exec/windows
+
+      - name: Upload native binaries to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows
+          path: main/kaldi_active_grammar/exec/windows
+
+      - name: Build Python wheel
+        working-directory: main
+        run: |
           python -m pip -V
           python -m pip install --upgrade setuptools wheel scikit-build cmake ninja
           # ls -alR ../
-          mkdir -p kaldi_active_grammar/exec/windows
-          cp ../kaldi/kaldiwin_${VS_VERSION}_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll kaldi_active_grammar/exec/windows/
-          env KALDIAG_SETUP_RAW=1 python setup.py bdist_wheel
+          env KALDIAG_BUILD_SKIP_NATIVE=1 python setup.py bdist_wheel
           ls -al dist/
 
       - name: Upload Windows wheels
@@ -165,6 +268,13 @@ jobs:
         with:
           name: wheels-windows
           path: main/dist/*
+
+      - name: Examine results
+        run: |
+          for whl in main/dist/*.whl; do
+            echo "Wheel: $whl"
+            unzip -l $whl
+          done
 
       # - name: Copy Windows vc_redist
       #   run: |
@@ -188,27 +298,38 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        id: get-kaldi-branch
         run: |
           # Fetch tags on the one fetched commit (shallow clone)
           git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
+          echo "TAG: $TAG"
           if [[ $TAG ]]; then
+            echo "KALDI_BRANCH: kag-$TAG"
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
+            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install dependencies
+      - name: Get Kaldi commit hash
+        id: get-kaldi-commit
         run: |
-          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
-          brew install automake sox libtool
-          brew reinstall gfortran  # For openblas
-          # brew install autoconf
+          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
+          echo "KALDI_COMMIT: $KALDI_COMMIT"
+          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Restore cached native binaries
+        id: cache-native-binaries-restore
+        uses: actions/cache/restore@v4
+        with:
+          key: native-${{ runner.os }}-arm-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
+          path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
-        if: ${{ env.MKL_URL != '' }}
+        if: ${{ env.MKL_URL != '' && steps.cache-native-binaries-restore.outputs.cache-hit != 'true' }}
         run: |
           echo "Installing MKL from: $MKL_URL"
           export MKL_FILE=${MKL_URL##*/}
@@ -219,17 +340,50 @@ jobs:
           sed -i.bak -e 's/decline/accept/g' silent.cfg
           sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
 
+      - name: Install dependencies for native build
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        run: |
+          python3 -m pip install --break-system-packages --user --upgrade scikit-build cmake ninja
+          brew install automake sox libtool
+          brew reinstall gfortran  # For openblas
+          # brew install autoconf
+
+      - name: Install dependencies for python build
+        run: |
+          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel
+
       - name: Build Python wheel
         run: |
           echo "KALDI_BRANCH: $KALDI_BRANCH"
-          python3 setup.py bdist_wheel
+          echo "MKL_URL: $MKL_URL"
+          ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
           ls -al dist/
+
+      - name: Save cached native binaries
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
+          path: kaldi_active_grammar/exec/macos
+
+      - name: Upload native binaries to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-arm
+          path: kaldi_active_grammar/exec/macos
 
       - name: Upload MacOS ARM wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-arm
           path: dist/*
+
+      - name: Examine results
+        run: |
+          for whl in dist/*.whl; do
+            echo "Wheel: $whl"
+            unzip -l $whl
+          done
 
   build-macos-intel:
     runs-on: macos-13
@@ -243,27 +397,38 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        id: get-kaldi-branch
         run: |
           # Fetch tags on the one fetched commit (shallow clone)
           git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
+          echo "TAG: $TAG"
           if [[ $TAG ]]; then
+            echo "KALDI_BRANCH: kag-$TAG"
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
+            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install dependencies
+      - name: Get Kaldi commit hash
+        id: get-kaldi-commit
         run: |
-          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
-          brew install automake sox
-          brew reinstall gfortran  # For openblas
-          # brew install autoconf libtool
+          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
+          echo "KALDI_COMMIT: $KALDI_COMMIT"
+          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Restore cached native binaries
+        id: cache-native-binaries-restore
+        uses: actions/cache/restore@v4
+        with:
+          key: native-${{ runner.os }}-intel-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
+          path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
-        if: ${{ env.MKL_URL != '' }}
+        if: ${{ env.MKL_URL != '' && steps.cache-native-binaries-restore.outputs.cache-hit != 'true' }}
         run: |
           echo "Installing MKL from: $MKL_URL"
           export MKL_FILE=${MKL_URL##*/}
@@ -274,16 +439,50 @@ jobs:
           sed -i.bak -e 's/decline/accept/g' silent.cfg
           sudo /Volumes/${MKL_FILE}/${MKL_FILE}.app/Contents/MacOS/install.sh --silent silent.cfg
 
+      - name: Install dependencies for native build
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        run: |
+          python3 -m pip install --break-system-packages --user --upgrade scikit-build cmake ninja
+          brew install automake sox
+          brew reinstall gfortran  # For openblas
+          # brew install autoconf libtool
+
+      - name: Install dependencies for python build
+        run: |
+          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel
+
       - name: Build Python wheel
         run: |
-          python3 setup.py bdist_wheel
+          echo "KALDI_BRANCH: $KALDI_BRANCH"
+          echo "MKL_URL: $MKL_URL"
+          ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
           ls -al dist/
+
+      - name: Save cached native binaries
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
+          path: kaldi_active_grammar/exec/macos
+
+      - name: Upload native binaries to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-intel
+          path: kaldi_active_grammar/exec/macos
 
       - name: Upload MacOS Intel wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-intel
-          path: dist/*
+          path: dist/*.whl
+
+      - name: Examine results
+        run: |
+          for whl in dist/*.whl; do
+            echo "Wheel: $whl"
+            unzip -l $whl
+          done
 
   merge-wheels:
     runs-on: ubuntu-latest
