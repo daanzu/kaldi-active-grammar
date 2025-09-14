@@ -21,12 +21,16 @@ jobs:
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
+          # Fetch tags on the one fetched commit (shallow clone)
+          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
           echo "TAG: $TAG"
           if [[ $TAG ]]; then
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup just
@@ -63,18 +67,24 @@ jobs:
       run:
         shell: bash
     steps:
+
       - name: Checkout main repository
         uses: actions/checkout@v5
         with:
           path: main
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
+        id: get_kaldi_branch
         run: |
+          # Fetch tags on the one fetched commit (shallow clone)
+          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
           if [[ $TAG ]]; then
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
       - name: Checkout OpenFST repository
@@ -88,7 +98,7 @@ jobs:
         with:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
-          ref: ${{ env.KALDI_BRANCH }}
+          ref: ${{ steps.get_kaldi_branch.outputs.KALDI_BRANCH }}
 
       - name: Gather system information
         run: |
@@ -171,6 +181,7 @@ jobs:
     if: true
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
+      MKL_URL: ""
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
     steps:
       - name: Checkout repository
@@ -178,24 +189,26 @@ jobs:
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
+          # Fetch tags on the one fetched commit (shallow clone)
+          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
           if [[ $TAG ]]; then
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
       - name: Install dependencies
         run: |
           python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
-          brew install automake
+          brew install automake sox libtool
+          brew reinstall gfortran  # For openblas
           # brew install autoconf
-          brew install sox
-          brew install libtool
-          brew reinstall gfortran  # for openblas
 
       - name: Install MKL (if enabled)
-        if: ${{ env.MKL_URL != 0 }}
+        if: ${{ env.MKL_URL != '' }}
         run: |
           echo "Installing MKL from: $MKL_URL"
           export MKL_FILE=${MKL_URL##*/}
@@ -208,6 +221,7 @@ jobs:
 
       - name: Build Python wheel
         run: |
+          echo "KALDI_BRANCH: $KALDI_BRANCH"
           python3 setup.py bdist_wheel
           ls -al dist/
 
@@ -222,6 +236,7 @@ jobs:
     if: true
     env:
       MACOSX_DEPLOYMENT_TARGET: "10.9"
+      MKL_URL: ""
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
     steps:
       - name: Checkout repository
@@ -229,24 +244,26 @@ jobs:
 
       - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
         run: |
+          # Fetch tags on the one fetched commit (shallow clone)
+          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
           export TAG=$(git tag --points-at HEAD)
           if [[ $TAG ]]; then
             echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
           else
             echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
+            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
           fi
 
       - name: Install dependencies
         run: |
           python3 -m pip install --break-system-packages --user --upgrade setuptools wheel scikit-build cmake ninja
-          brew install automake
-          # brew install autoconf
-          brew install sox
-          # brew install libtool
-          brew reinstall gfortran  # for openblas
+          brew install automake sox
+          brew reinstall gfortran  # For openblas
+          # brew install autoconf libtool
 
       - name: Install MKL (if enabled)
-        if: ${{ env.MKL_URL != 0 }}
+        if: ${{ env.MKL_URL != '' }}
         run: |
           echo "Installing MKL from: $MKL_URL"
           export MKL_FILE=${MKL_URL##*/}
