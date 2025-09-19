@@ -43,11 +43,15 @@ test-model model_dir:
 	cd {{invocation_directory()}} && rm -rf kaldi_model kaldi_model.tmp && cp -rp {{model_dir}} kaldi_model
 
 trigger-build ref='master':
-	gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref={{ref}}
+	gh workflow run build.yml --ref {{ref}}
 
 setup-tests:
 	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
 	cd tests && [ ! -e kaldi_model ] && curl -L -C - -o kaldi_model.zip '{{kaldi_model_url}}' && unzip -o kaldi_model.zip || true
 
 test *args='':
-    uv run --no-project --with-requirements requirements-test.txt -m pytest {{args}}
+    uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest {{args}}
+
+test-package *args='':
+	@# Run within tests directory to prevent importing kaldi_active_grammar from source tree
+	uv run --no-project --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest {{args}}
