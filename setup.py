@@ -210,9 +210,9 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'cffi ~= 1.12',
-        'numpy ~= 1.16, != 1.19.4',
-        'ush ~= 3.1',
+        'cffi >= 1.12',
+        'numpy >= 1.16, != 1.19.4',
+        'ush >= 3.1',
         'six',
         'futures; python_version == "2.7"',
     ],  # Optional
@@ -226,8 +226,8 @@ setup(
     # Similar to `install_requires` above, these must be valid existing
     # projects.
     extras_require={  # Optional
-        'g2p_en': ['g2p_en ~= 2.1.0'],
-        'online': ['requests ~= 2.18'],
+        'g2p_en': ['g2p_en >= 2.1.0'],
+        'online': ['requests >= 2.18'],
         # 'dev': ['check-manifest'],
         # "test": [
         #     # See requirements-test.txt

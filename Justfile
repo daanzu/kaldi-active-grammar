@@ -54,4 +54,4 @@ test *args='':
 
 test-package *args='':
 	@# Run within tests directory to prevent importing kaldi_active_grammar from source tree
-	uv run --no-project --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest {{args}}
+	uv run -v --no-project --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest {{args}}
