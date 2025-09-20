@@ -6,13 +6,13 @@ on:
       build_run_id:
         description: 'Build workflow run ID to test (leave empty for latest successful)'
         required: false
-  workflow_run:
-    workflows: ["Build"]
-    types:
-      - completed
-  push:
-    branches:
-      - build
+  # workflow_run:
+  #   workflows: ["Build"]
+  #   types:
+  #     - completed
+  # push:
+  #   branches:
+  #     - build
 
 jobs:
   test-wheels:
