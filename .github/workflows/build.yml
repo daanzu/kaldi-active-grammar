@@ -491,7 +491,7 @@ jobs:
       - build-windows
       - build-macos-arm
       - build-macos-intel
-    if: true
+    if: ${{ always() && true }}  # Run even if some build jobs failed
     defaults:
       run:
         shell: bash
@@ -529,12 +529,28 @@ jobs:
         with:
           name: ${{ steps.artifact-name.outputs.name }}
           path: wheels/
+        continue-on-error: true  # Continue even if no artifact found
+
+      - name: Check wheels presence
+        id: wheels-presence
+        run: |
+          shopt -s nullglob
+          files=(wheels/*.whl)
+          if (( ${#files[@]} > 0 )); then
+            echo "found=true" >> $GITHUB_OUTPUT
+            ls -al wheels/
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "No wheel artifacts found for ${{ matrix.os }}" 1>&2
+          fi
 
       - name: Setup tests
+        if: steps.wheels-presence.outputs.found == 'true'
         run: |
           just setup-tests
 
       - name: Run tests
+        if: steps.wheels-presence.outputs.found == 'true'
         run: |
           just test-package -v
 
