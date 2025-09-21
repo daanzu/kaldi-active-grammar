@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# We use this wrapper script to set CXXFLAGS in the environment before calling
+# kaldi configure, to avoid issues with setting environment variables in
+# commands called from cmake.
+
 set -e -x
 
 export CXXFLAGS="-O3 -g0 -ftree-vectorize"
@@ -7,4 +11,4 @@ export CXXFLAGS="-O3 -g0 -ftree-vectorize"
 #      Level 0 produces no debug information at all. Thus, -g0 negates -g.
 
 # Execute all arguments
-eval "$*"
+exec "$@"
