@@ -9,6 +9,7 @@ https://github.com/pypa/sampleproject
 from setuptools import find_packages
 import datetime
 import os
+import platform
 import re
 
 # Optionally skip native code build (expecting libraries to be manually/externally placed correctly prior) by using standard setuptools; otherwise build native code with scikit-build
@@ -38,6 +39,10 @@ if True:
             python, abi, plat = super().get_tag()
             # Mark us as python-version-agnostic (py3), and python-ABI-agnostic (none), since we contain no CPython extensions
             python, abi = 'py3', 'none'
+            # For MacOS, prevent mistakenly marking as universal2 wheel (since we compile our native libraries as either x86_64 or arm64, not both)
+            if plat.startswith("macosx_") and plat.endswith("_universal2"):
+                want = "x86_64" if platform.machine() == "x86_64" else "arm64"
+                plat = re.sub(r"_universal2$", f"_{want}", plat)
             return python, abi, plat
 
     from setuptools.command.install import install
@@ -244,7 +249,7 @@ setup(
     # If using Python 2.6 or earlier, then these have to be included in
     # MANIFEST.in as well.
     package_data={  # Optional
-        'kaldi_active_grammar': ['exec/*/*'],
+        'kaldi_active_grammar': ['exec/*/*', 'exec/*/*/*'],
         '': ['LICENSE.txt'],
     },
 

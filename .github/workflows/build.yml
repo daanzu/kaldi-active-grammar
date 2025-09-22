@@ -63,14 +63,20 @@ jobs:
 
       - name: Build with dockcross (native binaries & python wheel)
         run: |
+          shopt -s nullglob
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           just build-dockcross ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && '--skip-native' || '' }} $KALDI_BRANCH $MKL_URL
-          # ls -al wheelhouse/
+          ls -al wheelhouse/
+          for whl in wheelhouse/*.whl; do
+            unzip -l $whl
+          done
 
       - name: Extract native binaries from wheel after auditwheel repair, to save to cache
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        # We do this rather than manually caching all of the various kaldi/openfst libraries in their build locations
         run: |
+          shopt -s nullglob
           # Assert there is only one wheel
           WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
           if [ "$WHEEL_COUNT" -ne 1 ]; then
@@ -80,9 +86,9 @@ jobs:
           fi
           WHEEL_FILE=$(ls wheelhouse/*.whl)
           echo "Extracting from wheel: $WHEEL_FILE"
-          unzip -j -o $WHEEL_FILE 'kaldi_active_grammar/exec/linux/*' -d kaldi_active_grammar/exec/linux/
+          unzip -o $WHEEL_FILE 'kaldi_active_grammar/exec/linux/*'
           unzip -o $WHEEL_FILE 'kaldi_active_grammar.libs/*'
-          ls -al kaldi_active_grammar/exec/linux/
+          ls -al kaldi_active_grammar/exec/linux/ kaldi_active_grammar.libs/
           readelf -d kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so | egrep 'NEEDED|RUNPATH|RPATH'
 
       - name: Save cached native binaries
@@ -110,8 +116,8 @@ jobs:
 
       - name: Examine results
         run: |
+          shopt -s nullglob
           for whl in wheelhouse/*.whl; do
-            echo "Wheel: $whl"
             unzip -l $whl
           done
 
@@ -258,8 +264,7 @@ jobs:
         working-directory: main
         run: |
           python -m pip -V
-          python -m pip install --upgrade setuptools wheel scikit-build cmake ninja
-          # ls -alR ../
+          python -m pip install --upgrade setuptools wheel
           env KALDIAG_BUILD_SKIP_NATIVE=1 python setup.py bdist_wheel
           ls -al dist/
 
@@ -271,8 +276,8 @@ jobs:
 
       - name: Examine results
         run: |
+          shopt -s nullglob
           for whl in main/dist/*.whl; do
-            echo "Wheel: $whl"
             unzip -l $whl
           done
 
@@ -343,21 +348,61 @@ jobs:
       - name: Install dependencies for native build
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         run: |
-          python3 -m pip install --break-system-packages --user --upgrade scikit-build cmake ninja
+          python3 -m pip install --break-system-packages --user --upgrade scikit-build>=0.10.0 cmake ninja
           brew install automake sox libtool
           brew reinstall gfortran  # For openblas
           # brew install autoconf
 
       - name: Install dependencies for python build
         run: |
-          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel
+          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel delocate
 
       - name: Build Python wheel
         run: |
+          shopt -s nullglob
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
           ls -al dist/
+          for whl in dist/*.whl; do
+            unzip -l $whl
+          done
+
+      - name: Repair wheel with delocate
+        run: |
+          shopt -s nullglob
+          for whl in dist/*.whl; do
+            echo "Examining wheel before delocate: $whl"
+            python3 -m delocate.cmd.delocate_listdeps -d $whl
+            echo "Repairing wheel: $whl"
+            python3 -m delocate.cmd.delocate_wheel -v -w wheelhouse -L exec/macos/libs --require-archs arm64 $whl
+          done
+          # NOTE: This also downgrades the required MacOS version to the minimum possible
+          ls -al wheelhouse/
+          for whl in wheelhouse/*.whl; do
+            echo "Examining repaired wheel: $whl"
+            python3 -m delocate.cmd.delocate_listdeps -d $whl
+          done
+
+      - name: Extract native binaries from wheel after delocate repair, to save to cache
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        # We do this rather than manually caching all of the various kaldi/openfst libraries in their build locations
+        run: |
+          shopt -s nullglob
+          # Assert there is only one wheel
+          WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
+          if [ "$WHEEL_COUNT" -ne 1 ]; then
+            echo "Error: Expected exactly 1 wheel, found $WHEEL_COUNT"
+            ls -al wheelhouse/
+            exit 1
+          fi
+          WHEEL_FILE=$(ls wheelhouse/*.whl)
+          echo "Extracting from wheel: $WHEEL_FILE"
+          unzip -o $WHEEL_FILE 'kaldi_active_grammar/exec/macos/*'
+          ls -al kaldi_active_grammar/exec/macos/
+          otool -l kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib | egrep -A2 'LC_RPATH|cmd LC_LOAD_DYLIB'
+          otool -L kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
+          lipo -archs kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
 
       - name: Save cached native binaries
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
@@ -376,12 +421,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-arm
-          path: dist/*
+          path: wheelhouse/*
 
       - name: Examine results
         run: |
-          for whl in dist/*.whl; do
-            echo "Wheel: $whl"
+          shopt -s nullglob
+          for whl in wheelhouse/*.whl; do
             unzip -l $whl
           done
 
@@ -442,21 +487,61 @@ jobs:
       - name: Install dependencies for native build
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
         run: |
-          python3 -m pip install --break-system-packages --user --upgrade scikit-build cmake ninja
+          python3 -m pip install --break-system-packages --user --upgrade scikit-build>=0.10.0 cmake ninja
           brew install automake sox
           brew reinstall gfortran  # For openblas
           # brew install autoconf libtool
 
       - name: Install dependencies for python build
         run: |
-          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel
+          python3 -m pip install --break-system-packages --user --upgrade setuptools wheel delocate
 
       - name: Build Python wheel
         run: |
+          shopt -s nullglob
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
           ls -al dist/
+          for whl in dist/*.whl; do
+            unzip -l $whl
+          done
+
+      - name: Repair wheel with delocate
+        run: |
+          shopt -s nullglob
+          for whl in dist/*.whl; do
+            echo "Examining wheel before delocate: $whl"
+            python3 -m delocate.cmd.delocate_listdeps -d $whl
+            echo "Repairing wheel: $whl"
+            python3 -m delocate.cmd.delocate_wheel -v -w wheelhouse -L exec/macos/libs --require-archs x86_64 $whl
+          done
+          # NOTE: This also downgrades the required MacOS version to the minimum possible
+          ls -al wheelhouse/
+          for whl in wheelhouse/*.whl; do
+            echo "Examining repaired wheel: $whl"
+            python3 -m delocate.cmd.delocate_listdeps -d $whl
+          done
+
+      - name: Extract native binaries from wheel after delocate repair, to save to cache
+        if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
+        # We do this rather than manually caching all of the various kaldi/openfst libraries in their build locations
+        run: |
+          shopt -s nullglob
+          # Assert there is only one wheel
+          WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
+          if [ "$WHEEL_COUNT" -ne 1 ]; then
+            echo "Error: Expected exactly 1 wheel, found $WHEEL_COUNT"
+            ls -al wheelhouse/
+            exit 1
+          fi
+          WHEEL_FILE=$(ls wheelhouse/*.whl)
+          echo "Extracting from wheel: $WHEEL_FILE"
+          unzip -o $WHEEL_FILE 'kaldi_active_grammar/exec/macos/*'
+          ls -al kaldi_active_grammar/exec/macos/
+          otool -l kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib | egrep -A2 'LC_RPATH|cmd LC_LOAD_DYLIB'
+          otool -L kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
+          lipo -archs kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
 
       - name: Save cached native binaries
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
@@ -475,12 +560,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-intel
-          path: dist/*.whl
+          path: wheelhouse/*
 
       - name: Examine results
         run: |
-          for whl in dist/*.whl; do
-            echo "Wheel: $whl"
+          shopt -s nullglob
+          for whl in wheelhouse/*.whl; do
             unzip -l $whl
           done
 
