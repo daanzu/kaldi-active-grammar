@@ -633,10 +633,30 @@ jobs:
             echo "No wheel artifacts found for ${{ matrix.os }}" 1>&2
           fi
 
+      - name: Restore cached tests setup
+        id: cache-tests-setup-restore
+        uses: actions/cache/restore@v4
+        with:
+          key: tests-setup-${{ hashFiles('tests/*.onnx, tests/*.onnx.json, tests/kaldi_model') }}-v1
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
+
       - name: Setup tests
-        if: steps.wheels-presence.outputs.found == 'true'
+        if: steps.wheels-presence.outputs.found == 'true' && steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
         run: |
           just setup-tests
+
+      - name: Save cached tests setup
+        if: steps.wheels-presence.outputs.found == 'true' && steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-tests-setup-restore.outputs.cache-primary-key }}
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
 
       - name: Run tests
         if: steps.wheels-presence.outputs.found == 'true'
