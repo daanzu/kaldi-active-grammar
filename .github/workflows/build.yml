@@ -54,12 +54,8 @@ jobs:
             kaldi_active_grammar/exec/linux
             kaldi_active_grammar.libs
 
-      - name: Setup just
-        run: |
-          ls -al $HOME
-          mkdir $HOME/bin
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to $HOME/bin/
-          echo "$HOME/bin" >> $GITHUB_PATH
+      - name: Install just
+        uses: taiki-e/install-action@just
 
       - name: Build with dockcross (native binaries & python wheel)
         run: |
@@ -67,7 +63,7 @@ jobs:
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           just build-dockcross ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && '--skip-native' || '' }} $KALDI_BRANCH $MKL_URL
-          ls -al wheelhouse/
+          ls -l wheelhouse/
           for whl in wheelhouse/*.whl; do
             unzip -l $whl
           done
@@ -81,14 +77,14 @@ jobs:
           WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
           if [ "$WHEEL_COUNT" -ne 1 ]; then
             echo "Error: Expected exactly 1 wheel, found $WHEEL_COUNT"
-            ls -al wheelhouse/
+            ls -l wheelhouse/
             exit 1
           fi
           WHEEL_FILE=$(ls wheelhouse/*.whl)
           echo "Extracting from wheel: $WHEEL_FILE"
           unzip -o $WHEEL_FILE 'kaldi_active_grammar/exec/linux/*'
           unzip -o $WHEEL_FILE 'kaldi_active_grammar.libs/*'
-          ls -al kaldi_active_grammar/exec/linux/ kaldi_active_grammar.libs/
+          ls -l kaldi_active_grammar/exec/linux/ kaldi_active_grammar.libs/
           readelf -d kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so | egrep 'NEEDED|RUNPATH|RPATH'
 
       - name: Save cached native binaries
@@ -193,15 +189,15 @@ jobs:
           echo $GITHUB_WORKSPACE
           df -h
           echo "Windows SDK Versions:"
-          ls -al '/c/Program Files (x86)/Windows Kits/10/Include/'
+          ls -l '/c/Program Files (x86)/Windows Kits/10/Include/'
           echo "Visual Studio Redistributables:"
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/'
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/v142'
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.16.27012/x64/Microsoft.VC141.CRT'
-          # ls -al '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/'*/x64/Microsoft.*.CRT
-          # ls -alR /c/Program\ Files\ \(x86\)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/
-          # ls -alR '/c/Program Files (x86)/Microsoft Visual Studio/'2022/Enterprise/VC/Redist/MSVC/
+          # ls -l '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/'
+          # ls -l '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'
+          # ls -l '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/v142'
+          # ls -l '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.16.27012/x64/Microsoft.VC141.CRT'
+          # ls -l '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/'*/x64/Microsoft.*.CRT
+          # ls -lR /c/Program\ Files\ \(x86\)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/
+          # ls -lR '/c/Program Files (x86)/Microsoft Visual Studio/'2022/Enterprise/VC/Redist/MSVC/
           vswhere
           vswhere -find 'VC\Redist\**\VC_redist.x64.exe'
 
@@ -267,7 +263,7 @@ jobs:
           python -m pip -V
           python -m pip install --upgrade setuptools wheel
           env KALDIAG_BUILD_SKIP_NATIVE=1 python setup.py bdist_wheel
-          ls -al dist/
+          ls -l dist/
 
       - name: Upload Windows wheels
         uses: actions/upload-artifact@v4
@@ -365,7 +361,7 @@ jobs:
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
-          ls -al dist/
+          ls -l dist/
           for whl in dist/*.whl; do
             unzip -l $whl
           done
@@ -380,7 +376,7 @@ jobs:
             python3 -m delocate.cmd.delocate_wheel -v -w wheelhouse -L exec/macos/libs --require-archs arm64 $whl
           done
           # NOTE: This also downgrades the required MacOS version to the minimum possible
-          ls -al wheelhouse/
+          ls -l wheelhouse/
           for whl in wheelhouse/*.whl; do
             echo "Examining repaired wheel: $whl"
             python3 -m delocate.cmd.delocate_listdeps -d $whl
@@ -395,13 +391,13 @@ jobs:
           WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
           if [ "$WHEEL_COUNT" -ne 1 ]; then
             echo "Error: Expected exactly 1 wheel, found $WHEEL_COUNT"
-            ls -al wheelhouse/
+            ls -l wheelhouse/
             exit 1
           fi
           WHEEL_FILE=$(ls wheelhouse/*.whl)
           echo "Extracting from wheel: $WHEEL_FILE"
           unzip -o $WHEEL_FILE 'kaldi_active_grammar/exec/macos/*'
-          ls -al kaldi_active_grammar/exec/macos/
+          ls -l kaldi_active_grammar/exec/macos/
           otool -l kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib | egrep -A2 'LC_RPATH|cmd LC_LOAD_DYLIB'
           otool -L kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
           lipo -archs kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
@@ -505,7 +501,7 @@ jobs:
           echo "KALDI_BRANCH: $KALDI_BRANCH"
           echo "MKL_URL: $MKL_URL"
           ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
-          ls -al dist/
+          ls -l dist/
           for whl in dist/*.whl; do
             unzip -l $whl
           done
@@ -520,7 +516,7 @@ jobs:
             python3 -m delocate.cmd.delocate_wheel -v -w wheelhouse -L exec/macos/libs --require-archs x86_64 $whl
           done
           # NOTE: This also downgrades the required MacOS version to the minimum possible
-          ls -al wheelhouse/
+          ls -l wheelhouse/
           for whl in wheelhouse/*.whl; do
             echo "Examining repaired wheel: $whl"
             python3 -m delocate.cmd.delocate_listdeps -d $whl
@@ -535,13 +531,13 @@ jobs:
           WHEEL_COUNT=$(ls wheelhouse/*.whl | wc -l)
           if [ "$WHEEL_COUNT" -ne 1 ]; then
             echo "Error: Expected exactly 1 wheel, found $WHEEL_COUNT"
-            ls -al wheelhouse/
+            ls -l wheelhouse/
             exit 1
           fi
           WHEEL_FILE=$(ls wheelhouse/*.whl)
           echo "Extracting from wheel: $WHEEL_FILE"
           unzip -o $WHEEL_FILE 'kaldi_active_grammar/exec/macos/*'
-          ls -al kaldi_active_grammar/exec/macos/
+          ls -l kaldi_active_grammar/exec/macos/
           otool -l kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib | egrep -A2 'LC_RPATH|cmd LC_LOAD_DYLIB'
           otool -L kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
           lipo -archs kaldi_active_grammar/exec/macos/libkaldi-dragonfly.dylib
@@ -627,7 +623,7 @@ jobs:
           files=(wheels/*.whl)
           if (( ${#files[@]} > 0 )); then
             echo "found=true" >> $GITHUB_OUTPUT
-            ls -al wheels/
+            ls -l wheels/
           else
             echo "found=false" >> $GITHUB_OUTPUT
             echo "No wheel artifacts found for ${{ matrix.os }}" 1>&2

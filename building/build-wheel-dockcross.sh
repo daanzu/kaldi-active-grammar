@@ -60,9 +60,11 @@ if [ "$SKIP_NATIVE" = true ]; then
     export KALDIAG_BUILD_SKIP_NATIVE=1
     # Patch the native binaries restored from cache to work with auditwheel repair below; final result should be idempotent
     patchelf --force-rpath --set-rpath "$(pwd)/kaldi_active_grammar.libs" kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so
-    # readelf -d kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so | egrep 'NEEDED|RUNPATH|RPATH'
+    readelf -d kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so | egrep 'NEEDED|RUNPATH|RPATH'
+    # ldd kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so
     # LD_DEBUG=libs ldd kaldi_active_grammar/exec/linux/libkaldi-dragonfly.so
 else
+    # Clean in preparation for native build
     mkdir -p _skbuild
     rm -rf _skbuild/*/cmake-install/ _skbuild/*/setuptools/
     rm -rf kaldi_active_grammar/exec
@@ -70,8 +72,12 @@ fi
 
 KALDI_BRANCH=$KALDI_BRANCH $PYTHON_EXE setup.py bdist_wheel
 
+# ls -lR kaldi_active_grammar/exec/linux
+
 mkdir -p wheelhouse
 for whl in dist/*.whl; do
-    # unzip -l $whl
+    unzip -l $whl
+    auditwheel show $whl
     auditwheel repair $whl --plat $WHEEL_PLAT -w wheelhouse/
+    # auditwheel -v repair $whl --plat $WHEEL_PLAT -w wheelhouse/
 done
