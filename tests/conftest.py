@@ -6,6 +6,10 @@ import piper
 import pytest
 
 
+@pytest.fixture
+def change_to_test_dir(monkeypatch):
+        monkeypatch.chdir(Path(__file__).parent)  # Where model is
+
 def get_piper_model_path():
     """ Get Piper model path from environment or use default. """
     model_name = os.environ.get('PIPER_MODEL', 'en_US-ryan-low.onnx')

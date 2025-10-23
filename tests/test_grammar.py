@@ -11,8 +11,7 @@ from tests.helpers import *
 class TestGrammar:
 
     @pytest.fixture(autouse=True)
-    def setup(self, monkeypatch, audio_generator):
-        monkeypatch.chdir(Path(__file__).parent)  # Where model is
+    def setup(self, change_to_test_dir, audio_generator):
         self.compiler = Compiler()
         self.decoder = self.compiler.init_decoder()
         self.audio_generator = audio_generator

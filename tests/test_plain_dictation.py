@@ -11,8 +11,7 @@ from tests.helpers import *
 class TestPlainDictation:
 
     @pytest.fixture(autouse=True)
-    def setup(self, monkeypatch):
-        monkeypatch.chdir(Path(__file__).parent)  # Where model is
+    def setup(self, change_to_test_dir):
         self.recognizer = PlainDictationRecognizer()
 
     def test_initialization(self):
