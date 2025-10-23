@@ -2,9 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [ build ]
   pull_request:
-    branches: [ build ]
   workflow_dispatch:
     # gh api repos/:owner/:repo/actions/workflows/build.yml/dispatches -F ref=master
     # gh workflow run build.yml --ref develop
