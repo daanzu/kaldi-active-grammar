@@ -26,7 +26,7 @@ class TestGrammar:
         assert rule.loaded
         return rule
 
-    def decode(self, text: str, kaldi_rules_activity: list[bool], expected_rule: KaldiRule, expected_words_are_dictation_mask: Optional[list[bool]] = None):
+    def decode(self, text: str, kaldi_rules_activity: list[bool], expected_rule: Optional[KaldiRule], expected_words_are_dictation_mask: Optional[list[bool]] = None):
         audio_data = self.audio_generator(text)
         self.decoder.decode(audio_data, True, kaldi_rules_activity)
 
@@ -36,11 +36,16 @@ class TestGrammar:
         assert_info_shape(info)
 
         recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
-        assert recognized_rule == expected_rule
-        assert words == text.split()
-        if expected_words_are_dictation_mask is None:
-            expected_words_are_dictation_mask = [False] * len(words)
-        assert words_are_dictation_mask == expected_words_are_dictation_mask
+        if expected_rule is None:
+            assert recognized_rule is None
+            assert words == []
+            assert words_are_dictation_mask == []
+        else:
+            assert recognized_rule == expected_rule
+            assert words == text.split()
+            if expected_words_are_dictation_mask is None:
+                expected_words_are_dictation_mask = [False] * len(words)
+            assert words_are_dictation_mask == expected_words_are_dictation_mask
 
     def test_simple_rule(self):
         def _build(fst):
@@ -440,6 +445,83 @@ class TestGrammar:
         rule = self.make_rule('DictationRule', _build, has_dictation=True)
         text = f"dictate {dictation_words}".strip()
         self.decode(text, [True], rule, expected_words_are_dictation_mask=expected_mask)
+
+    def test_no_rules(self):
+        """Test decoding when no rules are defined."""
+        self.decode("hello", [], None)
+
+    def test_no_active_rules(self):
+        """Test decoding when no rules are active."""
+        def _build(fst):
+            initial_state = fst.add_state(initial=True)
+            final_state = fst.add_state(final=True)
+            fst.add_arc(initial_state, final_state, 'hello')
+        rule = self.make_rule('InactiveRule', _build)
+        self.decode("hello", [False], None)
+
+    def test_garbage_audio(self):
+        """Test decoder with random noise/garbage audio."""
+        import random
+        def _build(fst):
+            initial_state = fst.add_state(initial=True)
+            final_state = fst.add_state(final=True)
+            fst.add_arc(initial_state, final_state, 'hello')
+        rule = self.make_rule('NoiseRule', _build)
+
+        random.seed(42)
+        audio_data = bytes(random.randint(0, 255) for _ in range(32768))
+        self.decoder.decode(audio_data, True, [True])
+
+        output, info = self.decoder.get_output()
+        assert isinstance(output, str)
+        assert_info_shape(info)
+
+        recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
+        assert recognized_rule is None
+        assert words == []
+        assert words_are_dictation_mask == []
+
+    def test_empty_audio(self):
+        """Test decoder with empty audio data."""
+        def _build(fst):
+            initial_state = fst.add_state(initial=True)
+            final_state = fst.add_state(final=True)
+            fst.add_arc(initial_state, final_state, 'hello')
+        rule = self.make_rule('EmptyAudioRule', _build)
+
+        self.decoder.decode(b'', True, [True])
+
+        output, info = self.decoder.get_output()
+        assert isinstance(output, str)
+        assert output == ""
+        assert_info_shape(info)
+
+        recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
+        assert recognized_rule is None
+        assert words == []
+        assert words_are_dictation_mask == []
+
+    def test_very_short_audio(self):
+        """Test decoder with very short utterance."""
+        def _build(fst):
+            initial_state = fst.add_state(initial=True)
+            final_state = fst.add_state(final=True)
+            fst.add_arc(initial_state, final_state, 'hi')
+        rule = self.make_rule('ShortRule', _build)
+        self.decode("hi", [True], rule)
+
+    def test_multiple_utterances_sequence(self):
+        """Test decoding multiple utterances in sequence."""
+        def _build(fst):
+            initial_state = fst.add_state(initial=True)
+            final_state = fst.add_state(final=True)
+            fst.add_arc(initial_state, final_state, 'hello')
+            fst.add_arc(initial_state, final_state, 'world')
+            fst.add_arc(initial_state, final_state, 'test')
+        rule = self.make_rule('MultiUtteranceRule', _build)
+
+        for text in ['hello', 'world', 'test']:
+            self.decode(text, [True], rule)
 
 
 class TestAlternativeDictation:
