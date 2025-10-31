@@ -14,7 +14,7 @@ def assert_info_shape(info):
         assert isinstance(info[key], expected_type), f"Incorrect type for {key}: expected {expected_type}, got {type(info[key])}"
 
 def play_audio_on_windows(audio_bytes: bytes, sample_rate: int = 16000):
-    """ Play raw PCM audio bytes on Windows using winsound. """
+    """ Play raw PCM audio bytes on Windows using winsound. For interactive debugging only. """
     import io
     import wave
     import winsound

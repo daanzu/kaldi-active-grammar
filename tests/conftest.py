@@ -37,6 +37,7 @@ def audio_generator(piper_voice):
                 noise_w_scale=0.0,  # No speaking variation, for repeatable testing
             )
         audio_chunks = []
+        # Chunk size is variable and determined by Piper internals
         for chunk in piper_voice.synthesize(text, syn_config=syn_config):
             audio_chunks.append(chunk.audio_int16_bytes)
         return b''.join(audio_chunks)
