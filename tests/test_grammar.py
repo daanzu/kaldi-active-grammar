@@ -26,13 +26,23 @@ class TestGrammar:
         assert rule.loaded
         return rule
 
-    def decode(self, text: str, kaldi_rules_activity: list[bool], expected_rule: Optional[KaldiRule], expected_words_are_dictation_mask: Optional[list[bool]] = None):
-        audio_data = self.audio_generator(text)
+    def decode(self, text_or_audio: Union[str, bytes], kaldi_rules_activity: list[bool], expected_rule: Optional[KaldiRule], expected_words: Optional[list[str]] = None, expected_words_are_dictation_mask: Optional[list[bool]] = None):
+        if isinstance(text_or_audio, str):
+            text = text_or_audio
+            audio_data = self.audio_generator(text)
+            if expected_words is None:
+                expected_words = text.split() if text else []
+        else:
+            text = None
+            audio_data = text_or_audio
+            if expected_words is None:
+                expected_words = []
+
         self.decoder.decode(audio_data, True, kaldi_rules_activity)
 
         output, info = self.decoder.get_output()
         assert isinstance(output, str)
-        assert len(output) > 0 or text == ""
+        assert len(output) > 0 or expected_words == []
         assert_info_shape(info)
 
         recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
@@ -42,7 +52,7 @@ class TestGrammar:
             assert words_are_dictation_mask == []
         else:
             assert recognized_rule == expected_rule
-            assert words == text.split()
+            assert words == expected_words
             if expected_words_are_dictation_mask is None:
                 expected_words_are_dictation_mask = [False] * len(words)
             assert words_are_dictation_mask == expected_words_are_dictation_mask
@@ -470,16 +480,7 @@ class TestGrammar:
 
         random.seed(42)
         audio_data = bytes(random.randint(0, 255) for _ in range(32768))
-        self.decoder.decode(audio_data, True, [True])
-
-        output, info = self.decoder.get_output()
-        assert isinstance(output, str)
-        assert_info_shape(info)
-
-        recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
-        assert recognized_rule is None
-        assert words == []
-        assert words_are_dictation_mask == []
+        self.decode(audio_data, [True], None)
 
     def test_empty_audio(self):
         """Test decoder with empty audio data."""
@@ -488,18 +489,7 @@ class TestGrammar:
             final_state = fst.add_state(final=True)
             fst.add_arc(initial_state, final_state, 'hello')
         rule = self.make_rule('EmptyAudioRule', _build)
-
-        self.decoder.decode(b'', True, [True])
-
-        output, info = self.decoder.get_output()
-        assert isinstance(output, str)
-        assert output == ""
-        assert_info_shape(info)
-
-        recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
-        assert recognized_rule is None
-        assert words == []
-        assert words_are_dictation_mask == []
+        self.decode(b'', [True], None)
 
     def test_very_short_audio(self):
         """Test decoder with very short utterance."""
