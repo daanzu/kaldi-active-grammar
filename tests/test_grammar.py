@@ -15,8 +15,8 @@ class TestGrammar:
         self.decoder = self.compiler.init_decoder()
         self.audio_generator = audio_generator
 
-    def make_rule(self, name: str, build_func: Callable[[Union[NativeWFST, WFST]], None]):
-        rule = KaldiRule(self.compiler, name)
+    def make_rule(self, name: str, build_func: Callable[[Union[NativeWFST, WFST]], None], **kwargs) -> KaldiRule:
+        rule = KaldiRule(self.compiler, name, **kwargs)
         assert rule.name == name
         assert rule.fst is not None
         build_func(rule.fst)
@@ -27,11 +27,12 @@ class TestGrammar:
         return rule
 
     def decode(self, text: str, kaldi_rules_activity: list[bool], expected_rule: KaldiRule, expected_words_are_dictation_mask: Optional[list[bool]] = None):
-        self.decoder.decode(self.audio_generator(text), True, kaldi_rules_activity)
+        audio_data = self.audio_generator(text)
+        self.decoder.decode(audio_data, True, kaldi_rules_activity)
 
         output, info = self.decoder.get_output()
         assert isinstance(output, str)
-        assert len(output) > 0
+        assert len(output) > 0 or text == ""
         assert_info_shape(info)
 
         recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
@@ -416,6 +417,29 @@ class TestGrammar:
             fst.add_arc(spoke3, final_state, 'end')
         rule = self.make_rule('HubSpokeRule', _build)
         self.decode("center north end", [True], rule)
+
+    @pytest.mark.parametrize('dictation_words,expected_mask', [
+        ("", [False]),
+        ("hello", [False, True]),
+        ("hello world", [False, True, True]),
+    ], ids=['zero_words', 'one_word', 'two_words'])
+    def test_rule_with_dictation(self, dictation_words, expected_mask):
+        """Test rule with dictation element: 'dictate <dictation>' with varying dictation content."""
+        def _build(fst):
+            initial_state = fst.add_state(initial=True)
+            write_state = fst.add_state()
+            dictation_state = fst.add_state()
+            end_state = fst.add_state()
+            final_state = fst.add_state(final=True)
+
+            fst.add_arc(initial_state, write_state, 'dictate')
+            fst.add_arc(write_state, dictation_state, '#nonterm:dictation')
+            fst.add_arc(dictation_state, end_state, None, '#nonterm:end')
+            fst.add_arc(end_state, final_state, None)
+
+        rule = self.make_rule('DictationRule', _build, has_dictation=True)
+        text = f"dictate {dictation_words}".strip()
+        self.decode(text, [True], rule, expected_words_are_dictation_mask=expected_mask)
 
 
 class TestAlternativeDictation:
