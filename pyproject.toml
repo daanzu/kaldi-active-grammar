@@ -9,6 +9,6 @@ addopts = [
     "-ra",  # extra summary for skips/xfails
     "--strict-markers",  # fail on unknown markers
     "--strict-config",  # fail on bad config
-    "--cov=kaldi_active_grammar", "--no-cov-on-fail", "--cov-branch", "--cov-report=term-missing",
+    # "--cov=kaldi_active_grammar", "--no-cov-on-fail", "--cov-branch", "--cov-report=term-missing",
 ]
 xfail_strict = true

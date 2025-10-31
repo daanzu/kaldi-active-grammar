@@ -49,7 +49,7 @@ setup-tests:
 	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
 	cd tests && [ ! -e kaldi_model ] && curl -L -C - -o kaldi_model.zip '{{kaldi_model_url}}' && unzip -o kaldi_model.zip || true
 
-# Common args: --lf
+# Common args: --lf -k
 test *args='':
     uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest {{args}}
 

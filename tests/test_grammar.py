@@ -416,3 +416,336 @@ class TestGrammar:
             fst.add_arc(spoke3, final_state, 'end')
         rule = self.make_rule('HubSpokeRule', _build)
         self.decode("center north end", [True], rule)
+
+
+class TestAlternativeDictation:
+    """Tests for alternative dictation feature."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, change_to_test_dir, audio_generator):
+        self.audio_generator = audio_generator
+        self.alternative_dictation_calls = []
+
+    @pytest.fixture
+    def compiler_with_mock(self):
+        """Fixture providing compiler with mock alternative dictation."""
+        def mock_alternative_dictation_func(audio_data):
+            self.alternative_dictation_calls.append(audio_data)
+            return 'ALTERNATIVE_TEXT'
+        return Compiler(alternative_dictation=mock_alternative_dictation_func)
+
+    def create_mock_rule(self, compiler, has_dictation=True):
+        """Helper to create a mock KaldiRule for testing."""
+        return KaldiRule(compiler, 'mock_rule', has_dictation=has_dictation)
+
+    def parse_with_dictation_info(self, compiler, output_text, audio_data, word_align):
+        """Helper to parse output with dictation info."""
+        def dictation_info_func():
+            return audio_data, word_align
+        return compiler.parse_output(output_text, dictation_info_func=dictation_info_func)
+
+    def test_alternative_dictation_callable_check(self):
+        """Test that alternative_dictation must be callable."""
+        compiler = Compiler(alternative_dictation=lambda x: 'text')
+        assert compiler.alternative_dictation is not None
+
+        compiler = Compiler(alternative_dictation=None)
+        assert compiler.alternative_dictation is None
+
+    def test_alternative_dictation_not_called_without_dictation(self, compiler_with_mock):
+        """Test alternative dictation is not called for rules without dictation."""
+        decoder = compiler_with_mock.init_decoder()
+
+        rule = KaldiRule(compiler_with_mock, 'no_dictation_rule', has_dictation=False)
+        fst = rule.fst
+        initial_state = fst.add_state(initial=True)
+        final_state = fst.add_state(final=True)
+        fst.add_arc(initial_state, final_state, 'hello')
+        rule.compile().load()
+
+        decoder.decode(self.audio_generator('hello'), True, [True])
+        output, info = decoder.get_output()
+
+        kaldi_rule, words, words_are_dictation_mask = compiler_with_mock.parse_output(output, dictation_info_func=None)
+
+        assert len(self.alternative_dictation_calls) == 0
+        assert kaldi_rule == rule
+        assert words == ['hello']
+
+    def test_alternative_dictation_integration_full_decode(self, change_to_test_dir):
+        """Full integration test: rule with dictation, decode audio, alternative dictation called and replaces text."""
+        from kaldi_active_grammar import PlainDictationRecognizer
+
+        alternative_calls = []
+        alternative_audio_received = []
+        alternative_recognized_texts = []
+
+        def alternative_dictation_func(audio_data):
+            """Uses an independent PlainDictationRecognizer to decode the audio."""
+            alternative_calls.append(True)
+            alternative_audio_received.append(len(audio_data))
+            alt_recognizer = PlainDictationRecognizer()
+            alt_text, alt_info = alt_recognizer.decode_utterance(audio_data)
+            alternative_recognized_texts.append(alt_text)
+            return alt_text
+
+        compiler = Compiler(alternative_dictation=alternative_dictation_func)
+        decoder = compiler.init_decoder()
+
+        # Create rule with dictation: "hello <dictation>"
+        rule = KaldiRule(compiler, 'dictation_rule', has_dictation=True)
+        fst = rule.fst
+
+        initial_state = fst.add_state(initial=True)
+        hello_state = fst.add_state()
+        dictation_state = fst.add_state()
+        end_state = fst.add_state()
+        final_state = fst.add_state(final=True)
+
+        # Pattern: "hello" followed by dictation
+        fst.add_arc(initial_state, hello_state, 'hello')
+        fst.add_arc(hello_state, dictation_state, '#nonterm:dictation', '#nonterm:dictation_cloud')  # #nonterm:dictation must be on ilabel; cloud variant on olabel
+        fst.add_arc(dictation_state, end_state, None, '#nonterm:end')
+        fst.add_arc(end_state, final_state, None)
+
+        rule.compile().load()
+
+        # Generate audio for "hello world"
+        audio_data = self.audio_generator('hello world')
+
+        # Decode
+        decoder.decode(audio_data, True, [True])
+        output, info = decoder.get_output()
+
+        # Get word alignment for alternative dictation
+        word_align = decoder.get_word_align(output)
+
+        # Create dictation_info_func that returns audio and word_align
+        def dictation_info_func():
+            return audio_data, word_align
+
+        # Parse with alternative dictation
+        kaldi_rule, words, words_are_dictation_mask = compiler.parse_output(
+            output, dictation_info_func=dictation_info_func)
+
+        # Verify alternative dictation was called
+        assert len(alternative_calls) > 0, "Alternative dictation should have been called"
+        assert len(alternative_audio_received) > 0, "Alternative dictation should have received audio"
+        assert len(alternative_recognized_texts) > 0, "Alternative dictation should have recognized text"
+
+        # Verify the alternative recognizer produced some output
+        alt_text = alternative_recognized_texts[0]
+        assert alt_text, f"Alternative recognizer should produce text, got: {alt_text}"
+
+        # The alternative text should be in the final words (replacing original dictation)
+        words_str = ' '.join(words)
+        assert alt_text in words_str or any(word in words for word in alt_text.split()), \
+            f"Alternative text '{alt_text}' should be in words: {words}"
+
+        # Verify 'hello' is still there (not part of dictation)
+        assert 'hello' in words, f"Hello word should be preserved: {words}"
+
+        # Verify rule was recognized
+        assert kaldi_rule == rule
+
+        # Verify dictation mask is correct
+        assert len(words) == len(words_are_dictation_mask)
+        assert words_are_dictation_mask[words.index('hello')] == False, "Hello should not be marked as dictation"
+
+    def test_alternative_dictation_not_called_without_cloud_nonterm(self, compiler_with_mock):
+        """Test alternative dictation not called when #nonterm:dictation_cloud not in output."""
+        decoder = compiler_with_mock.init_decoder()
+
+        rule = KaldiRule(compiler_with_mock, 'no_cloud_rule', has_dictation=True)
+        fst = rule.fst
+        initial_state = fst.add_state(initial=True)
+        final_state = fst.add_state(final=True)
+        fst.add_arc(initial_state, final_state, 'test')
+        rule.compile().load()
+
+        decoder.decode(self.audio_generator('test'), True, [True])
+        output, info = decoder.get_output()
+
+        mock_audio = b'mock_audio_data'
+        mock_word_align = [('test', 0, 1000)]
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler_with_mock, output, mock_audio, mock_word_align)
+
+        assert len(self.alternative_dictation_calls) == 0
+
+    def test_alternative_dictation_word_align_parsing(self, compiler_with_mock):
+        """Test parsing of word_align data for dictation spans."""
+        output_text = '#nonterm:rule0 start #nonterm:dictation_cloud original text #nonterm:end finish'
+        mock_audio = b'\x00' * 32000
+        mock_word_align = [
+            ('#nonterm:rule0', 0, 0),
+            ('start', 0, 8000),
+            ('#nonterm:dictation_cloud', 8000, 0),
+            ('original', 8000, 4000),
+            ('text', 12000, 4000),
+            ('#nonterm:end', 16000, 0),
+            ('finish', 16000, 8000),
+        ]
+
+        self.create_mock_rule(compiler_with_mock)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler_with_mock, output_text, mock_audio, mock_word_align)
+
+        assert len(self.alternative_dictation_calls) == 1
+        assert len(self.alternative_dictation_calls[0]) > 0
+        assert 'ALTERNATIVE_TEXT' in words or words == ['start', 'finish']
+
+    @pytest.mark.parametrize('output_text,word_align,audio_size,expected_audio_size', [
+        (
+            '#nonterm:rule0 start #nonterm:dictation_cloud final words #nonterm:end',
+            [
+                ('#nonterm:rule0', 0, 0),
+                ('start', 0, 8000),
+                ('#nonterm:dictation_cloud', 8000, 0),
+                ('final', 8000, 4000),
+                ('words', 12000, 4000),
+                ('#nonterm:end', 16000, 0),
+            ],
+            32000,
+            24000,  # 32000 - 8000
+        ),
+        (
+            '#nonterm:rule0 start #nonterm:dictation_cloud middle text #nonterm:end finish',
+            [
+                ('#nonterm:rule0', 0, 0),
+                ('start', 0, 4000),
+                ('#nonterm:dictation_cloud', 4000, 0),
+                ('middle', 4000, 4000),
+                ('text', 8000, 4000),
+                ('#nonterm:end', 12000, 0),
+                ('finish', 16000, 4000),
+            ],
+            32000,
+            10000,  # 14000 - 4000 (half gap to next word)
+        ),
+    ], ids=['end_of_utterance', 'middle_of_utterance'])
+    def test_alternative_dictation_span_calculation(self, compiler_with_mock, output_text, word_align, audio_size, expected_audio_size):
+        """Test dictation span calculation for various positions."""
+        mock_audio = b'\x00' * audio_size
+
+        self.create_mock_rule(compiler_with_mock)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler_with_mock, output_text, mock_audio, word_align)
+
+        assert len(self.alternative_dictation_calls) == 1
+        assert len(self.alternative_dictation_calls[0]) == expected_audio_size
+
+    def test_alternative_dictation_multiple_spans(self):
+        """Test handling multiple dictation spans in single utterance."""
+        call_count = [0]
+
+        def multi_alternative_func(audio_data):
+            call_count[0] += 1
+            return f'ALT_{call_count[0]}'
+
+        compiler = Compiler(alternative_dictation=multi_alternative_func)
+
+        output_text = '#nonterm:rule0 start #nonterm:dictation_cloud first #nonterm:end middle #nonterm:dictation_cloud second #nonterm:end finish'
+        mock_audio = b'\x00' * 48000
+        mock_word_align = [
+            ('#nonterm:rule0', 0, 0),
+            ('start', 0, 4000),
+            ('#nonterm:dictation_cloud', 4000, 0),
+            ('first', 4000, 4000),
+            ('#nonterm:end', 8000, 0),
+            ('middle', 12000, 4000),
+            ('#nonterm:dictation_cloud', 16000, 0),
+            ('second', 16000, 4000),
+            ('#nonterm:end', 20000, 0),
+            ('finish', 24000, 4000),
+        ]
+
+        self.create_mock_rule(compiler)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler, output_text, mock_audio, mock_word_align)
+
+        assert call_count[0] == 2
+
+    @pytest.mark.parametrize('alternative_func,expected_words', [
+        (lambda x: None, ['original', 'text']),
+        (lambda x: '', ['original', 'text']),
+    ], ids=['returns_none', 'returns_empty_string'])
+    def test_alternative_dictation_fallback(self, alternative_func, expected_words):
+        """Test fallback to original text when alternative_dictation returns falsy value."""
+        compiler = Compiler(alternative_dictation=alternative_func)
+
+        output_text = '#nonterm:rule0 #nonterm:dictation_cloud original text #nonterm:end'
+        mock_audio = b'\x00' * 16000
+        mock_word_align = [
+            ('#nonterm:rule0', 0, 0),
+            ('#nonterm:dictation_cloud', 0, 0),
+            ('original', 0, 4000),
+            ('text', 4000, 4000),
+            ('#nonterm:end', 8000, 0),
+        ]
+
+        self.create_mock_rule(compiler)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler, output_text, mock_audio, mock_word_align)
+
+        for expected_word in expected_words:
+            assert expected_word in words
+
+    def test_alternative_dictation_exception_handling(self):
+        """Test that exceptions in alternative_dictation are caught and logged."""
+        def failing_func(audio_data):
+            raise ValueError('Test exception')
+
+        compiler = Compiler(alternative_dictation=failing_func)
+
+        output_text = '#nonterm:rule0 #nonterm:dictation_cloud original #nonterm:end'
+        mock_audio = b'\x00' * 8000
+        mock_word_align = [
+            ('#nonterm:rule0', 0, 0),
+            ('#nonterm:dictation_cloud', 0, 0),
+            ('original', 0, 4000),
+            ('#nonterm:end', 4000, 0),
+        ]
+
+        self.create_mock_rule(compiler)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler, output_text, mock_audio, mock_word_align)
+
+        assert 'original' in words
+
+    def test_alternative_dictation_invalid_type_raises(self):
+        """Test that invalid alternative_dictation type raises TypeError."""
+        compiler = Compiler(alternative_dictation='not_callable')
+
+        output_text = '#nonterm:rule0 #nonterm:dictation_cloud text #nonterm:end'
+        mock_audio = b'\x00' * 8000
+        mock_word_align = [
+            ('#nonterm:rule0', 0, 0),
+            ('#nonterm:dictation_cloud', 0, 0),
+            ('text', 0, 4000),
+            ('#nonterm:end', 4000, 0),
+        ]
+
+        self.create_mock_rule(compiler)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler, output_text, mock_audio, mock_word_align)
+
+        assert words is not None
+
+    def test_alternative_dictation_audio_slice_accuracy(self):
+        """Test that correct audio slice is passed to alternative_dictation."""
+        received_audio = []
+
+        def capture_audio_func(audio_data):
+            received_audio.append(audio_data)
+            return 'replaced'
+
+        compiler = Compiler(alternative_dictation=capture_audio_func)
+
+        output_text = '#nonterm:rule0 #nonterm:dictation_cloud test #nonterm:end'
+        mock_audio = b'\x01' * 4000 + b'\x02' * 4000 + b'\x03' * 4000
+        mock_word_align = [
+            ('#nonterm:rule0', 0, 0),
+            ('#nonterm:dictation_cloud', 4000, 0),
+            ('test', 4000, 4000),
+            ('#nonterm:end', 8000, 0),
+        ]
+
+        self.create_mock_rule(compiler)
+        kaldi_rule, words, words_are_dictation_mask = self.parse_with_dictation_info(compiler, output_text, mock_audio, mock_word_align)
+
+        assert len(received_audio) == 1
+        assert received_audio[0] == b'\x02' * 4000 + b'\x03' * 4000

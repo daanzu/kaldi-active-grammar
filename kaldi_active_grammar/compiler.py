@@ -649,6 +649,9 @@ class Compiler(object):
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
+        """
+        dictation_info_func: Optional but required for using alternative_dictation; expected to be (audio_data, wrapper::KaldiNNet3Decoder.get_word_align output).
+        """
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
         if (output == '') or (output in self._noise_words):
@@ -679,7 +682,7 @@ class Compiler(object):
                     for index, (word, time, length) in enumerate(word_align)
                     if word.startswith('#nonterm:dictation_cloud')]
 
-                # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
+                # If last dictation is at end of utterance, it should include rest of audio_data; else, it should include half of audio_data between dictation end and start of next word
                 dictation_span = dictation_spans[-1]
                 if dictation_span['index_end'] == len(word_align) - 1:
                     dictation_span['offset_end'] = len(audio_data)
@@ -687,7 +690,7 @@ class Compiler(object):
                     next_word_time = times[dictation_span['index_end'] + 1]
                     dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) // 2
 
-                def replace_dictation(matchobj):
+                def replace_dictation(matchobj: re.Match) -> str:
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
