@@ -6,7 +6,49 @@ Note that the project (and python wheel) is built from a duorepo (2 separate rep
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) since v1.0.0.
 
-<!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...master) -->
+<!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.2.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.2.0...master) -->
+
+## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-10-31 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
+
+### Added
+
+* Comprehensive test suite with 80+ tests covering grammar compilation, plain dictation, and alternative dictation
+* Test infrastructure using pytest with TTS-generated test audio (Piper)
+* `AGENTS.md` documentation for AI coding agents with project architecture and development guidance
+* `RELEASING.md` comprehensive release process documentation
+* Exposed `NativeWFST` at package top-level for easier importing
+* Support for testing with multiple platforms and Python versions (3.9-3.13)
+
+### Changed
+
+* **CI/CD Improvements**:
+  * Implemented comprehensive caching of native binaries by commit hash
+  * Added caching of test setup data
+  * Updated build workflow to run on all pushes and PRs
+  * Modified macOS wheel builds to use delocate instead of ad-hoc manual library handling
+  * Improved Linux wheel build with cleaner output and better caching
+  * Updated CI to support latest GitHub Actions runners (Ubuntu 24.04, Windows 2025, macOS 13/15/26)
+  * Moved tests into main build workflow for faster feedback
+  * Added notices for built wheels in CI output
+* Relaxed Python package requirements version specifiers for better compatibility
+* Updated setup.py classifiers to include Python 3.11, 3.12, 3.13, 3.14
+* Dropped Python 2 from wheel tag (py3 instead of py2.py3), as Python 2 is no longer supported
+* Improved comments and cleanup in Justfile
+
+### Fixed
+
+* Updated CI workflows to properly handle latest runner environments
+* Fixed Linux build configuration and wrapper script
+* Cleaned up and standardized build processes across all platforms
+
+### Development
+
+* Refactored test structure for better organization and maintainability
+* Added test generators for creating synthetic speech using Piper TTS and Google TTS
+* Added helper utilities for test fixtures and audio generation
+* Improved test coverage for edge cases (empty audio, garbage audio, very short/long audio)
+* Added tests for complex grammar patterns (diamond, cascade, hub-and-spoke, etc.)
+* Added comprehensive alternative dictation tests with mocking
 
 ## [3.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.1.0) - 2021-11-24 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...v3.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...kag-v3.1.0)
 
