@@ -640,7 +640,7 @@ jobs:
         # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
         os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-13, macos-14, macos-15, macos-26]
         # Status of Python versions (https://devguide.python.org/versions/)
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]  # 3.14 doesn't have piper-tts wheels yet
     steps:
       - uses: actions/checkout@v5
 
