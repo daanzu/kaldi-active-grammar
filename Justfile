@@ -1,4 +1,6 @@
 
+set positional-arguments
+
 docker_repo := 'daanzu/kaldi-fork-active-grammar-manylinux'
 piper_voice := 'en_US-ryan-low'
 kaldi_model_url := 'https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030-smalllm.zip'
@@ -51,8 +53,8 @@ setup-tests:
 
 # Common args: --lf -k
 test *args='':
-    uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest {{args}}
+    uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"
 
 # Test package after building wheel into wheels/ directory. Runs tests from within tests/ directory to prevent importing kaldi_active_grammar from source tree
 test-package *args='':
-	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest {{args}}
+	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest "$@"
