@@ -583,6 +583,45 @@ jobs:
           pattern: wheels-*
           delete-merged: false  # Optional: removes the individual artifacts
 
+  setup-tests-cache:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Restore cached tests setup
+        id: cache-tests-setup-restore
+        uses: actions/cache/restore@v4
+        with:
+          key: tests-setup-${{ hashFiles('Justfile') }}-v1
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
+
+      - name: Setup tests
+        if: steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
+        run: |
+          just setup-tests
+
+      - name: Save cached tests setup
+        if: steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.cache-tests-setup-restore.outputs.cache-primary-key }}
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
+
   test-wheels:
     runs-on: ${{ matrix.os }}
     needs:
@@ -590,6 +629,7 @@ jobs:
       - build-windows
       - build-macos-arm
       - build-macos-intel
+      - setup-tests-cache
     if: ${{ always() && true }}  # Run even if some build jobs failed
     defaults:
       run:
@@ -644,29 +684,14 @@ jobs:
           fi
 
       - name: Restore cached tests setup
-        id: cache-tests-setup-restore
         uses: actions/cache/restore@v4
         with:
-          key: tests-setup-${{ hashFiles('tests/*.onnx, tests/*.onnx.json, tests/kaldi_model') }}-v1
+          key: tests-setup-${{ hashFiles('Justfile') }}-v1
           path: |
             tests/*.onnx
             tests/*.onnx.json
             tests/kaldi_model
-
-      - name: Setup tests
-        if: steps.wheels-presence.outputs.found == 'true' && steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
-        run: |
-          just setup-tests
-
-      - name: Save cached tests setup
-        if: steps.wheels-presence.outputs.found == 'true' && steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          key: ${{ steps.cache-tests-setup-restore.outputs.cache-primary-key }}
-          path: |
-            tests/*.onnx
-            tests/*.onnx.json
-            tests/kaldi_model
+          fail-on-cache-miss: true
 
       - name: Run tests
         if: steps.wheels-presence.outputs.found == 'true'
