@@ -1,4 +1,5 @@
 
+set ignore-comments
 set positional-arguments
 
 docker_repo := 'daanzu/kaldi-fork-active-grammar-manylinux'
@@ -58,3 +59,6 @@ test *args='':
 # Test package after building wheel into wheels/ directory. Runs tests from within tests/ directory to prevent importing kaldi_active_grammar from source tree
 test-package *args='':
 	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest "$@"
+
+test-package-separately *args='':
+	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ run_each_test_separately.py "$@"

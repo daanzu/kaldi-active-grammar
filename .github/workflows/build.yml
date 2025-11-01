@@ -695,5 +695,7 @@ jobs:
 
       - name: Run tests
         if: steps.wheels-presence.outputs.found == 'true'
+        # Must ignore warnings for piper-tts on Github Actions Windows runners
         run: |
-          just test-package -v
+          # just test-package -v -W 'ignore:Unsupported Windows version (2022server). ONNX Runtime supports Windows 10 and above, only.:UserWarning' -W 'ignore:Unsupported Windows version (2025server). ONNX Runtime supports Windows 10 and above, only.:UserWarning'
+          just test-package-separately -W 'ignore:Unsupported Windows version (2022server). ONNX Runtime supports Windows 10 and above, only.:UserWarning' -W 'ignore:Unsupported Windows version (2025server). ONNX Runtime supports Windows 10 and above, only.:UserWarning'
