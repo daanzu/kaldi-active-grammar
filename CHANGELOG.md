@@ -8,14 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.2.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.2.0...master) -->
 
-## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-10-31 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
+## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-11-02 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
 
 ### Added
 
 * Comprehensive test suite with 80+ tests covering grammar compilation, plain dictation, and alternative dictation
 * Test infrastructure using pytest with TTS-generated test audio (Piper)
 * `AGENTS.md` documentation for AI coding agents with project architecture and development guidance
-* `RELEASING.md` comprehensive release process documentation
 * Exposed `NativeWFST` at package top-level for easier importing
 * Support for testing with multiple platforms and Python versions (3.9-3.13)
 
