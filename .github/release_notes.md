@@ -258,13 +258,19 @@ Minor fix for OpenBLAS compilation for some architectures on linux/mac.
 See [major changes introduced in v2.0.0 and associated downloads](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0).
 
 
+v3.2.0
+
+Functionality-wise, only one small bug-fix: to the broken alternative dictation interface. But extensive build and infrastructure changes lead me to make this a minor release rather than just a patch release, out of an abundance of caution.
+
+Active development has resumed after a long break! (While development paused, the project was continuously maintained and actively used in production.) Look forward to more frequent releases in the hopefully-near future.
+
 
 
 You can subscribe to announcements on GitHub (see Watch panel above), or on Gitter (see [instructions](https://gitlab.com/gitlab-org/gitter/webapp/blob/master/docs/notifications.md#announcements) [![Gitter](https://badges.gitter.im/kaldi-active-grammar/community.svg)](https://gitter.im/kaldi-active-grammar/community))
 
 #### Donations are appreciated to encourage development.
 
-[![Donate](https://img.shields.io/badge/donate-GitHub-pink.svg)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-Patreon-orange.svg)](https://www.patreon.com/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-green.svg)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/preferred-GitHub-black.svg)](https://github.com/sponsors/daanzu)
+[![Donate](https://img.shields.io/badge/donate-GitHub-EA4AAA.svg?logo=githubsponsors)](https://github.com/sponsors/daanzu) [![Donate](https://img.shields.io/badge/donate-PayPal-002991.svg?logo=paypal)](https://paypal.me/daanzu) [![Donate](https://img.shields.io/badge/donate-GitHub-EA4AAA.svg?logo=githubsponsors)](https://github.com/sponsors/daanzu)
 
 
 ### Artifacts
