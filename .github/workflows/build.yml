@@ -428,7 +428,7 @@ jobs:
           done
 
   build-macos-intel:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     if: true
     env:
       MACOSX_DEPLOYMENT_TARGET: "10.9"
@@ -638,7 +638,8 @@ jobs:
       fail-fast: false
       matrix:
         # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
-        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-13, macos-14, macos-15, macos-26]
+        # https://github.com/actions/runner-images
+        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-14, macos-15, macos-15-intel, macos-26]
         # Status of Python versions (https://devguide.python.org/versions/)
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]  # 3.14 doesn't have piper-tts wheels yet
     steps:
@@ -658,7 +659,7 @@ jobs:
           case "${{ matrix.os }}" in
             ubuntu-*) echo "name=wheels-linux" >> $GITHUB_OUTPUT ;;
             windows-*) echo "name=wheels-windows" >> $GITHUB_OUTPUT ;;
-            macos-13) echo "name=wheels-macos-intel" >> $GITHUB_OUTPUT ;;
+            macos-15-intel) echo "name=wheels-macos-intel" >> $GITHUB_OUTPUT ;;
             macos-*) echo "name=wheels-macos-arm" >> $GITHUB_OUTPUT ;;
             *) echo "Unexpected OS: ${{ matrix.os }}" 1>&2; exit 1 ;;
           esac
