@@ -112,13 +112,14 @@ Otherwise...
     * Try deleting the Kaldi model directory itself, re-downloading and/or re-extracting it, and re-running. (Note: You may want to make a copy of your `user_lexicon.txt` file before deleting, to put in the new model directory.)
 * For reporting issues, try running with `import logging; logging.basicConfig(level=1)` at the top of your main/loader file to enable full debugging logging.
 
-## Documentation
-
-Formal documentation is somewhat lacking currently. To see example usage, examine:
-
+## Example usage
 * [**Plain dictation interface**](examples/plain_dictation.py): Set up recognizer for plain dictation; perform decoding on given `wav` file.
 * [**Full example**](examples/full_example.py): Set up grammar compiler & decoder; set up a rule; perform decoding on live, real-time audio from microphone.
 * [**Backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi): Many advanced features and complex interactions.
+
+## Documentation
+
+Formal documentation is somewhat lacking currently.
 
 The KaldiAG API is fairly low level, but basically: you define a set of grammar rules, then send in audio data, along with a bit mask of which rules are active at the beginning of each utterance, and receive back the recognized rule and text. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
 
