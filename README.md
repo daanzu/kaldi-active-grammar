@@ -114,8 +114,9 @@ Otherwise...
 
 ## Documentation
 
-Formal documentation is somewhat lacking currently. To see example usage, examine:
+Architecture and usage references:
 
+* [**Kaldi fork architecture and interaction**](docs/kaldi-fork-architecture.md): Multi-level design of the Python/native boundary, grammar compilation, dynamic decoding, build coupling, and operational invariants.
 * [**Plain dictation interface**](examples/plain_dictation.py): Set up recognizer for plain dictation; perform decoding on given `wav` file.
 * [**Full example**](examples/full_example.py): Set up grammar compiler & decoder; set up a rule; perform decoding on live, real-time audio from microphone.
 * [**Backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi): Many advanced features and complex interactions.
