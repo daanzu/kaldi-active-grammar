@@ -125,19 +125,9 @@ The KaldiAG API is fairly low level, but basically: you define a set of grammar 
 
 ### Building
 
-* Recommendation: use the binary wheels distributed for all major platforms.
-    * Significant work has gone into allowing you to avoid the many repo/dependency downloads, GBs of disk space, and vCPU-hours needed for building from scratch.
-    * They are built in public by automated Continuous Integration run on GitHub Actions: [see manifest](.github/workflows/build.yml).
-* Alternatively, to build for use locally:
-    * Linux/MacOS:
-        1. `python -m pip install -r requirements-build.txt`
-        1. `python setup.py bdist_wheel` (see [`CMakeLists.txt`](CMakeLists.txt) for details)
-    * Windows:
-        * Less easily generally automated
-        * You can follow the steps for Continuous Integration run on GitHub Actions: see the `build-windows` section of [the manifest](.github/workflows/build.yml).
-* Note: the project (and python wheel) is built from a duorepo (2 separate repos used together):
-    1. This repo, containing the external interface and higher-level logic, written in Python.
-    1. [My fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), containing the lower-level code, written in C++.
+If at all possible, use the published binary wheels for your platform. Only
+consult [`BUILDING.md`](BUILDING.md) if you cannot use the wheels and need to
+build from source.
 
 ## Contributing
 
