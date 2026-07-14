@@ -17,19 +17,101 @@ source build. The wheels are built by automated GitHub Actions CI; see the
 
 ### Linux and macOS
 
-Install the build requirements and build a wheel:
+For a normal local Linux or macOS build, for use on the same machine, install
+the build requirements and build a wheel. The CMake build downloads and builds
+the selected Kaldi fork revision as part of the wheel build:
 
 ```sh
 python -m pip install -r requirements-build.txt
-python setup.py bdist_wheel
+KALDI_BRANCH=kag-v3.2.0 python setup.py bdist_wheel
 ```
 
-See [`CMakeLists.txt`](CMakeLists.txt) for native build details.
+Replace `kag-v3.2.0` with the matching Kaldi branch. For a development build,
+use the current development branch or `origin/master` as appropriate. The
+resulting wheel is written to `dist/`.
+
+#### Linux CI-equivalent build
+
+The Linux CI build uses a Dockcross manylinux container so the resulting wheel
+can run on older Linux distributions. Install Docker and `just`, initialize
+the checked-in Dockcross helper, and run:
+
+```sh
+just setup-dockcross
+just build-dockcross manylinux2010_x86_64 kag-v3.2.0 ""
+```
+
+The second argument selects the Kaldi fork branch. The optional third argument
+is an Intel MKL download URL; leave it empty to use the default non-MKL path.
+The helper invokes `building/build-wheel-dockcross.sh`, which builds the wheel
+and runs `auditwheel repair`. Repaired wheels are written to `wheelhouse/`.
+The CI job may pass `--skip-native` when compatible native binaries have been
+restored from its cache; do not use that option unless the matching binaries
+are already present in `kaldi_active_grammar/exec/linux`.
+
+See [`CMakeLists.txt`](CMakeLists.txt), [`Justfile`](Justfile), and
+[`building/build-wheel-dockcross.sh`](building/build-wheel-dockcross.sh) for
+the native and container build details.
 
 ### Windows
 
-Windows builds are less easily automated locally. Follow the steps in the
-`build-windows` section of the [build workflow](.github/workflows/build.yml).
+Windows native builds require Visual Studio 2022 with the v143 toolset, a
+Windows 10 SDK, Intel oneMKL, Git, Perl, and a Bash environment such as Git
+Bash. The CI job uses `VS_VERSION=vs2022`, `PLATFORM_TOOLSET=v143`,
+`WINDOWS_TARGET_PLATFORM_VERSION=10.0`, and `MKL_VERSION=2025.1.0`.
+
+From a parent directory containing the KAG checkout, check out the matching
+OpenFST and Kaldi repositories alongside it:
+
+```sh
+git clone https://github.com/daanzu/openfst.git openfst
+git clone --branch kag-v3.2.0 https://github.com/daanzu/kaldi-fork-active-grammar.git kaldi
+```
+
+In `kaldi/windows`, prepare the Visual Studio solution and point it at those
+checkouts. The commands below mirror the CI configuration step; run them from
+the Kaldi repository:
+
+```sh
+cd kaldi/windows
+cp kaldiwin_mkl.props kaldiwin.props
+cp variables.props.dev variables.props
+perl -pi -e 's/<OPENFST>.*<\/OPENFST>/<OPENFST>C:\\path\\to\\openfst<\/OPENFST>/g' variables.props
+perl -pi -e 's/<OPENFSTLIB>.*<\/OPENFSTLIB>/<OPENFSTLIB>C:\\path\\to\\openfst\\build_output<\/OPENFSTLIB>/g' variables.props
+perl generate_solution.pl --vsver vs2022 --enable-mkl --noportaudio
+perl get_version.pl
+```
+
+Replace the example paths with the absolute Windows paths to the OpenFST
+checkout and its `build_output` directory. The CI also adds
+`libfstscript.lib` to the `kaldi-dragonfly` project before building; if the
+generated project does not already include it, add it to the project's linker
+additional dependencies.
+
+Build OpenFST first, then the Kaldi native target. These commands are run from
+a Visual Studio developer prompt (or an environment where `msbuild` is on
+`PATH`):
+
+```bat
+msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -maxCpuCount -verbosity:minimal openfst\openfst.sln
+msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -p:WindowsTargetPlatformVersion=10.0 -maxCpuCount -verbosity:minimal kaldi\kaldiwin_vs2022_MKL\kaldiwin\kaldi-dragonfly\kaldi-dragonfly.vcxproj
+```
+
+Copy the resulting DLL into the Python package, then build the wheel without
+rebuilding native code:
+
+```sh
+mkdir -p kaldi-active-grammar/kaldi_active_grammar/exec/windows
+cp kaldi/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/x64/Release/kaldi-dragonfly.dll \
+   kaldi-active-grammar/kaldi_active_grammar/exec/windows/
+cd kaldi-active-grammar
+python -m pip install --upgrade setuptools wheel
+env KALDIAG_BUILD_SKIP_NATIVE=1 python setup.py bdist_wheel
+```
+
+The Windows wheel is written to `dist/`. Follow the `build-windows` job in the
+[CI workflow](.github/workflows/build.yml) if the local Visual Studio layout
+differs from these assumptions.
 
 ## Build and release coupling
 
