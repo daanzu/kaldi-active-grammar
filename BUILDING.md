@@ -30,7 +30,53 @@ Replace `kag-v3.2.0` with the matching Kaldi branch. For a development build,
 use the current development branch or `origin/master` as appropriate. The
 resulting wheel is written to `dist/`.
 
-#### Linux CI-equivalent build
+### Linux: active development with separate checkouts
+
+For work that changes either repository frequently, keep the Python and Kaldi
+fork repositories as separate sibling checkouts. Build the fork in place and
+use an editable installation of the Python checkout. The staging command below
+creates relative symbolic links in the ignored `kaldi_active_grammar/exec/linux`
+directory, so the Python process loads the current native build without copying
+artifacts between repositories.
+
+```text
+workspace/
+├── kaldi-active-grammar/        # Python interface and packaging
+└── kaldi-fork-active-grammar/   # native engine
+```
+
+From the Python checkout, the following commands configure the fork once,
+build it, stage its shared library, and install the Python package editable:
+
+```sh
+just configure-linux-develop
+just build-linux-develop
+just setup-linux-develop
+KALDIAG_BUILD_SKIP_NATIVE=1 python -m pip install -e .
+```
+
+`configure-linux-develop` builds the fork's OpenBLAS dependency, OpenFST, and
+configures a CPU-only shared-library build with debug symbols. It downloads
+dependencies on its first run. If the fork has already been configured with
+the desired options, skip that command.
+
+After editing C++ code, run:
+
+```sh
+just build-linux-develop
+```
+
+After editing only Python code, no rebuild is needed: the editable install uses
+the source checkout. The normal `build-linux`/wheel path is intentionally not
+used for this loop because its CMake configuration shallow-clones a separate
+fork into `_skbuild`.
+
+The two checkouts remain separate Git repositories; the staging links are
+ignored and must not be packaged in a release wheel. Keep their branches or
+commits intentionally paired. The C ABI has no runtime version negotiation, so
+test both sides together whenever an ABI-facing change is made.
+
+### Linux CI-equivalent build
 
 The Linux CI build uses a Dockcross manylinux container so the resulting wheel
 can run on older Linux distributions. Install Docker and `just`, initialize

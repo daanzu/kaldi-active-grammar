@@ -31,16 +31,24 @@ setup-dockcross:
 pip-install-develop:
 	KALDIAG_BUILD_SKIP_NATIVE=1 pip3 install --user -e .
 
-# Setup an editable development environment on linux
-setup-linux-develop kaldi_root_dir:
-	# Compile kaldi_root_dir with: env CXXFLAGS=-O2 ./configure --mkl-root=/home/daanzu/intel/mkl/ --shared --static-math
+# Configure a separate Kaldi fork checkout for local Linux development. This is a one-time setup (or rerun after changing configure options).
+configure-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
+	cd {{kaldi_root_dir}}/tools && ./extras/install_openblas.sh && make -j"$(nproc)"
+	# cd {{kaldi_root_dir}}/tools && make -j"$(nproc)"
+	cd {{kaldi_root_dir}}/tools/openfst && autoreconf
+	cd {{kaldi_root_dir}}/src && CXXFLAGS='-O2' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS
+	# cd {{kaldi_root_dir}}/src && CXXFLAGS='-O0 -g3' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS --debug-level=2
+	# cd {{kaldi_root_dir}}/src && CXXFLAGS=-O2 ./configure --mkl-root=/home/daanzu/intel/mkl/ --shared --static-math
+	make -C {{kaldi_root_dir}}/src -j"$(nproc)" depend
+
+# Rebuild the native library after C++ changes in a separately checked-out fork.
+build-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
+	make -C {{kaldi_root_dir}}/src -j"$(nproc)" dragonfly
+
+# Stage a separate Kaldi fork checkout for an editable Linux Python install. The links keep the repositories independent while Python loads the current native build directly.
+setup-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
 	mkdir -p kaldi_active_grammar/exec/linux/
-	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstarcsort kaldi_active_grammar/exec/linux/
-	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstcompile kaldi_active_grammar/exec/linux/
-	ln -sr {{kaldi_root_dir}}/tools/openfst/bin/fstinfo kaldi_active_grammar/exec/linux/
-	ln -sr {{kaldi_root_dir}}/src/fstbin/fstaddselfloops kaldi_active_grammar/exec/linux/
-	ln -sr {{kaldi_root_dir}}/src/dragonfly/libkaldi-dragonfly.so kaldi_active_grammar/exec/linux/
-	ln -sr {{kaldi_root_dir}}/src/dragonflybin/compile-graph-agf kaldi_active_grammar/exec/linux/
+	ln -srf {{kaldi_root_dir}}/src/lib/libkaldi-dragonfly.so kaldi_active_grammar/exec/linux/
 
 watch-windows-develop config='Release':
 	bash -c "watchexec -v --no-ignore -w /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/ cp /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/{{config}}/kaldi-dragonfly.dll /mnt/c/Work/Speech/kaldi/kaldi-active-grammar/kaldi_active_grammar/exec/windows/"
