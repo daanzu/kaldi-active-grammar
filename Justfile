@@ -10,6 +10,9 @@ _default:
 	just --list
 	just --summary
 
+
+### BUILDING
+
 build-linux python='python3':
 	mkdir -p _skbuild
 	rm -rf kaldi_active_grammar/exec
@@ -42,11 +45,14 @@ setup-linux-develop kaldi_root_dir:
 watch-windows-develop config='Release':
 	bash -c "watchexec -v --no-ignore -w /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/ cp /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/{{config}}/kaldi-dragonfly.dll /mnt/c/Work/Speech/kaldi/kaldi-active-grammar/kaldi_active_grammar/exec/windows/"
 
-test-model model_dir:
-	cd {{invocation_directory()}} && rm -rf kaldi_model kaldi_model.tmp && cp -rp {{model_dir}} kaldi_model
-
 trigger-build ref='master':
 	gh workflow run build.yml --ref {{ref}}
+
+
+### TESTING
+
+test-model model_dir:
+	cd {{invocation_directory()}} && rm -rf kaldi_model kaldi_model.tmp && cp -rp {{model_dir}} kaldi_model
 
 setup-tests:
 	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
