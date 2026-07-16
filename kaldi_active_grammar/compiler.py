@@ -287,6 +287,40 @@ class Compiler(object):
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
+    def close(self):
+        """Release native resources owned by this compiler, once."""
+        decoder, self.decoder = self.decoder, None
+        if decoder is not None:
+            decoder.close()
+
+        agf_compiler, self._agf_compiler = self._agf_compiler, None
+        if agf_compiler is not None:
+            agf_compiler.close()
+
+        # Rules point back to this compiler.  Break those cycles after native
+        # decoder teardown; unloading individual grammars is neither necessary
+        # nor valid once the decoder has gone away.
+        rules = list(self.kaldi_rule_by_id_dict.values())
+        self.kaldi_rule_by_id_dict.clear()
+        self.compile_queue.clear()
+        self.compile_duplicate_filename_queue.clear()
+        self.load_queue.clear()
+        self._num_kaldi_rules = 0
+        for rule in rules:
+            rule.loaded = False
+            rule.destroyed = True
+            rule.compiler = None
+            if isinstance(rule.fst, NativeWFST):
+                rule.fst.close()
+
+    destroy = close
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
     def init_decoder(self, config=None, dictation_fst_file=None):
         if self.decoder: raise KaldiError("Decoder already initialized")
         if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath

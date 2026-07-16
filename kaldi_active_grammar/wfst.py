@@ -211,42 +211,38 @@ class NativeWFST(FFIObject):
         self._construct()
 
     def _construct(self):
-        self.native_obj = self._lib.fst__construct()
-        if self.native_obj == _ffi.NULL:
+        native_obj = self._lib.fst__construct()
+        if native_obj == _ffi.NULL:
             raise KaldiError("Failed fst__construct")
+        self.native_obj = self._own_native(native_obj, self._lib.fst__destruct, 'native WFST')
 
         self.num_states = 1  # Is initialized with a start state
         self.num_arcs = 0
         self.filename = None
         self._compiled_native_obj = None
 
-    def __del__(self):
-        self.destruct()
-
-    def destruct(self):
+    def close(self):
         del self.compiled_native_obj
-        if self.native_obj is not None:
-            result = self._lib.fst__destruct(self.native_obj)
-            self.native_obj = None
-            if not result:
-                raise KaldiError("Failed fst__destruct on %r" % self.native_obj)
+        self._release_native('native_obj', self._lib.fst__destruct, 'native WFST')
+
+    destruct = close
 
     compiled_native_obj = property(lambda self: self._compiled_native_obj)
     @compiled_native_obj.setter
     def compiled_native_obj(self, value):
         del self.compiled_native_obj
-        self._compiled_native_obj = value
+        self._compiled_native_obj = (self._own_native(value, self._lib.fst__destruct, 'compiled native WFST')
+            if value is not None and value != _ffi.NULL else None)
     @compiled_native_obj.deleter
     def compiled_native_obj(self):
-        if self._compiled_native_obj is not None:
-            result = self._lib.fst__destruct(self._compiled_native_obj)
-            self._compiled_native_obj = None
-            if not result:
-                raise KaldiError("Failed fst__destruct on %r" % self._compiled_native_obj)
+        self._release_native('_compiled_native_obj', self._lib.fst__destruct, 'compiled native WFST')
 
     def clear(self):
-        self.destruct()
+        self.close()
         self._construct()
+
+    def _get_native_obj(self):
+        return self._require_native(self.native_obj, 'native WFST')
 
     def add_state(self, weight=None, initial=False, final=False):
         """ Default weight is 1. """
@@ -256,7 +252,7 @@ class NativeWFST(FFIObject):
         else:
             assert final
         weight = -math.log(weight) if weight != 0 else self.zero
-        id = self._lib.fst__add_state(self.native_obj, float(weight), bool(initial))
+        id = self._lib.fst__add_state(self._get_native_obj(), float(weight), bool(initial))
         if id < 0:
             raise KaldiError("Failed fst__add_state")
         self.num_states += 1
@@ -273,14 +269,14 @@ class NativeWFST(FFIObject):
         weight = -math.log(weight) if weight != 0 else self.zero
         label_id = self.word_to_ilabel_map[label]
         olabel_id = self.word_to_olabel_map[olabel]
-        result = self._lib.fst__add_arc(self.native_obj, int(src_state), int(dst_state), int(label_id), int(olabel_id), float(weight))
+        result = self._lib.fst__add_arc(self._get_native_obj(), int(src_state), int(dst_state), int(label_id), int(olabel_id), float(weight))
         if not result:
             raise KaldiError("Failed fst__add_arc")
         self.num_arcs += 1
 
     def compute_hash(self, dependencies_seed_hash_str='0'*32):
         hash_p = _ffi.new('char[]', 33)  # Length of MD5 hex string + null terminator
-        result = self._lib.fst__compute_md5(self.native_obj, hash_p, encode(dependencies_seed_hash_str))
+        result = self._lib.fst__compute_md5(self._get_native_obj(), hash_p, encode(dependencies_seed_hash_str))
         if not result:
             raise KaldiError("Failed fst__compute_md5")
         hash_str = decode(_ffi.string(hash_p))
@@ -291,13 +287,13 @@ class NativeWFST(FFIObject):
 
     def has_path(self):
         """ Returns True iff there is a path (from start state to a final state). Uses BFS. Assumes can nonterminals succeed. """
-        result = self._lib.fst__has_path(self.native_obj)
+        result = self._lib.fst__has_path(self._get_native_obj())
         return result
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
         """ Returns True iff there is a epsilon-like-only path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
         assert not eps_like_labels
-        result = self._lib.fst__has_eps_path(self.native_obj, path_src_state, path_dst_state)
+        result = self._lib.fst__has_eps_path(self._get_native_obj(), path_src_state, path_dst_state)
         return result
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False, output_max_length=1024):
@@ -307,7 +303,7 @@ class NativeWFST(FFIObject):
         output_p = _ffi.new('int32_t[]', output_max_length)
         output_len_p = _ffi.new('int32_t*', output_max_length)
         target_labels = [self.word_to_ilabel_map[word] for word in target_words]
-        result = self._lib.fst__does_match(self.native_obj, len(target_labels), target_labels, output_p, output_len_p)
+        result = self._lib.fst__does_match(self._get_native_obj(), len(target_labels), target_labels, output_p, output_len_p)
         if output_len_p[0] > output_max_length:
             raise KaldiError("fst__does_match needed too much output length")
         if result:
@@ -319,17 +315,17 @@ class NativeWFST(FFIObject):
     ####################################################################################################################
 
     def write_file(self, fst_filename):
-        result = self._lib.fst__write_file(self.native_obj, encode(fst_filename))
+        result = self._lib.fst__write_file(self._get_native_obj(), encode(fst_filename))
         if not result:
             raise KaldiError("Failed fst__write_file")
 
     def write_file_const(self, fst_filename):
-        result = self._lib.fst__write_file_const(self.native_obj, encode(fst_filename))
+        result = self._lib.fst__write_file_const(self._get_native_obj(), encode(fst_filename))
         if not result:
             raise KaldiError("Failed fst__write_file")
 
     def print(self, fst_filename=None):
-        result = self._lib.fst__print(self.native_obj, (encode(fst_filename) if fst_filename is not None else _ffi.NULL))
+        result = self._lib.fst__print(self._get_native_obj(), (encode(fst_filename) if fst_filename is not None else _ffi.NULL))
         if not result:
             raise KaldiError("Failed fst__print")
 
