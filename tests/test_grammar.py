@@ -14,6 +14,8 @@ class TestGrammar:
         self.compiler = Compiler()
         self.decoder = self.compiler.init_decoder()
         self.audio_generator = audio_generator
+        yield
+        self.compiler.close()
 
     def make_rule(self, name: str, build_func: Callable[[Union[NativeWFST, WFST]], None], **kwargs) -> KaldiRule:
         rule = KaldiRule(self.compiler, name, **kwargs)
@@ -521,6 +523,14 @@ class TestAlternativeDictation:
     def setup(self, change_to_test_dir, audio_generator):
         self.audio_generator = audio_generator
         self.alternative_dictation_calls = []
+        self.resources = []
+        yield
+        for resource in reversed(self.resources):
+            resource.close()
+
+    def track(self, resource):
+        self.resources.append(resource)
+        return resource
 
     @pytest.fixture
     def compiler_with_mock(self):
@@ -528,7 +538,9 @@ class TestAlternativeDictation:
         def mock_alternative_dictation_func(audio_data):
             self.alternative_dictation_calls.append(audio_data)
             return 'ALTERNATIVE_TEXT'
-        return Compiler(alternative_dictation=mock_alternative_dictation_func)
+        compiler = Compiler(alternative_dictation=mock_alternative_dictation_func)
+        yield compiler
+        compiler.close()
 
     def create_mock_rule(self, compiler, has_dictation=True):
         """Helper to create a mock KaldiRule for testing."""
@@ -542,10 +554,10 @@ class TestAlternativeDictation:
 
     def test_alternative_dictation_callable_check(self):
         """Test that alternative_dictation must be callable."""
-        compiler = Compiler(alternative_dictation=lambda x: 'text')
+        compiler = self.track(Compiler(alternative_dictation=lambda x: 'text'))
         assert compiler.alternative_dictation is not None
 
-        compiler = Compiler(alternative_dictation=None)
+        compiler = self.track(Compiler(alternative_dictation=None))
         assert compiler.alternative_dictation is None
 
     def test_alternative_dictation_not_called_without_dictation(self, compiler_with_mock):
@@ -580,12 +592,12 @@ class TestAlternativeDictation:
             """Uses an independent PlainDictationRecognizer to decode the audio."""
             alternative_calls.append(True)
             alternative_audio_received.append(len(audio_data))
-            alt_recognizer = PlainDictationRecognizer()
-            alt_text, alt_info = alt_recognizer.decode_utterance(audio_data)
+            with PlainDictationRecognizer() as alt_recognizer:
+                alt_text, alt_info = alt_recognizer.decode_utterance(audio_data)
             alternative_recognized_texts.append(alt_text)
             return alt_text
 
-        compiler = Compiler(alternative_dictation=alternative_dictation_func)
+        compiler = self.track(Compiler(alternative_dictation=alternative_dictation_func))
         decoder = compiler.init_decoder()
 
         # Create rule with dictation: "hello <dictation>"
@@ -736,7 +748,7 @@ class TestAlternativeDictation:
             call_count[0] += 1
             return f'ALT_{call_count[0]}'
 
-        compiler = Compiler(alternative_dictation=multi_alternative_func)
+        compiler = self.track(Compiler(alternative_dictation=multi_alternative_func))
 
         output_text = '#nonterm:rule0 start #nonterm:dictation_cloud first #nonterm:end middle #nonterm:dictation_cloud second #nonterm:end finish'
         mock_audio = b'\x00' * 48000
@@ -764,7 +776,7 @@ class TestAlternativeDictation:
     ], ids=['returns_none', 'returns_empty_string'])
     def test_alternative_dictation_fallback(self, alternative_func, expected_words):
         """Test fallback to original text when alternative_dictation returns falsy value."""
-        compiler = Compiler(alternative_dictation=alternative_func)
+        compiler = self.track(Compiler(alternative_dictation=alternative_func))
 
         output_text = '#nonterm:rule0 #nonterm:dictation_cloud original text #nonterm:end'
         mock_audio = b'\x00' * 16000
@@ -787,7 +799,7 @@ class TestAlternativeDictation:
         def failing_func(audio_data):
             raise ValueError('Test exception')
 
-        compiler = Compiler(alternative_dictation=failing_func)
+        compiler = self.track(Compiler(alternative_dictation=failing_func))
 
         output_text = '#nonterm:rule0 #nonterm:dictation_cloud original #nonterm:end'
         mock_audio = b'\x00' * 8000
@@ -805,7 +817,7 @@ class TestAlternativeDictation:
 
     def test_alternative_dictation_invalid_type_raises(self):
         """Test that invalid alternative_dictation type raises TypeError."""
-        compiler = Compiler(alternative_dictation='not_callable')
+        compiler = self.track(Compiler(alternative_dictation='not_callable'))
 
         output_text = '#nonterm:rule0 #nonterm:dictation_cloud text #nonterm:end'
         mock_audio = b'\x00' * 8000
@@ -829,7 +841,7 @@ class TestAlternativeDictation:
             received_audio.append(audio_data)
             return 'replaced'
 
-        compiler = Compiler(alternative_dictation=capture_audio_func)
+        compiler = self.track(Compiler(alternative_dictation=capture_audio_func))
 
         output_text = '#nonterm:rule0 #nonterm:dictation_cloud test #nonterm:end'
         mock_audio = b'\x01' * 4000 + b'\x02' * 4000 + b'\x03' * 4000

@@ -10,7 +10,9 @@ from tests.helpers import *
 
 @pytest.fixture
 def recognizer(change_to_test_dir):
-    return PlainDictationRecognizer()
+    recognizer = PlainDictationRecognizer()
+    yield recognizer
+    recognizer.close()
 
 
 def test_initialization(recognizer):
@@ -76,6 +78,8 @@ class TestPlainDictationWithFST:
         except Exception:
             self.has_hclg = False
             pytest.skip("HCLG.fst not available for testing")
+        yield
+        self.recognizer.close()
 
     def test_initialization(self):
         if not self.has_hclg:
@@ -109,13 +113,13 @@ def test_chunked_decode(recognizer, audio_generator, chunk_size, test_text):
 
 
 def test_custom_tmp_dir(change_to_test_dir, audio_generator, tmp_path):
-    recognizer = PlainDictationRecognizer(tmp_dir=str(tmp_path))
-    test_text = "custom temporary directory"
-    audio_data = audio_generator(test_text)
-    output_str, info = recognizer.decode_utterance(audio_data)
-    assert isinstance(output_str, str)
-    assert output_str == test_text
-    assert_info_shape(info)
+    with PlainDictationRecognizer(tmp_dir=str(tmp_path)) as recognizer:
+        test_text = "custom temporary directory"
+        audio_data = audio_generator(test_text)
+        output_str, info = recognizer.decode_utterance(audio_data)
+        assert isinstance(output_str, str)
+        assert output_str == test_text
+        assert_info_shape(info)
 
 
 def test_custom_config(change_to_test_dir, audio_generator):
@@ -123,13 +127,13 @@ def test_custom_config(change_to_test_dir, audio_generator):
         'beam': 13.0,
         'max_active': 7000,
     }
-    recognizer = PlainDictationRecognizer(config=config)
-    test_text = "custom configuration test"
-    audio_data = audio_generator(test_text)
-    output_str, info = recognizer.decode_utterance(audio_data)
-    assert isinstance(output_str, str)
-    assert output_str == test_text
-    assert_info_shape(info)
+    with PlainDictationRecognizer(config=config) as recognizer:
+        test_text = "custom configuration test"
+        audio_data = audio_generator(test_text)
+        output_str, info = recognizer.decode_utterance(audio_data)
+        assert isinstance(output_str, str)
+        assert output_str == test_text
+        assert_info_shape(info)
 
 
 def test_very_short_audio(recognizer, audio_generator):
@@ -201,11 +205,11 @@ def test_info_consistency(change_to_test_dir, audio_generator):
     test_text = "consistent info values"
     audio_data = audio_generator(test_text)
 
-    recognizer1 = PlainDictationRecognizer()
-    output_str1, info1 = recognizer1.decode_utterance(audio_data)
+    with PlainDictationRecognizer() as recognizer1:
+        output_str1, info1 = recognizer1.decode_utterance(audio_data)
 
-    recognizer2 = PlainDictationRecognizer()
-    output_str2, info2 = recognizer2.decode_utterance(audio_data)
+    with PlainDictationRecognizer() as recognizer2:
+        output_str2, info2 = recognizer2.decode_utterance(audio_data)
 
     assert output_str1 == output_str2
 
