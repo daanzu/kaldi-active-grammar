@@ -86,14 +86,6 @@ setup-tests:
 test *args='':
     uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"
 
-# Run the source-tree tests one at a time in separate processes.
-test-separately *args='':
-	uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/run_each_test_separately.py "$@"
-
 # Test package after building wheel into wheels/ directory. Runs tests from within tests/ directory to prevent importing kaldi_active_grammar from source tree
 test-package *args='':
 	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest "$@"
-
-# Run the installed-wheel tests one at a time in separate processes.
-test-package-separately *args='':
-	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ run_each_test_separately.py "$@"
