@@ -50,8 +50,17 @@ setup-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
 	mkdir -p kaldi_active_grammar/exec/linux/
 	ln -srf {{kaldi_root_dir}}/src/lib/libkaldi-dragonfly.so kaldi_active_grammar/exec/linux/
 
-watch-windows-develop config='Release':
-	bash -c "watchexec -v --no-ignore -w /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/ cp /mnt/c/Work/Speech/kaldi/kaldi-windows/kaldiwin_vs2019_MKL/x64/{{config}}/kaldi-dragonfly.dll /mnt/c/Work/Speech/kaldi/kaldi-active-grammar/kaldi_active_grammar/exec/windows/"
+# Copy the DLL from a separate Windows fork whenever MSBuild writes it; useful when a junction is unavailable or an independent staged copy is wanted.
+watch-windows-develop kaldi_root_dir='../kaldi-fork-active-grammar' config='Release':
+	mkdir -p kaldi_active_grammar/exec/windows
+	cp -f "{{kaldi_root_dir}}/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/x64/{{config}}/kaldi-dragonfly.dll" kaldi_active_grammar/exec/windows/
+	watchexec --postpone --watch "{{kaldi_root_dir}}/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/x64/{{config}}" --filter 'kaldi-dragonfly.dll' --fs-events create,modify,rename --debounce 500ms --shell=none -- cp -f "{{kaldi_root_dir}}/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/x64/{{config}}/kaldi-dragonfly.dll" kaldi_active_grammar/exec/windows/
+
+# Link the ignored Windows staging directory to a separate fork's MSBuild output through cmd.exe; no symlink privilege is needed and the link must not already exist.
+setup-windows-develop kaldi_root_dir='../kaldi-fork-active-grammar' config='Release':
+	mkdir -p kaldi_active_grammar/exec
+	if test -e kaldi_active_grammar/exec/windows; then echo 'kaldi_active_grammar/exec/windows already exists; remove its staging directory or junction first.' >&2; exit 1; fi
+	cmd //c mklink /J "$(cygpath -aw kaldi_active_grammar/exec/windows)" "$(cygpath -aw '{{kaldi_root_dir}}/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/x64/{{config}}')"
 
 trigger-build ref='master':
 	gh workflow run build.yml --ref {{ref}}

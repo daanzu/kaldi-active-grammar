@@ -102,9 +102,75 @@ the native and container build details.
 ### Windows
 
 Windows native builds require Visual Studio 2022 with the v143 toolset, a
-Windows 10 SDK, Intel oneMKL, Git, Perl, and a Bash environment such as Git
-Bash. The CI job uses `VS_VERSION=vs2022`, `PLATFORM_TOOLSET=v143`,
+Windows 10 SDK, Intel oneMKL, Git for Windows (for `cygpath`), and Perl. The
+CI job uses `VS_VERSION=vs2022`, `PLATFORM_TOOLSET=v143`,
 `WINDOWS_TARGET_PLATFORM_VERSION=10.0`, and `MKL_VERSION=2025.1.0`.
+
+### Windows: active development with separate checkouts
+
+For frequent changes to either repository, keep the Python interface, Kaldi
+fork, and Windows OpenFST port in separate sibling checkouts. Run the commands
+below from a POSIX-compatible Windows shell, such as Git Bash or Fish (with
+`msbuild` and Git for Windows' `cygpath` available on `PATH`), after following
+the one-time solution-generation steps in the next section:
+
+```text
+C:/src/
+|-- kaldi-active-grammar/        # Python interface and packaging
+|-- kaldi-fork-active-grammar/   # native engine
+`-- openfst/                     # Windows OpenFST port
+```
+
+Build OpenFST and `kaldi-dragonfly` with the desired configuration. The
+example below uses `Debug`, which is best for native debugging; replace it with
+`Release` for performance testing:
+
+```sh
+msbuild -t:Build -p:Configuration=Debug -p:Platform=x64 -p:PlatformToolset=v143 -maxCpuCount -verbosity:minimal ../openfst/openfst.sln
+msbuild -t:Build -p:Configuration=Debug -p:Platform=x64 -p:PlatformToolset=v143 -p:WindowsTargetPlatformVersion=10.0 -maxCpuCount -verbosity:minimal ../kaldi-fork-active-grammar/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
+```
+
+The recommended staging option is a directory junction. It makes KAG's
+ignored `exec/windows` directory point to the fork's MSBuild output, so no DLL
+copy step is needed after a rebuild (and the adjacent PDB remains available to
+a debugger):
+
+```sh
+just setup-windows-develop
+env KALDIAG_BUILD_SKIP_NATIVE=1 python -m pip install -e .
+```
+
+`setup-windows-develop` creates the junction through `cmd.exe`, so it works
+from these shells without enabling Windows Developer Mode or running as an
+administrator. It defaults to the sibling fork and the `Debug` output; both
+are configurable:
+
+```sh
+just setup-windows-develop ../my-kaldi-fork Release
+```
+
+If a prior staged `exec/windows` directory or junction exists, remove only
+that entry before re-running setup:
+
+```sh
+cmd //c rmdir 'kaldi_active_grammar\exec\windows'
+```
+
+The alternative `watch-windows-develop` recipe keeps an independent copy in
+`exec/windows`. It performs an initial copy, then uses `watchexec` to copy the
+DLL after it is created, modified, or renamed by MSBuild:
+
+```sh
+just watch-windows-develop
+# or: just watch-windows-develop ../my-kaldi-fork Release
+```
+
+Use the watcher when a junction is unsuitable. It requires `watchexec` on
+`PATH` and does not make PDB files available through the package directory.
+Whichever staging option is used, restart the Python process after rebuilding:
+Windows cannot replace a DLL that the process has loaded.
+
+### Windows: CI-equivalent native build
 
 From a parent directory containing the KAG checkout, check out the matching
 OpenFST and Kaldi repositories alongside it:
@@ -134,13 +200,12 @@ checkout and its `build_output` directory. The CI also adds
 generated project does not already include it, add it to the project's linker
 additional dependencies.
 
-Build OpenFST first, then the Kaldi native target. These commands are run from
-a Visual Studio developer prompt (or an environment where `msbuild` is on
-`PATH`):
+Build OpenFST first, then the Kaldi native target. Run these from a
+POSIX-compatible Windows shell where `msbuild` is on `PATH`:
 
-```bat
-msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -maxCpuCount -verbosity:minimal openfst\openfst.sln
-msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -p:WindowsTargetPlatformVersion=10.0 -maxCpuCount -verbosity:minimal kaldi\kaldiwin_vs2022_MKL\kaldiwin\kaldi-dragonfly\kaldi-dragonfly.vcxproj
+```sh
+msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -maxCpuCount -verbosity:minimal openfst/openfst.sln
+msbuild -t:Build -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 -p:WindowsTargetPlatformVersion=10.0 -maxCpuCount -verbosity:minimal kaldi/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/kaldi-dragonfly.vcxproj
 ```
 
 Copy the resulting DLL into the Python package, then build the wheel without
