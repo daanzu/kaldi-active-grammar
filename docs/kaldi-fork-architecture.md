@@ -292,10 +292,6 @@ instructions.
 
 `KaldiPlainNNet3Decoder` loads a conventional monolithic `HCLG.fst` and uses the same native base model, audio, lattice, score, adaptation, and alignment machinery. No per-rule graph list or activity vector is involved. This path demonstrates that the fork also serves as KAG's general native Kaldi wrapper, while dynamic grammar selection is specifically the AGF/LAF responsibility.
 
-### 8.3 Older paths
-
-The source retains GMM and indirect/CLI graph-compilation code. These help explain the project's evolution but should not be mistaken for the default nnet3 `agf-direct` design.
-
 ## 9. Architectural invariants and constraints
 
 Maintainers should treat the following as hard contracts:
