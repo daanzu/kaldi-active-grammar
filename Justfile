@@ -75,9 +75,12 @@ setup-tests:
 	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
 	cd tests && [ ! -e kaldi_model ] && curl -L -C - -o kaldi_model.zip '{{kaldi_model_url}}' && unzip -o kaldi_model.zip || true
 
-# Common args: --lf -k
+# Common args: --lf (only run last failed) -k "keyword" (only run tests matching keyword or name)
 test *args='':
     uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"
+
+test-separately *args='':
+	uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/run_each_test_separately.py "$@"
 
 # Test package after building wheel into wheels/ directory. Runs tests from within tests/ directory to prevent importing kaldi_active_grammar from source tree
 test-package *args='':
