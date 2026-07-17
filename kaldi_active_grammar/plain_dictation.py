@@ -6,7 +6,7 @@
 
 from . import _log, KaldiError
 from .model import Model
-from .compiler import Compiler, remove_nonterms_in_text
+from .compiler import Compiler, remove_nonterms_in_text, remove_words_in_text
 from .wrapper import KaldiPlainNNet3Decoder, KaldiAgfNNet3Decoder
 from .utils import show_donation_message
 
@@ -60,4 +60,5 @@ class PlainDictationRecognizer(object):
             self.decoder.decode(samples_data, True)
         output_str, info = self.decoder.get_output()
         output_str = remove_nonterms_in_text(output_str)
+        output_str = remove_words_in_text(output_str, lambda word: word in self._compiler._silence_words)
         return (output_str, info)
