@@ -7,49 +7,49 @@ https://github.com/pypa/sampleproject
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages
-import os, re, datetime
-# io.open is needed for projects that support Python 2.7
-# It ensures open() defaults to text mode with universal newlines,
-# and accepts an argument to specify the text encoding
-# Python 3 only projects can skip this import
-from io import open
+import datetime
+import os
+import platform
+import re
 
-if os.environ.get('KALDIAG_SETUP_RAW'):
+# Optionally skip native code build (expecting libraries to be manually/externally placed correctly prior) by using standard setuptools; otherwise build native code with scikit-build
+if os.environ.get('KALDIAG_BUILD_SKIP_NATIVE') or os.environ.get('KALDIAG_SETUP_RAW'):
     from setuptools import setup
-    import site, sys
-    site.ENABLE_USER_SITE = ("--user" in sys.argv[1:])  # Fix stupid pip https://github.com/pypa/pip/issues/7953
 else:
     from skbuild import setup
 
+import site, sys
+site.ENABLE_USER_SITE = bool("--user" in sys.argv[1:])  # Fix pip bug breaking editable install to user directory: https://github.com/pypa/pip/issues/7953
 
-# Force wheel to be platform specific
+
+# Force wheel to be platform-specific (needed due to manually-loaded native libraries)
 # https://stackoverflow.com/questions/45150304/how-to-force-a-python-wheel-to-be-platform-specific-when-building-it
 # https://github.com/Yelp/dumb-init/blob/48db0c0d0ecb4598d1a6400710445b85d67616bf/setup.py#L11-L27
 # https://github.com/google/or-tools/issues/616#issuecomment-371480314
-try:
+if True:
     from wheel.bdist_wheel import bdist_wheel as bdist_wheel
     class bdist_wheel_impure(bdist_wheel):
 
         def finalize_options(self):
-            bdist_wheel.finalize_options(self)
-            # Mark us as not a pure python package
+            super().finalize_options()
+            # Mark us as not a pure python package: we contain platform-specific native libraries, even though no CPython extensions
             self.root_is_pure = False
 
         def get_tag(self):
-            python, abi, plat = bdist_wheel.get_tag(self)
-            # We don't contain any python source
-            python, abi = 'py2.py3', 'none'
+            python, abi, plat = super().get_tag()
+            # Mark us as python-version-agnostic (py3), and python-ABI-agnostic (none), since we contain no CPython extensions
+            python, abi = 'py3', 'none'
+            # For MacOS, prevent mistakenly marking as universal2 wheel (since we compile our native libraries as either x86_64 or arm64, not both)
+            if plat.startswith("macosx_") and plat.endswith("_universal2"):
+                want = "x86_64" if platform.machine() == "x86_64" else "arm64"
+                plat = re.sub(r"_universal2$", f"_{want}", plat)
             return python, abi, plat
 
     from setuptools.command.install import install
     class install_platlib(install):
         def finalize_options(self):
-            install.finalize_options(self)
+            super().finalize_options()
             self.install_lib = self.install_platlib
-
-except ImportError:
-    bdist_wheel_impure = None
-    install_platlib = None
 
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -152,7 +152,7 @@ setup(
     # above.
     author_email='daanzu@gmail.com',  # Optional
 
-    license='AGPL-3.0',
+    license='AGPL-3.0-or-later',
 
     # Classifiers help users find your project by categorizing it.
     #
@@ -168,17 +168,18 @@ setup(
         'Intended Audience :: Developers',
         # 'Topic :: Software Development :: Build Tools',
 
-        # Pick your license as you wish
-        'License :: OSI Approved :: GNU Affero General Public License v3',
-
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
         # These classifiers are *not* checked by 'pip install'. See instead
         # 'python_requires' below.
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
+        'Programming Language :: Python :: 3.14',
+        'Programming Language :: Python :: Implementation :: CPython',
     ],
 
     # This field adds keywords for your project which will appear on the
@@ -203,7 +204,7 @@ setup(
     # and refuse to install the project if the version does not match. If you
     # do not support Python 2, you can simplify this to '>=3.5' or similar, see
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
-    python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4',
+    python_requires='>=3.6, <4',  # NOTE: Allowing earlier unsupported versions, even if not tested, unless we know they break
 
     # This field lists other packages that your project depends on to run.
     # Any package you put here will be installed by pip when your project is
@@ -212,10 +213,9 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'cffi ~= 1.12',
-        'numpy ~= 1.16, != 1.19.4',
-        'ush ~= 3.1',
-        'requests >= 2',
+        'cffi >= 1.12',
+        'numpy >= 1.16, != 1.19.4',
+        'ush >= 3.1',
         'six',
         'futures; python_version == "2.7"',
     ],  # Optional
@@ -229,8 +229,12 @@ setup(
     # Similar to `install_requires` above, these must be valid existing
     # projects.
     extras_require={  # Optional
+        'g2p_en': ['g2p_en >= 2.1.0'],
+        'online': ['requests >= 2.18'],
         # 'dev': ['check-manifest'],
-        # 'test': ['coverage'],
+        # "test": [
+        #     # See requirements-test.txt
+        # ]
     },
 
     # package_dir={
@@ -243,8 +247,7 @@ setup(
     # If using Python 2.6 or earlier, then these have to be included in
     # MANIFEST.in as well.
     package_data={  # Optional
-        # 'kaldi_active_grammar': ['exec/windows/*'],
-        'kaldi_active_grammar': ['exec/*/*'],
+        'kaldi_active_grammar': ['exec/*/*', 'exec/*/*/*'],
         '': ['LICENSE.txt'],
     },
 

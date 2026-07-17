@@ -356,11 +356,20 @@ class NativeWFST(FFIObject):
 
 class SymbolTable(object):
 
-    def __init__(self, filename):
+    def __init__(self, filename=None):
+        self.word_to_id_map = dict()
+        self.id_to_word_map = dict()
+        self.max_term_word_id = -1
+        if filename is not None:
+            self.load_text_file(filename)
+
+    def load_text_file(self, filename):
         with open(filename, 'r', encoding='utf-8') as file:
             word_id_pairs = [line.strip().split() for line in file]
-        self.word_to_id_map = { word: int(id) for (word, id) in word_id_pairs }
-        self.id_to_word_map = { id: word for (word, id) in self.word_to_id_map.items() }
+        self.word_to_id_map.clear()
+        self.id_to_word_map.clear()
+        self.word_to_id_map.update({ word: int(id) for (word, id) in word_id_pairs })
+        self.id_to_word_map.update({ id: word for (word, id) in self.word_to_id_map.items() })
         self.max_term_word_id = max(id for (word, id) in self.word_to_id_map.items() if not word.startswith('#nonterm'))
 
     def add_word(self, word, id=None):

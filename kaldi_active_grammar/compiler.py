@@ -344,14 +344,14 @@ class Compiler(object):
     # Methods for compiling graphs.
 
     def add_word(self, word, phones=None, lazy_compilation=False, allow_online_pronunciations=False):
-        self._lexicon_files_stale = True
         pronunciations = self.model.add_word(word, phones=phones, lazy_compilation=lazy_compilation, allow_online_pronunciations=allow_online_pronunciations)
+        self._lexicon_files_stale = True  # Only mark lexicon stale if it was successfully modified (not an exception)
         return pronunciations
 
     def prepare_for_compilation(self):
         if self._lexicon_files_stale:
             self.model.generate_lexicon_files()
-            self.model.load_words()
+            self.model.load_words()  # FIXME: This re-loading from the words.txt file may be unnecessary now that we have/use NativeWFST + SymbolTable, but it's not clear if it's safe to remove it.
             self.decoder.load_lexicon()
             if self._agf_compiler:
                 # TODO: Just update the necessary files in the config
@@ -661,6 +661,9 @@ class Compiler(object):
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
+        """
+        dictation_info_func: Optional but required for using alternative_dictation; expected to be (audio_data, wrapper::KaldiNNet3Decoder.get_word_align output).
+        """
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
         if (output is None) or (output == '') or (output in self._noise_words):
@@ -691,7 +694,7 @@ class Compiler(object):
                     for index, (word, time, length) in enumerate(word_align)
                     if word.startswith('#nonterm:dictation_cloud')]
 
-                # If last dictation is at end of utterance, include rest of audio_data; else, include half of audio_data between dictation end and start of next word
+                # If last dictation is at end of utterance, it should include rest of audio_data; else, it should include half of audio_data between dictation end and start of next word
                 dictation_span = dictation_spans[-1]
                 if dictation_span['index_end'] == len(word_align) - 1:
                     dictation_span['offset_end'] = len(audio_data)
@@ -699,13 +702,12 @@ class Compiler(object):
                     next_word_time = times[dictation_span['index_end'] + 1]
                     dictation_span['offset_end'] = (dictation_span['offset_end'] + next_word_time) // 2
 
-                def replace_dictation(matchobj):
+                def replace_dictation(matchobj: re.Match) -> str:
                     orig_text = matchobj.group(1)
                     dictation_span = dictation_spans.pop(0)
                     dictation_audio = audio_data[dictation_span['offset_start'] : dictation_span['offset_end']]
-                    kwargs = dict(language_code=self.cloud_dictation_lang)
                     with debug_timer(self._log.debug, 'alternative_dictation call'):
-                        alternative_text = alternative_text_func(dictation_audio, **kwargs)
+                        alternative_text = alternative_text_func(dictation_audio)
                         self._log.debug("alternative_dictation: %.2fs audio -> %r", (0.5 * len(dictation_audio) / 16000), alternative_text)  # FIXME: hardcoded sample_rate!
                     # alternative_dictation.write_wav('test.wav', dictation_audio)
                     return (alternative_text or orig_text)

@@ -5,7 +5,7 @@
 #
 
 _name = 'kaldi_active_grammar'
-__version__ = '2.1.0'
+__version__ = '3.2.0'
 # __dev_version__ = __version__ + '.dev0'
 REQUIRED_MODEL_VERSION = '0.5.0'
 
@@ -19,6 +19,6 @@ class KaldiError(Exception):
 
 from .compiler import Compiler, KaldiRule
 from .wrapper import KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder, KaldiPlainNNet3Decoder
-from .wfst import WFST
+from .wfst import NativeWFST, WFST
 from .plain_dictation import PlainDictationRecognizer
 from .utils import disable_donation_message

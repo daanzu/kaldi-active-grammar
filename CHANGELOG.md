@@ -6,7 +6,74 @@ Note that the project (and python wheel) is built from a duorepo (2 separate rep
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) since v1.0.0.
 
-## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...master)
+<!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.2.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.2.0...master) -->
+
+## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-11-02 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
+
+### Added
+
+* Comprehensive test suite with 80+ tests covering grammar compilation, plain dictation, and alternative dictation
+* Test infrastructure using pytest with TTS-generated test audio (Piper)
+* `AGENTS.md` documentation for AI coding agents with project architecture and development guidance
+* Exposed `NativeWFST` at package top-level for easier importing
+* Support for testing with multiple platforms and Python versions (3.9-3.13)
+
+### Changed
+
+* **CI/CD Improvements**:
+  * Implemented comprehensive caching of native binaries by commit hash
+  * Added caching of test setup data
+  * Updated build workflow to run on all pushes and PRs
+  * Modified macOS wheel builds to use delocate instead of ad-hoc manual library handling
+  * Improved Linux wheel build with cleaner output and better caching
+  * Updated CI to support latest GitHub Actions runners (Ubuntu 24.04, Windows 2025, macOS 13/15/26)
+  * Moved tests into main build workflow for faster feedback
+  * Added notices for built wheels in CI output
+* Relaxed Python package requirements version specifiers for better compatibility
+* Updated setup.py classifiers to include Python 3.11, 3.12, 3.13, 3.14
+* Dropped Python 2 from wheel tag (py3 instead of py2.py3), as Python 2 is no longer supported
+* Improved comments and cleanup in Justfile
+
+### Fixed
+
+* Updated CI workflows to properly handle latest runner environments
+* Fixed Linux build configuration and wrapper script
+* Cleaned up and standardized build processes across all platforms
+
+### Development
+
+* Refactored test structure for better organization and maintainability
+* Added test generators for creating synthetic speech using Piper TTS and Google TTS
+* Added helper utilities for test fixtures and audio generation
+* Improved test coverage for edge cases (empty audio, garbage audio, very short/long audio)
+* Added tests for complex grammar patterns (diamond, cascade, hub-and-spoke, etc.)
+* Added comprehensive alternative dictation tests with mocking
+
+## [3.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.1.0) - 2021-11-24 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.0.0...v3.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.0.0...kag-v3.1.0)
+
+### Fixed
+
+* Fix updating of SymbolTable multiple times for new words, so that there is only one instance for a single Model.
+
+### Changed
+
+* Only mark lexicon stale if it was successfully modified.
+* Removed deprecated CLI binaries from Windows build, reducing wheel size by ~65%.
+
+## [3.0.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.0.0) - 2021-10-31 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.1.0...v3.0.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.1.0...kag-v3.0.0)
+
+### Changed
+
+* Pronunciation generation for lexicon now better supports local mode (using the `g2p_en` package), which is now also the default mode. It is also preferred over the online mode (using CMU's web service), which is now disabled by default. See the Setup section of the README for details. The new models now include the data files for `g2p_en`.
+* `PlainDictation` output now discards any silence words from transcript.
+* `lattice_beam` default value reduced from `6.0` to `5.0`, to hopefully avoid occasional errors.
+* Removed deprecated CLI binaries from build for linux/mac.
+
+### Fixed
+
+* Whitespace in the model path is once again handled properly (thanks [@matthewmcintire](https://github.com/matthewmcintire)).
+* `NativeWFST.has_path()` now handles loops.
+* Linux/Mac binaries are now more stripped.
 
 ## [2.1.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.1.0) - 2021-04-04 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v2.0.2...v2.1.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v2.0.2...kag-v2.1.0)
 

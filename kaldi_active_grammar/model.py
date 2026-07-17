@@ -235,7 +235,6 @@ class Model(object):
             'lexiconp_disambig.base.txt': find_file(self.model_dir, 'lexiconp_disambig.base.txt', default=True),
             'words.relabeled.txt': find_file(self.model_dir, 'words.relabeled.txt', default=True),
         }
-        self.files_dict.update({ k: '"%s"' % v for (k, v) in self.files_dict.items() if v and ' ' in v })  # Handle spaces in paths
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
         self.fst_cache = utils.FSTFileCache(os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict, tmp_dir=self.tmp_dir)
 
@@ -253,13 +252,14 @@ class Model(object):
         if self.fst_cache.cache_is_new or files_are_not_current(necessary_files + non_lazy_files):
             self.generate_lexicon_files()
 
+        self.words_table = SymbolTable()
         self.load_words()
 
     def load_words(self, words_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']
         _log.debug("loading words from %r", words_file)
         invalid_words = "<eps> !SIL <UNK> #0 <s> </s>".lower().split()
-        self.words_table = SymbolTable(words_file)
+        self.words_table.load_text_file(words_file)
         self.longest_word = max(self.words_table.word_to_id_map.keys(), key=len)
         return self.words_table
 
@@ -282,7 +282,7 @@ class Model(object):
         word = word.strip().lower()
 
         if phones is None:
-            # Generate pronunciations, then call ourselves recursively
+            # Not given pronunciation(s), so generate pronunciation(s), then call ourselves recursively for each individual pronunciation
             pronunciations = Lexicon.generate_pronunciations(word, model_dir=self.model_dir, allow_online_pronunciations=allow_online_pronunciations)
             pronunciations = sum([
                 self.add_word(word, phones, lazy_compilation=True)
