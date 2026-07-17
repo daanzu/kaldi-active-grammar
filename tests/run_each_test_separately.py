@@ -9,6 +9,7 @@ import sys
 
 
 TESTS_DIR = Path(__file__).resolve().parent
+FAIL_FAST_OPTION = "--fail-fast"
 
 
 OPTIONS_WITH_VALUE = {
@@ -52,7 +53,9 @@ def collect_nodeids(extra):
     ]
 
 def main():
-    extra = sys.argv[1:]   # e.g. ["tests", "-k", "not slow"]
+    raw_extra = sys.argv[1:]   # e.g. ["tests", "-k", "not slow"]
+    fail_fast = FAIL_FAST_OPTION in raw_extra
+    extra = [arg for arg in raw_extra if arg != FAIL_FAST_OPTION]
     nodeids = collect_nodeids(extra)
     options = options_only(extra)
     print(f"Collected {len(nodeids)} nodeids: {nodeids}")
@@ -62,13 +65,15 @@ def main():
         rc = subprocess.call([sys.executable, "-m", "pytest", "-q", nid, *options], cwd=TESTS_DIR)
         if rc != 0:
             failed.append(nid)
+            if fail_fast:
+                print(f"\nStopped after failure in {nid}.")
+                sys.exit(rc)
     print("\n========= DONE =========")
     if failed:
         print(f"\nFailures in {len(failed)} tests:")
         for nid in failed: print(" -", nid)
         sys.exit(1)
-    else:
-        print("\nAll tests passed.")
+    print("\nAll tests passed.")
 
 if __name__ == "__main__":
     main()
