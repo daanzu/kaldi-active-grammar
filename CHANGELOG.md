@@ -6,7 +6,13 @@ Note that the project (and python wheel) is built from a duorepo (2 separate rep
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) since v1.0.0.
 
-<!-- ## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.2.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.2.0...master) -->
+## [Unreleased] - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.2.0...master) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.2.0...master)
+
+### Changed
+
+* **Breaking: grammar activity is now a sparse set of active rule IDs instead of a positional Boolean mask.** `decoder.decode(...)`, `decoder.mimic(...)`, and `Compiler.mimic(...)` now expect `grammars_activity` to be an iterable of `KaldiRule.id` values (e.g. `[rule.id]`) rather than one Boolean per loaded rule (e.g. `[True, False, ...]`). `None` still means "keep the current native activity" (use it for utterance continuation chunks); an empty iterable explicitly disables all rules. Booleans are now rejected to prevent the legacy mask from being silently misread as rule ID 1.
+  * Rule IDs are stable for a rule's lifetime and do not shift when another rule is unloaded; a freed ID may later be reused by a new rule.
+  * **This requires a matching Kaldi fork build**: the native side now interprets the activity array as a set of active rule IDs. The ABI signature is unchanged (`int32_t*`), so mixing this Python version with an older native library will silently misinterpret activity.
 
 ## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-11-02 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
 

@@ -121,7 +121,7 @@ Architecture and usage references:
 * [**Full example**](examples/full_example.py): Set up grammar compiler & decoder; set up a rule; perform decoding on live, real-time audio from microphone.
 * [**Backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi): Many advanced features and complex interactions.
 
-The KaldiAG API is fairly low level, but basically: you define a set of grammar rules, then send in audio data, along with a bit mask of which rules are active at the beginning of each utterance, and receive back the recognized rule and text. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
+The KaldiAG API is fairly low level, but basically: you define a set of grammar rules, then send in audio data, along with the integer IDs of the rules active at the beginning of each utterance, and receive back the recognized rule and text. Pass `None` on continuation chunks; pass an empty list to explicitly disable all rules. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
 
 ### Building
 

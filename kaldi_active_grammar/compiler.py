@@ -40,7 +40,7 @@ class KaldiRule(object):
         self.has_dictation = has_dictation
         self.is_complex = is_complex
 
-        # id: matches "nonterm:rule__"; 0-based; can/will change due to rule unloading!
+        # id: matches "nonterm:rule__"; 0-based; stable for this rule's lifetime (other rules' ids do not shift when one is unloaded), but a freed id may later be reused by a new rule.
         self.id = int(self.compiler._kaldi_rule_id_allocator.alloc_id(self.exported) if self.nonterm else -1)
         if self.id in self.compiler.kaldi_rule_by_id_dict: raise KaldiError("KaldiRule id already in use")
         if self.id >= 0:
@@ -639,6 +639,12 @@ class Compiler(object):
                 self.fst_cache.save()
 
     def mimic(self, text, grammars_activity):
+        """Mimic text using active compiler rule IDs.
+
+        ``grammars_activity`` is an iterable of ``KaldiRule.id`` values, not
+        a positional Boolean mask.  The decoder wrapper also accepts ``None``
+        to preserve its current activity set.
+        """
         output = self.decoder.mimic(text, grammars_activity)
         if output is False:
             return None

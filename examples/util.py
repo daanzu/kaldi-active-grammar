@@ -22,7 +22,7 @@ def do_recognition(compiler, decoder, print_partial=True, cap_dictation=True):
         elif block is not None:
             if not in_phrase:
                 # Start of phrase
-                kaldi_rules_activity = [True]  # A bool for each rule
+                kaldi_rules_activity = [0]  # FIXME: IDs of the active rules; 0 is a placeholder for a single-rule demo (use each rule's .id in real code)
                 in_phrase = True
             else:
                 # Ongoing phrase

@@ -26,7 +26,7 @@ class TestGrammar:
         assert rule.loaded
         return rule
 
-    def decode(self, text_or_audio: Union[str, bytes], kaldi_rules_activity: list[bool], expected_rule: Optional[KaldiRule], expected_words: Optional[list[str]] = None, expected_words_are_dictation_mask: Optional[list[bool]] = None):
+    def decode(self, text_or_audio: Union[str, bytes], kaldi_rules_activity: list[int], expected_rule: Optional[KaldiRule], expected_words: Optional[list[str]] = None, expected_words_are_dictation_mask: Optional[list[bool]] = None):
         if isinstance(text_or_audio, str):
             text = text_or_audio
             audio_data = self.audio_generator(text)
@@ -63,7 +63,21 @@ class TestGrammar:
             final_state = fst.add_state(final=True)
             fst.add_arc(initial_state, final_state, 'hello')
         rule = self.make_rule('TestRule', _build)
-        self.decode("hello", [True], rule)
+        self.decode("hello", [rule.id], rule)
+
+    def test_sparse_rule_id_activity(self):
+        def _build(word):
+            def build(fst):
+                initial_state = fst.add_state(initial=True)
+                final_state = fst.add_state(final=True)
+                fst.add_arc(initial_state, final_state, word)
+            return build
+
+        first_rule = self.make_rule('FirstRule', _build('hello'))
+        second_rule = self.make_rule('SecondRule', _build('world'))
+        first_rule.destroy()
+
+        self.decode("world", [second_rule.id], second_rule)
 
     def test_epsilon_transition(self):
         """Test epsilon transitions between states."""
@@ -74,7 +88,7 @@ class TestGrammar:
             fst.add_arc(initial_state, middle_state, None)  # epsilon transition
             fst.add_arc(middle_state, final_state, 'world')
         rule = self.make_rule('EpsilonRule', _build)
-        self.decode("world", [True], rule)
+        self.decode("world", [rule.id], rule)
 
     def test_multiple_paths(self):
         """Test grammar with multiple alternative paths (choice)."""
@@ -87,7 +101,7 @@ class TestGrammar:
             fst.add_arc(initial_state, final_state, 'greetings')
         rule = self.make_rule('MultiPathRule', _build)
         # Test each alternative path
-        self.decode("hello", [True], rule)
+        self.decode("hello", [rule.id], rule)
 
     def test_multiple_paths_hi(self):
         """Test second alternative in multiple path grammar."""
@@ -98,7 +112,7 @@ class TestGrammar:
             fst.add_arc(initial_state, final_state, 'hi')
             fst.add_arc(initial_state, final_state, 'greetings')
         rule = self.make_rule('MultiPathRule2', _build)
-        self.decode("hi", [True], rule)
+        self.decode("hi", [rule.id], rule)
 
     def test_sequential_chain(self):
         """Test long sequential chain of states."""
@@ -113,7 +127,7 @@ class TestGrammar:
             fst.add_arc(state2, state3, 'brown')
             fst.add_arc(state3, final_state, 'fox')
         rule = self.make_rule('SequentialRule', _build)
-        self.decode("the quick brown fox", [True], rule)
+        self.decode("the quick brown fox", [rule.id], rule)
 
     def test_diamond_pattern(self):
         """Test diamond pattern with branch and merge."""
@@ -135,7 +149,7 @@ class TestGrammar:
             # Merge and continue
             fst.add_arc(merge_state, final_state, 'end')
         rule = self.make_rule('DiamondRule', _build)
-        self.decode("start left end", [True], rule)
+        self.decode("start left end", [rule.id], rule)
 
     def test_diamond_pattern_alt(self):
         """Test alternative path through diamond pattern."""
@@ -152,7 +166,7 @@ class TestGrammar:
             fst.add_arc(branch2, merge_state, 'path')
             fst.add_arc(merge_state, final_state, 'end')
         rule = self.make_rule('DiamondRule2', _build)
-        self.decode("start right path end", [True], rule)
+        self.decode("start right path end", [rule.id], rule)
 
     def test_self_loop(self):
         """Test self-loop for optional repetition."""
@@ -165,7 +179,7 @@ class TestGrammar:
             fst.add_arc(loop_state, loop_state, 'again')  # Self-loop
             fst.add_arc(loop_state, final_state, 'done')
         rule = self.make_rule('LoopRule', _build)
-        self.decode("repeat again again done", [True], rule)
+        self.decode("repeat again again done", [rule.id], rule)
 
     def test_optional_path_with_epsilon(self):
         """Test optional path using epsilon transition."""
@@ -181,7 +195,7 @@ class TestGrammar:
             fst.add_arc(initial_state, optional_state, None)  # epsilon
             fst.add_arc(optional_state, final_state, 'optional')
         rule = self.make_rule('OptionalRule', _build)
-        self.decode("hello", [True], rule)
+        self.decode("hello", [rule.id], rule)
 
     def test_complex_branching(self):
         """Test complex branching structure with multiple decision points."""
@@ -206,7 +220,7 @@ class TestGrammar:
             # Branch B goes directly to final
             fst.add_arc(branch_b, final_state, 'forward')
         rule = self.make_rule('ComplexBranchRule', _build)
-        self.decode("go left side", [True], rule)
+        self.decode("go left side", [rule.id], rule)
 
     def test_complex_branching_alt1(self):
         """Test alternative path in complex branching."""
@@ -226,7 +240,7 @@ class TestGrammar:
             fst.add_arc(sub_branch_a2, final_state, 'side')
             fst.add_arc(branch_b, final_state, 'forward')
         rule = self.make_rule('ComplexBranchRule2', _build)
-        self.decode("go right side", [True], rule)
+        self.decode("go right side", [rule.id], rule)
 
     def test_complex_branching_alt2(self):
         """Test third alternative path in complex branching."""
@@ -246,7 +260,7 @@ class TestGrammar:
             fst.add_arc(sub_branch_a2, final_state, 'side')
             fst.add_arc(branch_b, final_state, 'forward')
         rule = self.make_rule('ComplexBranchRule3', _build)
-        self.decode("move forward", [True], rule)
+        self.decode("move forward", [rule.id], rule)
 
     def test_multiple_epsilon_transitions(self):
         """Test multiple consecutive epsilon transitions."""
@@ -262,7 +276,7 @@ class TestGrammar:
             fst.add_arc(eps2, eps3, None)  # epsilon
             fst.add_arc(eps3, final_state, 'finish')
         rule = self.make_rule('MultiEpsilonRule', _build)
-        self.decode("finish", [True], rule)
+        self.decode("finish", [rule.id], rule)
 
     def test_weighted_alternatives(self):
         """Test weighted alternative paths (higher weight should be preferred)."""
@@ -274,7 +288,7 @@ class TestGrammar:
             fst.add_arc(initial_state, final_state, 'test', weight=0.9)  # Higher probability
             fst.add_arc(initial_state, final_state, 'test', weight=0.1)  # Lower probability
         rule = self.make_rule('WeightedRule', _build)
-        self.decode("test", [True], rule)
+        self.decode("test", [rule.id], rule)
 
     def test_parallel_sequences(self):
         """Test parallel sequences that merge at the end."""
@@ -294,7 +308,7 @@ class TestGrammar:
             fst.add_arc(initial_state, seq2_s1, 'short')
             fst.add_arc(seq2_s1, final_state, 'way')
         rule = self.make_rule('ParallelRule', _build)
-        self.decode("long path here", [True], rule)
+        self.decode("long path here", [rule.id], rule)
 
     def test_parallel_sequences_alt(self):
         """Test alternative parallel sequence."""
@@ -311,7 +325,7 @@ class TestGrammar:
             fst.add_arc(initial_state, seq2_s1, 'short')
             fst.add_arc(seq2_s1, final_state, 'way')
         rule = self.make_rule('ParallelRule2', _build)
-        self.decode("short way", [True], rule)
+        self.decode("short way", [rule.id], rule)
 
     def test_nested_loops(self):
         """Test nested loop structures."""
@@ -329,7 +343,7 @@ class TestGrammar:
             fst.add_arc(outer_loop, exit_state, 'exit')
             fst.add_arc(exit_state, final_state, 'done')
         rule = self.make_rule('NestedLoopRule', _build)
-        self.decode("start inner repeat outer exit done", [True], rule)
+        self.decode("start inner repeat outer exit done", [rule.id], rule)
 
     def test_multiple_entry_points(self):
         """Test graph with multiple entry points via epsilon."""
@@ -351,7 +365,7 @@ class TestGrammar:
             # Merge to final
             fst.add_arc(merge, final_state, 'end')
         rule = self.make_rule('MultiEntryRule', _build)
-        self.decode("alpha end", [True], rule)
+        self.decode("alpha end", [rule.id], rule)
 
     def test_cascade_pattern(self):
         """Test cascading pattern with multiple stages."""
@@ -376,7 +390,7 @@ class TestGrammar:
             # Final
             fst.add_arc(stage3, final_state, 'done')
         rule = self.make_rule('CascadeRule', _build)
-        self.decode("one and three done", [True], rule)
+        self.decode("one and three done", [rule.id], rule)
 
     def test_backtracking_pattern(self):
         """Test pattern that requires backtracking in search."""
@@ -396,7 +410,7 @@ class TestGrammar:
             # Good path continues
             fst.add_arc(good_path, final_state, 'right')
         rule = self.make_rule('BacktrackRule', _build)
-        self.decode("start right", [True], rule)
+        self.decode("start right", [rule.id], rule)
 
     def test_very_long_sequence(self):
         """Test very long sequential chain to stress test."""
@@ -406,7 +420,7 @@ class TestGrammar:
             for i, word in enumerate(words):
                 fst.add_arc(states[i], states[i + 1], word)
         rule = self.make_rule('LongSequenceRule', _build)
-        self.decode("one two three four five six seven eight nine ten", [True], rule)
+        self.decode("one two three four five six seven eight nine ten", [rule.id], rule)
 
     def test_hub_and_spoke(self):
         """Test hub-and-spoke pattern with central node."""
@@ -431,7 +445,7 @@ class TestGrammar:
             fst.add_arc(spoke2, final_state, 'end')
             fst.add_arc(spoke3, final_state, 'end')
         rule = self.make_rule('HubSpokeRule', _build)
-        self.decode("center north end", [True], rule)
+        self.decode("center north end", [rule.id], rule)
 
     @pytest.mark.parametrize('dictation_words,expected_mask', [
         ("", [False]),
@@ -454,7 +468,7 @@ class TestGrammar:
 
         rule = self.make_rule('DictationRule', _build, has_dictation=True)
         text = f"dictate {dictation_words}".strip()
-        self.decode(text, [True], rule, expected_words_are_dictation_mask=expected_mask)
+        self.decode(text, [rule.id], rule, expected_words_are_dictation_mask=expected_mask)
 
     def test_no_rules(self):
         """Test decoding when no rules are defined."""
@@ -467,7 +481,7 @@ class TestGrammar:
             final_state = fst.add_state(final=True)
             fst.add_arc(initial_state, final_state, 'hello')
         rule = self.make_rule('InactiveRule', _build)
-        self.decode("hello", [False], None)
+        self.decode("hello", [], None)
 
     def test_garbage_audio(self):
         """Test decoder with random noise/garbage audio."""
@@ -480,7 +494,7 @@ class TestGrammar:
 
         random.seed(42)
         audio_data = bytes(random.randint(0, 255) for _ in range(32768))
-        self.decode(audio_data, [True], None)
+        self.decode(audio_data, [rule.id], None)
 
     def test_empty_audio(self):
         """Test decoder with empty audio data."""
@@ -489,7 +503,7 @@ class TestGrammar:
             final_state = fst.add_state(final=True)
             fst.add_arc(initial_state, final_state, 'hello')
         rule = self.make_rule('EmptyAudioRule', _build)
-        self.decode(b'', [True], None)
+        self.decode(b'', [rule.id], None)
 
     def test_very_short_audio(self):
         """Test decoder with very short utterance."""
@@ -498,7 +512,7 @@ class TestGrammar:
             final_state = fst.add_state(final=True)
             fst.add_arc(initial_state, final_state, 'hi')
         rule = self.make_rule('ShortRule', _build)
-        self.decode("hi", [True], rule)
+        self.decode("hi", [rule.id], rule)
 
     def test_multiple_utterances_sequence(self):
         """Test decoding multiple utterances in sequence."""
@@ -511,7 +525,7 @@ class TestGrammar:
         rule = self.make_rule('MultiUtteranceRule', _build)
 
         for text in ['hello', 'world', 'test']:
-            self.decode(text, [True], rule)
+            self.decode(text, [rule.id], rule)
 
 
 class TestAlternativeDictation:
@@ -559,7 +573,7 @@ class TestAlternativeDictation:
         fst.add_arc(initial_state, final_state, 'hello')
         rule.compile().load()
 
-        decoder.decode(self.audio_generator('hello'), True, [True])
+        decoder.decode(self.audio_generator('hello'), True, [rule.id])
         output, info = decoder.get_output()
 
         kaldi_rule, words, words_are_dictation_mask = compiler_with_mock.parse_output(output, dictation_info_func=None)
@@ -610,7 +624,7 @@ class TestAlternativeDictation:
         audio_data = self.audio_generator('hello world')
 
         # Decode
-        decoder.decode(audio_data, True, [True])
+        decoder.decode(audio_data, True, [rule.id])
         output, info = decoder.get_output()
 
         # Get word alignment for alternative dictation
@@ -659,7 +673,7 @@ class TestAlternativeDictation:
         fst.add_arc(initial_state, final_state, 'test')
         rule.compile().load()
 
-        decoder.decode(self.audio_generator('test'), True, [True])
+        decoder.decode(self.audio_generator('test'), True, [rule.id])
         output, info = decoder.get_output()
 
         mock_audio = b'mock_audio_data'

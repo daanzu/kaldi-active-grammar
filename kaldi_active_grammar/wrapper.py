@@ -8,7 +8,7 @@
 Wrapper classes for Kaldi
 """
 
-import argparse, json, os.path, sys
+import argparse, json, numbers, os.path, sys
 from io import open, StringIO
 
 from six.moves import zip
@@ -22,6 +22,38 @@ import kaldi_active_grammar.defaults as defaults
 
 _log = _log.getChild('wrapper')
 _log_library = _log.getChild('library')
+
+
+def _prepare_grammars_activity(grammars_activity):
+    """Convert active rule IDs to the native int32 array ABI. Returns a tuple of
+    (pointer, length). ``grammars_activity`` may be None or an iterable of integer rule IDs.
+
+    ``None`` means that the native decoder must keep its current activity
+    (normally used for continuation chunks). An empty sequence is different: it
+    explicitly selects no rules for the next utterance.
+    """
+    if grammars_activity is None:
+        return _ffi.NULL, 0
+
+    try:
+        active_rule_ids = list(grammars_activity)
+    except TypeError:
+        raise TypeError("grammars_activity must be None or an iterable of rule IDs")
+
+    normalized_ids = []
+    for rule_id in active_rule_ids:
+        if isinstance(rule_id, bool) or not isinstance(rule_id, numbers.Integral):
+            raise TypeError("grammars_activity must contain integer rule IDs, not booleans")
+        rule_id = int(rule_id)
+        if rule_id < 0:
+            raise ValueError("grammar rule IDs must be non-negative")
+        normalized_ids.append(rule_id)
+
+    # Native code stores this as a set. Canonicalizing here makes duplicate
+    # IDs harmless and keeps activity changes deterministic at the ABI.
+    normalized_ids = sorted(set(normalized_ids))
+    activity_p = _ffi.new('int32_t[]', normalized_ids or [0])
+    return activity_p, len(normalized_ids)
 
 
 ########################################################################################################################
@@ -294,12 +326,19 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
             raise KaldiError("set_mimic_dictation_fst_file error: %r, %r" % (grammar_fst_filename,))
         return True
 
-    def mimic(self, input, grammars_activity, grammar_fst_index=None, output_max_length=4*1024):
+    def mimic(self, input, grammars_activity=None, grammar_fst_index=None, output_max_length=4*1024):
+        """Mimic input using the supplied active rule IDs.
+
+        ``grammars_activity`` is an iterable of integer rule IDs.  ``None``
+        leaves the native activity set unchanged; an empty iterable selects
+        no rules.
+        """
         assert (grammar_fst_index is None) or (isinstance(grammar_fst_index, int) and grammar_fst_index >= 0)
+        grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         output_p = _ffi.new('char[]', output_max_length) if output_max_length else _ffi.NULL
         if grammar_fst_index is None: grammar_fst_index = -1  # No given grammar.
         result = self._lib.nnet3_active_base__mimic(self._model, en(input),
-            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
+            grammars_activity_p, grammars_activity_size,
             grammar_fst_index, output_p, output_max_length)
         if result:
             return de(_ffi.string(output_p)) if output_max_length else True
@@ -390,7 +429,12 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
         self.num_grammars -= 1
 
     def decode(self, frames, finalize, grammars_activity=None):
-        """Continue decoding with given new audio data."""
+        """Continue decoding with audio and an optional set of active rule IDs.
+
+        Pass active integer rule IDs only on the first chunk of an utterance;
+        pass ``None`` for continuation chunks.
+        """
+        grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
         frames_char = _ffi.from_buffer(frames)
@@ -398,7 +442,7 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
 
         self._start_decode_time(len(frames))
         result = self._lib.nnet3_agf__decode(self._model, self.sample_rate, len(frames), frames_float, finalize,
-            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
+            grammars_activity_p, grammars_activity_size,
             self._saving_adaptation_state)
         self._stop_decode_time(finalize)
 
@@ -519,7 +563,12 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
         self.num_grammars -= 1
 
     def decode(self, frames, finalize, grammars_activity=None):
-        """Continue decoding with given new audio data."""
+        """Continue decoding with audio and an optional set of active rule IDs.
+
+        Pass active integer rule IDs only on the first chunk of an utterance;
+        pass ``None`` for continuation chunks.
+        """
+        grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
         frames = frames.astype(np.float32)
         frames_char = _ffi.from_buffer(frames)
@@ -527,7 +576,7 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
 
         self._start_decode_time(len(frames))
         result = self._lib.nnet3_laf__decode(self._model, self.sample_rate, len(frames), frames_float, finalize,
-            (grammars_activity if grammars_activity is not None else _ffi.NULL), (len(grammars_activity) if grammars_activity is not None else 0),
+            grammars_activity_p, grammars_activity_size,
             self._saving_adaptation_state)
         self._stop_decode_time(finalize)
 

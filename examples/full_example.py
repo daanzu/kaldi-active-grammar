@@ -52,7 +52,7 @@ for block in audio_iterator:
     elif block is not None:
         if not in_phrase:
             # Start of phrase
-            kaldi_rules_activity = [True]  # A bool for each rule
+            kaldi_rules_activity = [rule.id]  # IDs of the active rules
             in_phrase = True
         else:
             # Ongoing phrase

@@ -46,7 +46,7 @@ flowchart LR
     Model[Compatible KAG model directory]
 
     App -->|rules, contexts, audio| KAG
-    KAG -->|FST operations, config, activity bits, PCM| ABI
+    KAG -->|FST operations, config, active rule IDs, PCM| ABI
     ABI --> Fork
     Model -->|acoustic model, lexicon, FSTs, configs| KAG
     Model -->|resolved file paths| Fork
@@ -219,7 +219,7 @@ sequenceDiagram
     Native-->>Compiler: grammar index
 ```
 
-When an in-memory graph is added, the native decoder creates its own `StdConstFst` copy. This disentangles decoder ownership from the Python-side compiled `StdVectorFst`. Reload likewise installs a new native-owned copy and deletes the previous decoder-owned graph. Removing a rule invalidates the stitched FST and compacts the Python/native index sequence; mutation is forbidden during an utterance.
+When an in-memory graph is added, the native decoder creates its own `StdConstFst` copy. This disentangles decoder ownership from the Python-side compiled `StdVectorFst`. Reload likewise installs a new native-owned copy and deletes the previous decoder-owned graph. Removing a rule invalidates the stitched FST and releases its ID for later reuse; IDs of remaining rules do not shift, and mutation is forbidden during an utterance.
 
 ### 5.2 Streaming an utterance
 
@@ -231,15 +231,15 @@ sequenceDiagram
     participant AGF as ActiveGrammarFst
     participant D as Kaldi online decoder
 
-    App->>Py: decode(first PCM chunk, finalize=false, [T,F,T,...])
+    App->>Py: decode(first PCM chunk, finalize=false, [0,2,...])
     Py->>Py: int16 PCM to float32 samples
-    Py->>C: nnet3_agf__decode(samples, activity vector)
+    Py->>C: nnet3_agf__decode(samples, active rule IDs)
     C->>AGF: SetActiveGrammars / UpdateActivity
     C->>D: create utterance decoder over AGF
     D->>AGF: traverse arcs
     AGF-->>D: arcs only for active rules, plus configured dictation
     App->>Py: decode(next chunk, false, None)
-    Py->>C: decode samples, empty activity vector
+    Py->>C: decode samples, NULL activity (no update)
     C->>D: continue same utterance
     App->>Py: decode(empty/final chunk, true, None)
     C->>D: finalize and obtain lattice
@@ -290,16 +290,16 @@ instructions.
 
 ### 8.2 Plain dictation
 
-`KaldiPlainNNet3Decoder` loads a conventional monolithic `HCLG.fst` and uses the same native base model, audio, lattice, score, adaptation, and alignment machinery. No per-rule graph list or activity vector is involved. This path demonstrates that the fork also serves as KAG's general native Kaldi wrapper, while dynamic grammar selection is specifically the AGF/LAF responsibility.
+`KaldiPlainNNet3Decoder` loads a conventional monolithic `HCLG.fst` and uses the same native base model, audio, lattice, score, adaptation, and alignment machinery. No per-rule graph list or active-rule ID set is involved. This path demonstrates that the fork also serves as KAG's general native Kaldi wrapper, while dynamic grammar selection is specifically the AGF/LAF responsibility.
 
 ## 9. Architectural invariants and constraints
 
 Maintainers should treat the following as hard contracts:
 
-1. **Index identity:** rule ID, rule nonterminal suffix, native grammar index, and activity-vector position must agree.
-2. **Dense ordering:** adding returns the next index; removing compacts later IDs on both sides.
+1. **Index identity:** rule ID, rule nonterminal suffix, and native grammar index must agree; the same ID is what appears in the active-rule ID set.
+2. **Stable IDs:** adding uses the compiler-assigned rule ID; removing releases that ID without shifting other rules.
 3. **Utterance immutability:** grammar activity and graph membership cannot change after an utterance decoder has started.
-4. **Vector size:** the supplied activity vector must correspond to all loaded command grammars. Dictation activity is appended internally and is enabled when a dictation graph is configured.
+4. **Activity IDs:** the supplied activity array contains active command-rule IDs only. Its length is the number of active rules; dictation is enabled internally when a dictation graph is configured.
 5. **Symbol agreement:** Python WFST labels, model symbol tables, compiler inputs, top graph, and decoder must share exact integer IDs.
 6. **Model topology:** AGF graph compilation requires the supported left-biphone setup and KAG nonterminal augmentation.
 7. **Object lifetime:** native FST/compiler/decoder handles must be destroyed by the matching exported destructor; decoder-owned FST copies must outlive utterance decoders.
@@ -321,7 +321,7 @@ The design moves expense to the most reusable level:
 
 Accuracy improves because inactive commands are absent from the decoder search space, not merely rejected after recognition. This reduces competing hypotheses during beam search.
 
-The main costs are native model memory, all loaded rule graphs, the shared dictation graph, lazy expanded-state caches, and per-utterance feature/decoder/lattice state. Very large rule sets also increase activity-vector and top-graph size, although inactive subgraphs are not traversable.
+The main costs are native model memory, all loaded rule graphs, the shared dictation graph, lazy expanded-state caches, and per-utterance feature/decoder/lattice state. Very large rule sets also increase top-graph size, although inactive subgraphs are not traversable.
 
 ## 11. Failure boundaries and diagnostics
 
@@ -333,7 +333,7 @@ Typical integration failures fall into recognizable layers:
 | Constructor fails while reading files | incompatible/incomplete model directory or bad JSON-resolved path |
 | Missing `#nonterm_*` symbol | model was not converted/augmented for KAG |
 | Rule index assertion | Python/native grammar lifecycle ordering diverged |
-| Activity length error or unexpected active rule | caller did not supply one Boolean per loaded rule at utterance start |
+| Activity error or unexpected active rule | caller supplied a legacy Boolean mask or an ID that is not loaded |
 | Graph compilation failure | empty/nondeterminizable grammar, lexicon mismatch, or unsupported topology |
 | Reload rejected | attempted graph mutation during an utterance |
 | Output parses to no rule | no active grammar matched, acoustic decode failed to reach a command path, or boundary tokens are inconsistent |
@@ -371,6 +371,6 @@ The most important implementation references are:
 
 ## 14. Summary
 
-Kaldi Active Grammar is the product and policy layer; the Kaldi fork is the embedded execution engine. Python defines and manages independent rules, compiles them through the fork, maps application context to an ordered activity vector, streams audio, and interprets tokenized output. The fork turns those rules into Kaldi decoding graphs, filters nonterminal traversal inside `ActiveGrammarFst`, performs online nnet3 decoding, and returns lattice-derived results through a stable C facade.
+Kaldi Active Grammar is the product and policy layer; the Kaldi fork is the embedded execution engine. Python defines and manages independent rules, compiles them through the fork, maps application context to a sparse active-rule ID set, streams audio, and interprets tokenized output. The fork turns those rules into Kaldi decoding graphs, filters nonterminal traversal inside `ActiveGrammarFst`, performs online nnet3 decoding, and returns lattice-derived results through a stable C facade.
 
 Their separation allows the public API and context-management logic to remain Pythonic while keeping graph compilation and decoding close to Kaldi and OpenFST. Their release, ABI, symbol tables, model format, and rule indexing remain tightly coupled by design.
