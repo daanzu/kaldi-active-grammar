@@ -290,12 +290,12 @@ class NativeWFST(FFIObject):
     ####################################################################################################################
 
     def has_path(self):
-        """ Returns True iff there is a path (from start state to a final state). Uses ShortestPath. Assumes can nonterminals succeed. """
+        """ Returns True iff there is a path (from start state to a final state). Uses BFS. Assumes can nonterminals succeed. """
         result = self._lib.fst__has_path(self.native_obj)
         return result
 
     def has_eps_path(self, path_src_state, path_dst_state, eps_like_labels=frozenset()):
-        """ Returns True iff there is a epsilon path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
+        """ Returns True iff there is a epsilon-like-only path from src_state to dst_state. Uses BFS. Does not follow nonterminals! """
         assert not eps_like_labels
         result = self._lib.fst__has_eps_path(self.native_obj, path_src_state, path_dst_state)
         return result

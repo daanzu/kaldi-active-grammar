@@ -248,14 +248,14 @@ If you have trouble downloading, try using `wget --continue`.
 
 
 
-V2.0.0: Faster Grammar Compilation; Cleaner Codebase; Preparation For New Features
+v2.0.0: Faster Grammar Compilation; Cleaner Codebase; Preparation For New Features
 
 
-V2.0.2
+v2.1.0
 
 Minor fix for OpenBLAS compilation for some architectures on linux/mac.
 
-See [major changes introduced in V2.0.0 and associated downloads](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0).
+See [major changes introduced in v2.0.0 and associated downloads](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v2.0.0).
 
 
 

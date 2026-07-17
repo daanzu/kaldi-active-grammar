@@ -8,13 +8,6 @@ import os, re, shutil
 from io import open
 
 from six import PY2, text_type
-import requests
-
-try:
-    # g2p_en==2.0.0
-    import g2p_en
-except ImportError:
-    g2p_en = None
 
 from . import _log, KaldiError, REQUIRED_MODEL_VERSION
 from .wfst import SymbolTable
@@ -82,7 +75,7 @@ class Lexicon(object):
     XSAMPA_to_CMU_dict = { v: k for k,v in CMU_to_XSAMPA_dict.items() }  # FIXME: handle double-entries
 
     @classmethod
-    def cmu_to_xsampa_generic(cls, phones, lexicon_phones=None):
+    def phones_cmu_to_xsampa_generic(cls, phones, lexicon_phones=None):
         new_phones = []
         for phone in phones:
             stress = False
@@ -105,8 +98,8 @@ class Lexicon(object):
 
         return new_phones
 
-    def cmu_to_xsampa(self, phones):
-        return self.cmu_to_xsampa_generic(phones, self.phone_set)
+    def phones_cmu_to_xsampa(self, phones):
+        return self.phones_cmu_to_xsampa_generic(phones, self.phone_set)
 
     @classmethod
     def make_position_dependent(cls, phones):
@@ -118,45 +111,69 @@ class Lexicon(object):
     def make_position_independent(cls, phones):
         return [re.sub(r'_[SBIE]', '', phone) for phone in phones]
 
+    @classmethod
+    def generate_pronunciations_cmu_online(cls, word):
+        try:
+            import requests
+            files = {'wordfile': ('wordfile', word)}
+            req = requests.post('http://www.speech.cs.cmu.edu/cgi-bin/tools/logios/lextool.pl', files=files)
+            req.raise_for_status()
+            # FIXME: handle network failures
+            match = re.search(r'<!-- DICT (.*)  -->', req.text)
+            if match:
+                url = match.group(1)
+                req = requests.get(url)
+                req.raise_for_status()
+                entries = req.text.strip().split('\n')
+                pronunciations = []
+                for entry in entries:
+                    tokens = entry.strip().split()
+                    assert re.match(word + r'(\(\d\))?', tokens[0], re.I)  # 'SEMI-COLON' or 'SEMI-COLON(2)'
+                    phones = tokens[1:]
+                    _log.debug("generated pronunciation with cloud-cmudict for %r: CMU phones are %r" % (word, phones))
+                    pronunciations.append(phones)
+                return pronunciations
+            raise KaldiError("received bad response from www.speech.cs.cmu.edu: %r" % req.text)
+        except Exception as e:
+            _log.exception("generate_pronunciations exception accessing www.speech.cs.cmu.edu")
+            raise e
+
     g2p_en = None
 
     @classmethod
-    def generate_pronunciations(cls, word):
+    def attempt_load_g2p_en(cls, model_dir=None):
+        try:
+            if model_dir:
+                import nltk
+                nltk.data.path.insert(0, os.path.abspath(os.path.join(model_dir, 'g2p')))
+            # g2p_en>=2.1.0
+            import g2p_en
+            cls.g2p_en = g2p_en.G2p()
+            assert all(re.sub(r'[012]$', '', phone) in cls.CMU_to_XSAMPA_dict for phone in cls.g2p_en.phonemes if not phone.startswith('<'))
+        except Exception:  # including ImportError
+            cls.g2p_en = False  # Don't try anymore.
+            _log.debug("failed to load g2p_en")
+
+    @classmethod
+    def generate_pronunciations_g2p_en(cls, word):
+        try:
+            phones = cls.g2p_en(word)
+            _log.debug("generated pronunciation with g2p_en for %r: %r" % (word, phones))
+            return [phones]
+        except Exception as e:
+            _log.exception("generate_pronunciations exception using g2p_en")
+            raise e
+
+    @classmethod
+    def generate_pronunciations(cls, word, model_dir=None, allow_online_pronunciations=False):
         """returns CMU/arpabet phones"""
-        if g2p_en:
-            try:
-                if not cls.g2p_en:
-                    cls.g2p_en = g2p_en.G2p()
-                phones = cls.g2p_en(word)
-                _log.debug("generated pronunciation with g2p_en for %r: %r" % (word, phones))
-                return phones
-            except Exception as e:
-                _log.exception("generate_pronunciations exception using g2p_en")
-
-        if True:
-            try:
-                files = {'wordfile': ('wordfile', word)}
-                req = requests.post('http://www.speech.cs.cmu.edu/cgi-bin/tools/logios/lextool.pl', files=files)
-                req.raise_for_status()
-                # FIXME: handle network failures
-                match = re.search(r'<!-- DICT (.*)  -->', req.text)
-                if match:
-                    url = match.group(1)
-                    req = requests.get(url)
-                    req.raise_for_status()
-                    entries = req.text.strip().split('\n')
-                    pronunciations = []
-                    for entry in entries:
-                        tokens = entry.strip().split()
-                        assert re.match(word + r'(\(\d\))?', tokens[0], re.I)  # 'SEMI-COLON' or 'SEMI-COLON(2)'
-                        phones = tokens[1:]
-                        _log.debug("generated pronunciation with cloud-cmudict for %r: CMU phones are %r" % (word, phones))
-                        pronunciations.append(phones)
-                    return pronunciations
-            except Exception as e:
-                _log.exception("generate_pronunciations exception accessing www.speech.cs.cmu.edu")
-
-        raise KaldiError("cannot generate word pronunciation")
+        if cls.g2p_en is None:
+            cls.attempt_load_g2p_en(model_dir)
+        if cls.g2p_en:
+            return cls.generate_pronunciations_g2p_en(word)
+        if allow_online_pronunciations:
+            return cls.generate_pronunciations_cmu_online(word)
+        raise KaldiError("cannot generate word pronunciation: no generators available")
 
 
 ########################################################################################################################
@@ -261,20 +278,22 @@ class Model(object):
         with open(filename, 'w', encoding='utf-8', newline='\n') as file:
             file.writelines(lines)
 
-    def add_word(self, word, phones=None, lazy_compilation=False):
+    def add_word(self, word, phones=None, lazy_compilation=False, allow_online_pronunciations=False):
         word = word.strip().lower()
 
         if phones is None:
             # Generate pronunciations, then call ourselves recursively
-            pronunciations = Lexicon.generate_pronunciations(word)
-            pronunciations = sum([self.add_word(word, phones, lazy_compilation=True) for phones in pronunciations], [])
+            pronunciations = Lexicon.generate_pronunciations(word, model_dir=self.model_dir, allow_online_pronunciations=allow_online_pronunciations)
+            pronunciations = sum([
+                self.add_word(word, phones, lazy_compilation=True)
+                for phones in pronunciations], [])
             if not lazy_compilation:
                 self.generate_lexicon_files()
             return pronunciations
             # FIXME: refactor this function
 
         # Now just handle single-pronunciation case...
-        phones = self.lexicon.cmu_to_xsampa(phones)
+        phones = self.lexicon.phones_cmu_to_xsampa(phones)
         new_entry = [word] + phones
 
         entries = self.read_user_lexicon()

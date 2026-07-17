@@ -80,8 +80,6 @@ elif sys.platform.startswith('darwin'): platform = 'macos'
 else: raise KaldiError("unknown sys.platform")
 
 exec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exec', platform)
-library_extension = dict(windows='.dll', linux='.so', macos='.dylib')[platform]
-subprocess_seperator = '^&' if platform == 'windows' else ';'
 
 import ush
 
