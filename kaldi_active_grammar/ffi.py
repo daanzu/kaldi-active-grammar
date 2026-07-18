@@ -36,5 +36,6 @@ class FFIObject(object):
 
     @classmethod
     def _init_ffi(cls):
-        _ffi.cdef(_c_source_ignore_regex.sub(' ', cls._library_header_text))
+        # Decoder subclasses share one FFI instance and each header includes its base-class declarations. Allow those common declarations to be registered again when a second decoder backend is initialized.
+        _ffi.cdef(_c_source_ignore_regex.sub(' ', cls._library_header_text), override=True)
         return _ffi.dlopen(_library_binary_path)
