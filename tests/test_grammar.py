@@ -38,13 +38,25 @@ class TestGrammar:
         return rule
 
     def decode(self, text_or_audio: Union[str, bytes], kaldi_rules_activity: list[int], expected_rule: Optional[KaldiRule], expected_words: Optional[list[str]] = None, expected_words_are_dictation_mask: Optional[list[bool]] = None):
+        """Decode one complete utterance and validate its grammar-level result.
+
+        ``text_or_audio`` may be fixture text, which is converted to speech by
+        ``audio_generator``, or raw audio bytes.  ``kaldi_rules_activity`` is
+        the explicit set of rule IDs enabled for this utterance; an empty list
+        selects no rules.
+
+        When ``expected_rule`` is provided, the parsed rule and its words must
+        match the expected result.  When it is ``None``, this asserts that the
+        decoder emits no grammar result.  Tests may still supply speech in that
+        case (for example, to verify that ordinary speech is rejected when no
+        rules are loaded or active).
+        """
         if isinstance(text_or_audio, str):
             text = text_or_audio
             audio_data = self.audio_generator(text)
             if expected_words is None:
-                expected_words = text.split() if text else []
+                expected_words = text.split() if text and expected_rule is not None else []
         else:
-            text = None
             audio_data = text_or_audio
             if expected_words is None:
                 expected_words = []
@@ -53,7 +65,8 @@ class TestGrammar:
 
         output, info = self.decoder.get_output()
         assert isinstance(output, str)
-        assert len(output) > 0 or expected_words == []
+        if expected_rule is not None:
+            assert output
         assert_info_shape(info)
 
         recognized_rule, words, words_are_dictation_mask = self.compiler.parse_output(output)
