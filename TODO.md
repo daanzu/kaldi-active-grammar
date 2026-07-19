@@ -1,5 +1,21 @@
 # TODO
 
+## LAF grammar FST storage
+
+- Benchmark the private mutable-copy path against conversion to `StdConstFst` with
+  representative small, medium, and large grammars. Record add/reload latency,
+  steady-state native memory, and decode throughput.
+- Decide whether freezing should be selectable, rather than unconditional. A
+  possible API is a decoder/model construction option with `auto` (default),
+  `mutable`, and `frozen` modes.
+- If an option is added, document that it changes only the LAF-owned copy: the
+  Python `NativeWFST` remains Python-owned and is never mutated or transferred.
+- Keep the default based on measurements: favor frozen FSTs for load-once,
+  decode-many grammars only if their memory/locality benefit outweighs conversion
+  cost; otherwise retain a private `StdVectorFst` copy.
+- Add regression coverage for adding, removing, and reloading a grammar while
+  the original Python-owned `NativeWFST` is subsequently destroyed.
+
 ## LAF lexicon updates
 
 - Provide a supported full LAF graph rebuild workflow for adding words or
