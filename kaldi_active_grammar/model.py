@@ -225,7 +225,6 @@ class Model(object):
             'L_disambig.fst': find_file(self.model_dir, 'L_disambig.fst', default=True),
             'tree': find_file(self.model_dir, 'tree', default=True),
             'final.mdl': find_file(self.model_dir, 'final.mdl', default=True),
-            # 'g.irelabel': find_file(self.model_dir, 'g.irelabel', default=True),  # otf
             'user_lexicon.txt': find_file(self.model_dir, 'user_lexicon.txt', default=True),
             'left_context_phones.txt': find_file(self.model_dir, 'left_context_phones.txt', default=True),
             'nonterminals.txt': find_file(self.model_dir, 'nonterminals.txt', default=True),
@@ -233,6 +232,9 @@ class Model(object):
             'wdisambig_words.int': find_file(self.model_dir, 'wdisambig_words.int', default=True),
             'lexiconp_disambig.txt': find_file(self.model_dir, 'lexiconp_disambig.txt', default=True),
             'lexiconp_disambig.base.txt': find_file(self.model_dir, 'lexiconp_disambig.base.txt', default=True),
+            # 'g.irelabel': find_file(self.model_dir, 'g.irelabel', default=True),  # OTF only
+            # Present only in lookahead (LAF) model bundles.
+            'relabel_ilabels.int': find_file(self.model_dir, 'relabel_ilabels.int'),
             'words.relabeled.txt': find_file(self.model_dir, 'words.relabeled.txt', default=True),
         }
         self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
@@ -251,6 +253,15 @@ class Model(object):
         files_are_not_current = lambda files: any(not self.fst_cache.file_is_current(self.files_dict[file]) for file in files)
         if self.fst_cache.cache_is_new or files_are_not_current(necessary_files + non_lazy_files):
             self.generate_lexicon_files()
+
+        # Generate ``words.relabeled.txt`` if it is missing and ``relabel_ilabels.int`` is present (LAF model bundle).
+        if (not os.path.isfile(self.files_dict['words.relabeled.txt'])
+                and self.files_dict['relabel_ilabels.int'] is not None):
+            _log.info("generating missing words.relabeled.txt from relabel_ilabels.int")
+            self.generate_words_relabeled_file(
+                self.files_dict['words.txt'],
+                self.files_dict['relabel_ilabels.int'],
+                self.files_dict['words.relabeled.txt'])
 
         self.words_table = SymbolTable()
         self.load_words()
@@ -416,8 +427,6 @@ class Model(object):
             command |= self.files_dict['L_disambig.fst']
             command()
 
-        # FIXME: generate_words_relabeled_file(self.files_dict['words.txt'], self.files_dict['relabel_ilabels.int'], self.files_dict['words.relabeled.txt'])
-
         self.fst_cache.update_dependencies()
         self.fst_cache.save()
 
@@ -499,9 +508,8 @@ def convert_generic_model_to_agf(src_dir, model_dir):
     with open(os.path.join(model_dir, 'nonterminals.txt'), 'w', encoding='utf-8', newline='\n') as f:
         f.writelines(nonterm + '\n' for nonterm in nonterminals)
 
-    # add nonterminals to align_lexicon.int
-    
-    # fix L_disambig.fst: construct lexiconp_disambig.txt ...
+    # FIXME: add nonterminals to align_lexicon.int
+    # FIXME: fix L_disambig.fst: construct lexiconp_disambig.txt ...
 
 
 ########################################################################################################################
