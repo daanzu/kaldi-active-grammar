@@ -117,17 +117,20 @@ Otherwise...
 Architecture and usage references:
 
 * [**Kaldi fork architecture and interaction**](docs/kaldi-fork-architecture.md): Multi-level design of the Python/native boundary, grammar compilation, dynamic decoding, build coupling, and operational invariants.
+* [**Building**](BUILDING.md): Source-build workflows and native/Python revision coupling.
+* [**Testing**](TESTING.md): Integration-test setup, framework requirements, and the opt-in prolonged grammar activity test.
 * [**Plain dictation interface**](examples/plain_dictation.py): Set up recognizer for plain dictation; perform decoding on given `wav` file.
 * [**Full example**](examples/full_example.py): Set up grammar compiler & decoder; set up a rule; perform decoding on live, real-time audio from microphone.
 * [**Backend for Dragonfly**](https://github.com/daanzu/dragonfly/tree/kaldi/dragonfly/engines/backend_kaldi): Many advanced features and complex interactions.
 
 The KaldiAG API is fairly low level, but basically: you define a set of grammar rules, then send in audio data, along with the integer IDs of the rules active at the beginning of each utterance, and receive back the recognized rule and text. Pass `None` on continuation chunks; pass an empty list to explicitly disable all rules. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
 
-### Building
+### Building and testing
 
 If at all possible, use the published binary wheels for your platform. Only
 consult [`BUILDING.md`](BUILDING.md) if you cannot use the wheels and need to
-build from source.
+build from source. Contributors can find integration and prolonged test setup
+in [`TESTING.md`](TESTING.md).
 
 ## Contributing
 

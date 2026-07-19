@@ -551,6 +551,76 @@ class TestGrammar:
         for text in ['hello', 'world', 'test']:
             self.decode(text, [rule.id], rule)
 
+    @pytest.mark.prolonged
+    def test_prolonged_changing_rule_activity(self):
+        """Stress dynamic rule activity over a long-lived decoder session.
+
+        The test loads 24 independent two-word rules into one decoder, then
+        decodes 1,000 utterances without recreating the compiler or decoder.
+        On every utterance it changes both the spoken target rule and the set
+        of active rules.  Active-set sizes cycle from one rule through all 24,
+        exercising narrow and maximally broad decode graphs as well as every
+        intermediate size.
+
+        Audio is synthesized once per rule and reused.  The prolonged loop
+        therefore focuses on decoder lifetime, retained state, repeated graph
+        setup, sparse rule-ID activity updates, and output parsing rather than
+        repeatedly measuring Piper synthesis.
+
+        The enclosing class parameterization runs the same workload against
+        ``agf-direct`` and ``laf``.  This is intentionally excluded from normal
+        test runs because each framework case processes 1,000 utterances.
+        Enable both cases with::
+
+            pytest -m prolonged tests/test_grammar.py::TestGrammar::test_prolonged_changing_rule_activity
+
+        Select one framework by appending its pytest parameter ID, ``[agf]``
+        or ``[laf]``, to the node ID.  See ``TESTING.md`` for prerequisites,
+        complete commands, and workload details.
+        """
+        directions = ('left', 'right', 'forward', 'back', 'north', 'south', 'east', 'west')
+        phrases = [f'{verb} {direction}'
+                   for verb in ('go', 'move', 'turn')
+                   for direction in directions]
+
+        def build_phrase(words):
+            def _build(fst):
+                states = [fst.add_state(initial=True)]
+                states.extend(fst.add_state() for _ in words[:-1])
+                states.append(fst.add_state(final=True))
+                for index, word in enumerate(words):
+                    fst.add_arc(states[index], states[index + 1], word)
+            return _build
+
+        rules = []
+        audio_by_rule_id = {}
+        words_by_rule_id = {}
+        for index, phrase in enumerate(phrases):
+            words = phrase.split()
+            rule = self.make_rule(f'LongTermRule{index}', build_phrase(words))
+            rules.append(rule)
+            audio_by_rule_id[rule.id] = self.audio_generator(phrase)
+            words_by_rule_id[rule.id] = words
+
+        # Seven and five are both coprime to the 24-rule count.  The target
+        # stride therefore visits every rule before repeating, while the
+        # activity stride selects every rule exactly once when active_count is
+        # 24 and does not duplicate IDs for smaller active sets.
+        for utterance_index in range(1000):
+            target_index = (utterance_index * 7) % len(rules)
+            active_count = 1 + utterance_index % len(rules)
+            active_rules = [
+                rules[(target_index + offset * 5) % len(rules)]
+                for offset in range(active_count)
+            ]
+            target_rule = rules[target_index]
+            self.decode(
+                audio_by_rule_id[target_rule.id],
+                [rule.id for rule in active_rules],
+                target_rule,
+                expected_words=words_by_rule_id[target_rule.id],
+            )
+
 
 class TestAlternativeDictation:
     """Tests for alternative dictation feature."""

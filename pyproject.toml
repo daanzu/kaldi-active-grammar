@@ -7,8 +7,12 @@ testpaths = ["tests"]
 addopts = [
     "--import-mode=importlib",
     "-ra",  # extra summary for skips/xfails
+    "-m", "not prolonged",  # exclude opt-in long-term tests by default
     "--strict-markers",  # fail on unknown markers
     "--strict-config",  # fail on bad config
     # "--cov=kaldi_active_grammar", "--no-cov-on-fail", "--cov-branch", "--cov-report=term-missing",
+]
+markers = [
+    "prolonged: opt-in long-term decoder tests (1,000 utterances per framework); enable with '-m prolonged'",
 ]
 xfail_strict = true
