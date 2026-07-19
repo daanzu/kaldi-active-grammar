@@ -4,6 +4,16 @@ import re
 import pytest
 
 
+def test_laf_rejects_runtime_pronunciation_updates():
+    from kaldi_active_grammar import Compiler, KaldiError
+
+    compiler = Compiler.__new__(Compiler)
+    compiler.decoding_framework = 'laf'
+
+    with pytest.raises(KaldiError, match='LAF does not support adding words or pronunciations at runtime'):
+        compiler.add_word('example')
+
+
 def test_activity_ids_are_normalized_for_native_abi():
     from kaldi_active_grammar.wrapper import _prepare_grammars_activity
     from kaldi_active_grammar.ffi import _ffi

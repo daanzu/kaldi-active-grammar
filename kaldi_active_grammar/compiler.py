@@ -344,6 +344,12 @@ class Compiler(object):
     # Methods for compiling graphs.
 
     def add_word(self, word, phones=None, lazy_compilation=False, allow_online_pronunciations=False):
+        if self.decoding_framework == 'laf':
+            raise KaldiError(
+                "LAF does not support adding words or pronunciations at runtime; "
+                "rebuild the LAF graph bundle (HCLr.fst, Gr.fst, "
+                "relabel_ilabels.int, and words.relabeled.txt) with the updated "
+                "lexicon before constructing the compiler.")
         pronunciations = self.model.add_word(word, phones=phones, lazy_compilation=lazy_compilation, allow_online_pronunciations=allow_online_pronunciations)
         self._lexicon_files_stale = True  # Only mark lexicon stale if it was successfully modified (not an exception)
         return pronunciations
