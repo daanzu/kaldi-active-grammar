@@ -75,13 +75,18 @@ setup-tests:
 	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
 	cd tests && [ ! -e kaldi_model ] && curl -L -C - -o kaldi_model.zip '{{kaldi_model_url}}' && unzip -o kaldi_model.zip || true
 
+setup-tests-venv:
+	rm -rf .venv
+	uv venv --no-project
+	uv pip install --python .venv/bin/python -r requirements-test.txt -r requirements-editable.txt
+
 # Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test *args='':
-    uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"
+	if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"; fi
 
 # Args: --fail-fast (stop after the first failed test process)
 test-separately *args='':
-	uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/run_each_test_separately.py "$@"
+	if [ -x .venv/bin/python ]; then .venv/bin/python tests/run_each_test_separately.py "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/run_each_test_separately.py "$@"; fi
 
 # Test package after building wheel into wheels/ directory. Runs tests from within tests/ directory to prevent importing kaldi_active_grammar from source tree
 # Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
