@@ -33,10 +33,10 @@ pip-install-develop:
 
 # Configure a separate Kaldi fork checkout for local Linux development. This is a one-time setup (or rerun after changing configure options).
 configure-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
-	cd {{kaldi_root_dir}}/tools && ./extras/install_openblas.sh && make -j"$(nproc)"
+	cd {{kaldi_root_dir}}/tools && ./extras/install_openblas.sh && CXXFLAGS='-Wno-missing-template-keyword' make -j"$(nproc)"
 	# cd {{kaldi_root_dir}}/tools && make -j"$(nproc)"
 	cd {{kaldi_root_dir}}/tools/openfst && autoreconf
-	cd {{kaldi_root_dir}}/src && CXXFLAGS='-O2' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS
+	cd {{kaldi_root_dir}}/src && CXXFLAGS='-O2 -Wno-template-id-cdtor' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS
 	# cd {{kaldi_root_dir}}/src && CXXFLAGS='-O0 -g3' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS --debug-level=2
 	# cd {{kaldi_root_dir}}/src && CXXFLAGS=-O2 ./configure --mkl-root=/home/daanzu/intel/mkl/ --shared --static-math
 	make -C {{kaldi_root_dir}}/src -j"$(nproc)" depend
