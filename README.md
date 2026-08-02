@@ -125,6 +125,19 @@ Architecture and usage references:
 
 The KaldiAG API is fairly low level, but basically: you define a set of grammar rules, then send in audio data, along with the integer IDs of the rules active at the beginning of each utterance, and receive back the recognized rule and text. Pass `None` on continuation chunks; pass an empty list to explicitly disable all rules. The easy way is to go through Dragonfly, which makes it easy to define the rules, contexts, and actions.
 
+Native decoders and graph compilers can hold around a gigabyte of memory. They
+are released automatically when Python garbage-collects their owning objects,
+including reference cycles. For prompt, deterministic release, use `Compiler`,
+`PlainDictationRecognizer`, decoder wrappers, and `NativeWFST` as context
+managers, or call their idempotent `close()` method. The older `destroy()` and
+`NativeWFST.destruct()` names remain supported as aliases.
+
+```python
+with Compiler() as compiler:
+    decoder = compiler.init_decoder()
+    # compile rules and decode audio
+```
+
 ### Building and testing
 
 If at all possible, use the published binary wheels for your platform. Only

@@ -192,21 +192,24 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
     @saving_adaptation_state.setter
     def saving_adaptation_state(self, value): self._saving_adaptation_state = value
 
+    def _get_model(self):
+        return self._require_native(getattr(self, '_model', None), 'nnet3 decoder')
+
     def load_lexicon(self, words_file=None, word_align_lexicon_file=None):
         """ Only necessary when you update the lexicon after initialization. """
         if words_file is None: words_file = self.words_file
         if word_align_lexicon_file is None: word_align_lexicon_file = self.word_align_lexicon_file
-        result = self._lib.nnet3_base__load_lexicon(self._model, en(words_file), en(word_align_lexicon_file))
+        result = self._lib.nnet3_base__load_lexicon(self._get_model(), en(words_file), en(word_align_lexicon_file))
         if not result:
             raise KaldiError("error loading lexicon (%r, %r)" % (words_file, word_align_lexicon_file))
 
     def save_adaptation_state(self):
-        result = self._lib.nnet3_base__save_adaptation_state(self._model)
+        result = self._lib.nnet3_base__save_adaptation_state(self._get_model())
         if not result:
             raise KaldiError("save_adaptation_state error")
 
     def reset_adaptation_state(self):
-        result = self._lib.nnet3_base__reset_adaptation_state(self._model)
+        result = self._lib.nnet3_base__reset_adaptation_state(self._get_model())
         if not result:
             raise KaldiError("reset_adaptation_state error")
 
@@ -217,7 +220,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         lm_score_p = _ffi.new('float *')
         confidence_p = _ffi.new('float *')
         expected_error_rate_p = _ffi.new('float *')
-        result = self._lib.nnet3_base__get_output(self._model, output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
+        result = self._lib.nnet3_base__get_output(self._get_model(), output_p, output_max_length, likelihood_p, am_score_p, lm_score_p, confidence_p, expected_error_rate_p)
         if not result:
             raise KaldiError("get_output error")
         output_str = de(_ffi.string(output_p))
@@ -237,7 +240,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
         num_words = len(words)
         kaldi_frame_times_p = _ffi.new('int32_t[]', num_words)
         kaldi_frame_lengths_p = _ffi.new('int32_t[]', num_words)
-        result = self._lib.nnet3_base__get_word_align(self._model, kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
+        result = self._lib.nnet3_base__get_word_align(self._get_model(), kaldi_frame_times_p, kaldi_frame_lengths_p, num_words)
         if not result:
             raise KaldiError("get_word_align error")
         times = [kaldi_frame_num * self.bytes_per_kaldi_frame for kaldi_frame_num in kaldi_frame_times_p]
@@ -246,7 +249,7 @@ class KaldiNNet3Decoder(KaldiDecoderBase):
 
     def set_lm_prime_text(self, prime_text):
         prime_text = prime_text.strip()
-        result = self._lib.nnet3_base__set_lm_prime_text(self._model, en(prime_text))
+        result = self._lib.nnet3_base__set_lm_prime_text(self._get_model(), en(prime_text))
         if not result:
             raise KaldiError("error setting prime text %r" % prime_text)
 
@@ -274,15 +277,14 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         if config: self.config_dict.update(config)
 
         _log.debug("config_dict: %s", self.config_dict)
-        self._model = self._lib.nnet3_plain__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
-        if not self._model: raise KaldiError("failed nnet3_plain__construct")
+        model = self._lib.nnet3_plain__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not model: raise KaldiError("failed nnet3_plain__construct")
+        self._model = self._own_native(model, self._lib.nnet3_plain__destruct, 'plain nnet3 decoder')
 
-    def destroy(self):
-        if self._model:
-            result = self._lib.nnet3_plain__destruct(self._model)
-            if not result:
-                raise KaldiError("failed nnet3_plain__destruct")
-            self._model = None
+    def close(self):
+        self._release_native('_model', self._lib.nnet3_plain__destruct, 'plain nnet3 decoder')
+
+    destroy = close
 
     def decode(self, frames, finalize):
         """Continue decoding with given new audio data."""
@@ -292,7 +294,7 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
         frames_float = _ffi.cast('float *', frames_char)
 
         self._start_decode_time(len(frames))
-        result = self._lib.nnet3_plain__decode(self._model, self.sample_rate, len(frames), frames_float, finalize, self._saving_adaptation_state)
+        result = self._lib.nnet3_plain__decode(self._get_model(), self.sample_rate, len(frames), frames_float, finalize, self._saving_adaptation_state)
         self._stop_decode_time(finalize)
 
         if not result:
@@ -314,14 +316,17 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
 
     def set_mimic_grammar_fst(self, grammar_fst_index, grammar_fst):
         if isinstance(grammar_fst, NativeWFST):
-            result = self._lib.nnet3_active_base__set_mimic_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
+            # Native code stores its own ConstFst copy; the Python WFST remains
+            # independently owned and can be closed after this call.
+            result = self._lib.nnet3_active_base__set_mimic_grammar_fst(
+                self._get_model(), grammar_fst_index, grammar_fst._get_native_obj())
         else: raise KaldiError("unrecognized grammar_fst type")
         if not result:
             raise KaldiError("set_mimic_grammar_fst error: %r, %r" % (grammar_fst_index, grammar_fst))
         return True
 
     def set_mimic_dictation_fst_file(self, grammar_fst_filename):
-        result = self._lib.nnet3_active_base__set_mimic_dictation_fst_file(self._model, en(grammar_fst_filename))
+        result = self._lib.nnet3_active_base__set_mimic_dictation_fst_file(self._get_model(), en(grammar_fst_filename))
         if not result:
             raise KaldiError("set_mimic_dictation_fst_file error: %r, %r" % (grammar_fst_filename,))
         return True
@@ -337,7 +342,7 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         output_p = _ffi.new('char[]', output_max_length) if output_max_length else _ffi.NULL
         if grammar_fst_index is None: grammar_fst_index = -1  # No given grammar.
-        result = self._lib.nnet3_active_base__mimic(self._model, en(input),
+        result = self._lib.nnet3_active_base__mimic(self._get_model(), en(input),
             grammars_activity_p, grammars_activity_size,
             grammar_fst_index, output_p, output_max_length)
         if result:
@@ -382,29 +387,30 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
             'dictation_phones_offset': dictation_phones_offset,
             'dictation_fst_filename': os.path.normpath(dictation_fst_file) if dictation_fst_file is not None else '',
             })
-        if isinstance(top_fst, NativeWFST): self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst.compiled_native_obj))})
+        if isinstance(top_fst, NativeWFST):
+            self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst._get_compiled_native_obj()))})
         elif isinstance(top_fst, str): self.config_dict.update({'top_fst_filename': os.path.normpath(top_fst)})
         else: raise KaldiError("unrecognized top_fst type")
         if config: self.config_dict.update(config)
 
         _log.debug("config_dict: %s", self.config_dict)
-        self._model = self._lib.nnet3_agf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
-        if not self._model: raise KaldiError("failed nnet3_agf__construct")
+        model = self._lib.nnet3_agf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not model: raise KaldiError("failed nnet3_agf__construct")
+        self._model = self._own_native(model, self._lib.nnet3_agf__destruct, 'AGF nnet3 decoder')
         self.num_grammars = 0
 
-    def destroy(self):
-        if self._model:
-            result = self._lib.nnet3_agf__destruct(self._model)
-            if not result:
-                raise KaldiError("failed nnet3_agf__destruct")
-            self._model = None
+    def close(self):
+        self._release_native('_model', self._lib.nnet3_agf__destruct, 'AGF nnet3 decoder')
+
+    destroy = close
 
     def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
         if isinstance(grammar_fst, NativeWFST):
-            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(self._model, grammar_fst_index, grammar_fst.compiled_native_obj)
+            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(
+                self._get_model(), grammar_fst_index, grammar_fst._get_compiled_native_obj())
         elif isinstance(grammar_fst, str):
-            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._model, grammar_fst_index, en(os.path.normpath(grammar_fst)))
+            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._get_model(), grammar_fst_index, en(os.path.normpath(grammar_fst)))
         else: raise KaldiError("unrecognized grammar_fst type")
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst)
@@ -414,16 +420,17 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
     def reload_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst)
         if isinstance(grammar_fst, NativeWFST):
-            result = self._lib.nnet3_agf__reload_grammar_fst(self._model, grammar_fst_index, grammar_fst.compiled_native_obj)
+            result = self._lib.nnet3_agf__reload_grammar_fst(
+                self._get_model(), grammar_fst_index, grammar_fst._get_compiled_native_obj())
         elif isinstance(grammar_fst, str):
-            result = self._lib.nnet3_agf__reload_grammar_fst_file(self._model, grammar_fst_index, en(os.path.normpath(grammar_fst)))
+            result = self._lib.nnet3_agf__reload_grammar_fst_file(self._get_model(), grammar_fst_index, en(os.path.normpath(grammar_fst)))
         else: raise KaldiError("unrecognized grammar_fst type")
         if not result:
             raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst))
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
-        result = self._lib.nnet3_agf__remove_grammar_fst(self._model, grammar_fst_index)
+        result = self._lib.nnet3_agf__remove_grammar_fst(self._get_model(), grammar_fst_index)
         if not result:
             raise KaldiError("error removing grammar #%s" % grammar_fst_index)
         self.num_grammars -= 1
@@ -441,7 +448,7 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
         frames_float = _ffi.cast('float *', frames_char)
 
         self._start_decode_time(len(frames))
-        result = self._lib.nnet3_agf__decode(self._model, self.sample_rate, len(frames), frames_float, finalize,
+        result = self._lib.nnet3_agf__decode(self._get_model(), self.sample_rate, len(frames), frames_float, finalize,
             grammars_activity_p, grammars_activity_size,
             self._saving_adaptation_state)
         self._stop_decode_time(finalize)
@@ -465,30 +472,35 @@ class KaldiAgfCompiler(FFIObject):
 
     def __init__(self, config):
         super(KaldiAgfCompiler, self).__init__()
-        self._compiler = self._lib.nnet3_agf__construct_compiler(en(json.dumps(config)))
-        if not self._compiler: raise KaldiError("failed nnet3_agf__construct_compiler")
+        compiler = self._lib.nnet3_agf__construct_compiler(en(json.dumps(config)))
+        if not compiler: raise KaldiError("failed nnet3_agf__construct_compiler")
+        self._compiler = self._own_native(compiler, self._lib.nnet3_agf__destruct_compiler, 'AGF compiler')
 
-    def destroy(self):
-        if self._compiler:
-            result = self._lib.nnet3_agf__destruct_compiler(self._compiler)
-            if not result:
-                raise KaldiError("failed nnet3_agf__destruct_compiler")
-            self._compiler = None
+    def close(self):
+        self._release_native('_compiler', self._lib.nnet3_agf__destruct_compiler, 'AGF compiler')
+
+    destroy = close
+
+    def _get_compiler(self):
+        return self._require_native(getattr(self, '_compiler', None), 'AGF compiler')
 
     def compile_graph(self, config, grammar_fst=None, grammar_fst_text=None, grammar_fst_file=None, return_graph=False):
         if 1 != sum(int(g is not None) for g in [grammar_fst, grammar_fst_text, grammar_fst_file]):
             raise ValueError("must pass exactly one grammar")
         if grammar_fst is not None:
+            if not isinstance(grammar_fst, NativeWFST):
+                raise KaldiError("unrecognized grammar_fst type")
             _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst=%r", config, grammar_fst)
-            result = self._lib.nnet3_agf__compile_graph(self._compiler, en(json.dumps(config)), grammar_fst.native_obj, return_graph)
+            result = self._lib.nnet3_agf__compile_graph(
+                self._get_compiler(), en(json.dumps(config)), grammar_fst._get_native_obj(), return_graph)
             return result
         if grammar_fst_text is not None:
             _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_text:\n%s", config, grammar_fst_text)
-            result = self._lib.nnet3_agf__compile_graph_text(self._compiler, en(json.dumps(config)), en(grammar_fst_text), return_graph)
+            result = self._lib.nnet3_agf__compile_graph_text(self._get_compiler(), en(json.dumps(config)), en(grammar_fst_text), return_graph)
             return result
         if grammar_fst_file is not None:
             _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_file=%r", config, grammar_fst_file)
-            result = self._lib.nnet3_agf__compile_graph_file(self._compiler, en(json.dumps(config)), en(grammar_fst_file), return_graph)
+            result = self._lib.nnet3_agf__compile_graph_file(self._get_compiler(), en(json.dumps(config)), en(grammar_fst_file), return_graph)
             return result
 
 
@@ -521,20 +533,23 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
         if config: self.config_dict.update(config)
 
         _log.debug("config_dict: %s", self.config_dict)
-        self._model = self._lib.nnet3_laf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
-        if not self._model: raise KaldiError("failed nnet3_laf__construct")
+        model = self._lib.nnet3_laf__construct(en(self.model_dir), en(json.dumps(self.config_dict)), self.verbosity)
+        if not model: raise KaldiError("failed nnet3_laf__construct")
+        self._model = self._own_native(model, self._lib.nnet3_laf__destruct, 'LAF nnet3 decoder')
         self.num_grammars = 0
 
-    def destroy(self):
-        if self._model:
-            result = self._lib.nnet3_laf__destruct(self._model)
-            if not result:
-                raise KaldiError("failed nnet3_laf__destruct")
-            self._model = None
+    def close(self):
+        self._release_native('_model', self._lib.nnet3_laf__destruct, 'LAF nnet3 decoder')
+
+    destroy = close
 
     def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
-        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
+        if not isinstance(grammar_fst, NativeWFST):
+            raise KaldiError("unrecognized grammar_fst type")
+        # The LAF bridge copies this FST before preparing and storing it.
+        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst(
+            self._get_model(), grammar_fst_index, grammar_fst._get_native_obj())
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst)
         self.num_grammars += 1
@@ -543,7 +558,7 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
     def add_grammar_fst_text(self, grammar_fst_index, grammar_fst_text):
         assert grammar_fst_text
         _log.log(8, "%s: adding grammar_fst_text: %r", self, grammar_fst_text[:512])
-        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_text(self._model, grammar_fst_index, en(grammar_fst_text))
+        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_text(self._get_model(), grammar_fst_index, en(grammar_fst_text))
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst_text[:512])
         self.num_grammars += 1
@@ -551,13 +566,16 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
 
     def reload_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst)
-        result = self._lib.nnet3_laf__reload_grammar_fst(self._model, grammar_fst_index, grammar_fst.native_obj)
+        if not isinstance(grammar_fst, NativeWFST):
+            raise KaldiError("unrecognized grammar_fst type")
+        result = self._lib.nnet3_laf__reload_grammar_fst(
+            self._get_model(), grammar_fst_index, grammar_fst._get_native_obj())
         if not result:
             raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst))
 
     def remove_grammar_fst(self, grammar_fst_index):
         _log.debug("%s: removing grammar_fst_index: %s", self, grammar_fst_index)
-        result = self._lib.nnet3_laf__remove_grammar_fst(self._model, grammar_fst_index)
+        result = self._lib.nnet3_laf__remove_grammar_fst(self._get_model(), grammar_fst_index)
         if not result:
             raise KaldiError("error removing grammar #%s" % grammar_fst_index)
         self.num_grammars -= 1
@@ -575,7 +593,7 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
         frames_float = _ffi.cast('float *', frames_char)
 
         self._start_decode_time(len(frames))
-        result = self._lib.nnet3_laf__decode(self._model, self.sample_rate, len(frames), frames_float, finalize,
+        result = self._lib.nnet3_laf__decode(self._get_model(), self.sample_rate, len(frames), frames_float, finalize,
             grammars_activity_p, grammars_activity_size,
             self._saving_adaptation_state)
         self._stop_decode_time(finalize)

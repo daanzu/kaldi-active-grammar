@@ -13,6 +13,7 @@ _default:
 
 ### BUILDING
 
+# Build a local wheel using the specified Python interpreter.
 build-linux python='python3':
 	mkdir -p _skbuild
 	rm -rf kaldi_active_grammar/exec
@@ -21,13 +22,16 @@ build-linux python='python3':
 	# MKL with INTEL_MKL_DIR=/opt/intel/mkl/
 	{{python}} setup.py bdist_wheel
 
+# Build and repair a manylinux wheel with the checked-in Dockcross helper.
 build-dockcross *args='':
 	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{args}}
 
+# Download and make executable the Dockcross helper for manylinux builds.
 setup-dockcross:
 	docker run --rm dockcross/manylinux2010-x64:20210127-72b83fc > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64
 	@# [ ! -e building/dockcross-manylinux2010-x64 ] && docker run --rm dockcross/manylinux2010-x64 > building/dockcross-manylinux2010-x64 && chmod +x building/dockcross-manylinux2010-x64 || true
 
+# Install the Python package in editable mode while skipping native builds. Useful for active development.
 pip-install-develop:
 	KALDIAG_BUILD_SKIP_NATIVE=1 pip3 install --user -e .
 
@@ -62,25 +66,29 @@ setup-windows-develop kaldi_root_dir='../kaldi-fork-active-grammar' config='Rele
 	if test -e kaldi_active_grammar/exec/windows; then echo 'kaldi_active_grammar/exec/windows already exists; remove its staging directory or junction first.' >&2; exit 1; fi
 	cmd //c mklink /J "$(cygpath -aw kaldi_active_grammar/exec/windows)" "$(cygpath -aw '{{kaldi_root_dir}}/kaldiwin_vs2022_MKL/kaldiwin/kaldi-dragonfly/x64/{{config}}')"
 
+# Manually trigger the GitHub Actions wheel-build workflow for a ref.
 trigger-build ref='master':
 	gh workflow run build.yml --ref {{ref}}
 
 
 ### TESTING
 
+# Replace the local test Kaldi model with a copy of the specified model.
 test-model model_dir:
 	cd {{invocation_directory()}} && rm -rf kaldi_model kaldi_model.tmp && cp -rp {{model_dir}} kaldi_model
 
+# Download the Piper voice and Kaldi model required by the test suite.
 setup-tests:
 	uv run --no-project --with-requirements requirements-test.txt -m piper.download_voices --debug --download-dir tests/ '{{piper_voice}}'
 	cd tests && [ ! -e kaldi_model ] && curl -L -C - -o kaldi_model.zip '{{kaldi_model_url}}' && unzip -o kaldi_model.zip || true
 
+# Create a reusable virtual environment for repeated local test runs.
 setup-tests-venv:
 	rm -rf .venv
 	uv venv --no-project
 	uv pip install --python .venv/bin/python -r requirements-test.txt -r requirements-editable.txt
 
-# Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
+# Run the test suite with pytest. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test *args='':
 	if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"; fi
 
@@ -88,8 +96,7 @@ test *args='':
 test-separately *args='':
 	if [ -x .venv/bin/python ]; then .venv/bin/python tests/run_each_test_separately.py "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/run_each_test_separately.py "$@"; fi
 
-# Test package after building wheel into wheels/ directory. Runs tests from within tests/ directory to prevent importing kaldi_active_grammar from source tree
-# Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
+# Test the built wheel from tests/ so the source tree cannot be imported accidentally. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test-package *args='':
 	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest "$@"
 

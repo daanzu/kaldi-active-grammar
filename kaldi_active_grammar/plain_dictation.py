@@ -28,6 +28,10 @@ class PlainDictationRecognizer(object):
         """
         show_donation_message()
 
+        self._model = None
+        self._compiler = None
+        self.decoder = None
+
         kwargs = {}
         if config: kwargs['config'] = dict(config)
 
@@ -43,6 +47,24 @@ class PlainDictationRecognizer(object):
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
                 top_fst=top_fst_rule.fst_wrapper, dictation_fst_file=dictation_fst_file, **kwargs)
 
+    def close(self):
+        """Release the decoder and any internally owned compiler."""
+        decoder, self.decoder = self.decoder, None
+        if decoder is not None:
+            decoder.close()
+        compiler, self._compiler = self._compiler, None
+        if compiler is not None:
+            compiler.close()
+        self._model = None
+
+    destroy = close
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
 
     def decode_utterance(self, samples_data, chunk_size=None):
         """
@@ -51,6 +73,8 @@ class PlainDictationRecognizer(object):
         and returning a tuple of (output (*text*), likelihood (*float*)).
         Optionally takes *chunk_size* (*int* in number of samples) for decoding.
         """
+        if self.decoder is None:
+            raise KaldiError("Cannot use closed PlainDictationRecognizer")
         if chunk_size:
             chunk_size *= 2  # Compensate for int16 format
             for i in range(0, len(samples_data), chunk_size):
@@ -60,5 +84,6 @@ class PlainDictationRecognizer(object):
             self.decoder.decode(samples_data, True)
         output_str, info = self.decoder.get_output()
         output_str = remove_nonterms_in_text(output_str)
-        output_str = remove_words_in_text(output_str, lambda word: word in self._compiler._silence_words)
+        silence_words = self._compiler._silence_words if self._compiler is not None else frozenset(['!SIL'])
+        output_str = remove_words_in_text(output_str, lambda word: word in silence_words)
         return (output_str, info)

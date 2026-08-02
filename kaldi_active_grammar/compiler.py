@@ -32,6 +32,7 @@ class KaldiRule(object):
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST).
         :param exported: bool whether rule is a top-level rule (with an arc to it from the top_fst), rather than needing to be referenced from another rule.
         """
+        compiler._require_open()
         self.compiler = compiler
         self.name = name
         assert nonterm or not exported
@@ -62,20 +63,27 @@ class KaldiRule(object):
     def __repr__(self):
         return "%s(%s, %s)" % (self.__class__.__name__, self.id, self.name)
 
-    fst_cache = property(lambda self: self.compiler.fst_cache)
-    decoder = property(lambda self: self.compiler.decoder)
+    def _require_compiler(self):
+        if self.compiler is None:
+            raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+        return self.compiler
 
-    pending_compile = property(lambda self: (self in self.compiler.compile_queue) or (self in self.compiler.compile_duplicate_filename_queue))
-    pending_load = property(lambda self: self in self.compiler.load_queue)
+    fst_cache = property(lambda self: self._require_compiler().fst_cache)
+    decoder = property(lambda self: self._require_compiler().decoder)
+
+    pending_compile = property(lambda self: (self in self._require_compiler().compile_queue) or (self in self._require_compiler().compile_duplicate_filename_queue))
+    pending_load = property(lambda self: self in self._require_compiler().load_queue)
 
     fst_wrapper = property(lambda self: self.fst if self.fst.native else self.filepath)
     filename = property(lambda self: self.fst.filename)
 
     @property
     def filepath(self):
+        compiler = self._require_compiler()
         assert self.filename
-        assert self.compiler.tmp_dir is not None
-        return os.path.join(self.compiler.tmp_dir, self.filename)
+        if compiler.tmp_dir is None:
+            raise KaldiError("Cannot get a KaldiRule filepath without a temporary directory")
+        return os.path.join(compiler.tmp_dir, self.filename)
 
     def compile(self, lazy=False, duplicate=None):
         if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
@@ -211,20 +219,27 @@ class KaldiRule(object):
         if self.destroyed:
             return
 
+        compiler = self.compiler
+
         if self.loaded:
             self.decoder.remove_grammar_fst(self.id)
-            assert self not in self.compiler.compile_queue
-            assert self not in self.compiler.compile_duplicate_filename_queue
-            assert self not in self.compiler.load_queue
+            assert self not in compiler.compile_queue
+            assert self not in compiler.compile_duplicate_filename_queue
+            assert self not in compiler.load_queue
         else:
-            if self in self.compiler.compile_queue: self.compiler.compile_queue.remove(self)
-            if self in self.compiler.compile_duplicate_filename_queue: self.compiler.compile_duplicate_filename_queue.remove(self)
-            if self in self.compiler.load_queue: self.compiler.load_queue.remove(self)
+            if self in compiler.compile_queue: compiler.compile_queue.remove(self)
+            if self in compiler.compile_duplicate_filename_queue: compiler.compile_duplicate_filename_queue.remove(self)
+            if self in compiler.load_queue: compiler.load_queue.remove(self)
 
-        del self.compiler.kaldi_rule_by_id_dict[self.id]
-        self.compiler._kaldi_rule_id_allocator.free_id(self.id)
+        if self.id >= 0:
+            del compiler.kaldi_rule_by_id_dict[self.id]
+            compiler._kaldi_rule_id_allocator.free_id(self.id)
 
         self.destroyed = True
+        self.loaded = False
+        self.compiler = None
+        if isinstance(self.fst, NativeWFST):
+            self.fst.close()
 
 
 ########################################################################################################################
@@ -259,6 +274,7 @@ class Compiler(object):
         self.native_fst = bool(native_fst)
         self.cache_fsts = bool(cache_fsts)
         self.alternative_dictation = alternative_dictation
+        self._closed = False
 
         tmp_dir_needed = bool(self.cache_fsts)
         self.model = Model(model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed)
@@ -283,7 +299,66 @@ class Compiler(object):
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
 
+    def close(self):
+        """Release native resources owned by this compiler, once."""
+        if self._closed:
+            return
+        self._closed = True
+
+        cleanup_error = None
+        decoder, self.decoder = self.decoder, None
+        if decoder is not None:
+            try:
+                decoder.close()
+            except Exception as error:
+                cleanup_error = error
+
+        agf_compiler, self._agf_compiler = self._agf_compiler, None
+        if agf_compiler is not None:
+            try:
+                agf_compiler.close()
+            except Exception as error:
+                if cleanup_error is None:
+                    cleanup_error = error
+
+        # Rules point back to this compiler.  Break those cycles after native
+        # decoder teardown; unloading individual grammars is neither necessary
+        # nor valid once the decoder has gone away.
+        rules = list(self.kaldi_rule_by_id_dict.values())
+        self.kaldi_rule_by_id_dict.clear()
+        self.compile_queue.clear()
+        self.compile_duplicate_filename_queue.clear()
+        self.load_queue.clear()
+        for rule in rules:
+            rule.loaded = False
+            rule.destroyed = True
+            rule.compiler = None
+            if isinstance(rule.fst, NativeWFST):
+                try:
+                    rule.fst.close()
+                except Exception as error:
+                    if cleanup_error is None:
+                        cleanup_error = error
+
+        if cleanup_error is not None:
+            raise cleanup_error
+
+    destroy = close
+
+    def __enter__(self):
+        self._require_open()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def _require_open(self):
+        if self._closed:
+            raise KaldiError("Cannot use closed Compiler")
+        return self
+
     def init_decoder(self, config=None, dictation_fst_file=None, dictation_g_fst_file=None):
+        self._require_open()
         if self.decoder: raise KaldiError("Decoder already initialized")
         assert (dictation_fst_file is not None) or (dictation_fst_file == dictation_g_fst_file)
         if dictation_fst_file is None: dictation_fst_file = self.dictation_fst_filepath
@@ -350,11 +425,13 @@ class Compiler(object):
                 "rebuild the LAF graph bundle (HCLr.fst, Gr.fst, "
                 "relabel_ilabels.int, and words.relabeled.txt) with the updated "
                 "lexicon before constructing the compiler.")
+        self._require_open()
         pronunciations = self.model.add_word(word, phones=phones, lazy_compilation=lazy_compilation, allow_online_pronunciations=allow_online_pronunciations)
         self._lexicon_files_stale = True  # Only mark lexicon stale if it was successfully modified (not an exception)
         return pronunciations
 
     def prepare_for_compilation(self):
+        self._require_open()
         if self._lexicon_files_stale:
             self.model.generate_lexicon_files()
             self.model.load_words()  # FIXME: This re-loading from the words.txt file may be unnecessary now that we have/use NativeWFST + SymbolTable, but it's not clear if it's safe to remove it.
@@ -366,6 +443,7 @@ class Compiler(object):
             self._lexicon_files_stale = False
 
     def _compile_laf_graph(self, input_text=None, input_filename=None, output_filename=None, **kwargs):
+        self._require_open()
         # FIXME: documentation
         with debug_timer(self._log.debug, "laf graph compilation"):
             format_kwargs = dict(self.files_dict, **kwargs)
@@ -403,6 +481,7 @@ class Compiler(object):
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
         :param simplify_lg: bool whether to simplify LG (disambiguate, and more) (do for command grammars, but not for dictation graph!)
         """
+        self._require_open()
         # Must be thread-safe!
         # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
         # FIXME: documentation
@@ -584,6 +663,7 @@ class Compiler(object):
         return kaldi_rule
 
     def process_compile_and_load_queues(self):
+        self._require_open()
         # Allowing this gives us leeway elsewhere
         # for kaldi_rule in self.compile_queue:
         #     if kaldi_rule.compiled:
@@ -633,6 +713,7 @@ class Compiler(object):
     # Methods for recognition.
 
     def prepare_for_recognition(self):
+        self._require_open()
         try:
             if self.compile_queue or self.compile_duplicate_filename_queue or self.load_queue:
                 self.process_compile_and_load_queues()
@@ -651,6 +732,7 @@ class Compiler(object):
         a positional Boolean mask.  The decoder wrapper also accepts ``None``
         to preserve its current activity set.
         """
+        self._require_open()
         output = self.decoder.mimic(text, grammars_activity)
         if output is False:
             return None
