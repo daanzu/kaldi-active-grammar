@@ -53,7 +53,7 @@ class KaldiRule(object):
         self.loaded = False
         self.reloading = False  # KaldiRule is in the process of the reload contextmanager
         self.has_been_loaded = False  # KaldiRule was loaded, then reload() was called & completed, and now it is not currently loaded, and load() we need to call the decoder's reload
-        self.destroyed = False  # KaldiRule must not be used/referenced anymore
+        self.closed = False  # KaldiRule must not be used/referenced anymore
 
         # Public
         self.fst = WFST() if not self.compiler.native_fst else NativeWFST()
@@ -64,8 +64,8 @@ class KaldiRule(object):
         return "%s(%s, %s)" % (self.__class__.__name__, self.id, self.name)
 
     def _require_compiler(self):
-        if self.compiler is None:
-            raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+        if self.closed:
+            raise KaldiError("Cannot use a KaldiRule after calling close()")
         return self.compiler
 
     fst_cache = property(lambda self: self._require_compiler().fst_cache)
@@ -86,7 +86,7 @@ class KaldiRule(object):
         return os.path.join(compiler.tmp_dir, self.filename)
 
     def compile(self, lazy=False, duplicate=None):
-        if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+        self._require_compiler()
         if self.compiled: return self
 
         if self.fst.native:
@@ -159,7 +159,7 @@ class KaldiRule(object):
         return self
 
     def load(self, lazy=False):
-        if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+        self._require_compiler()
         if lazy or self.pending_compile:
             self.compiler.load_queue.add(self)
             return self
@@ -194,7 +194,7 @@ class KaldiRule(object):
     @contextmanager
     def reload(self):
         """ Used for modifying a rule in place, e.g. ListRef. """
-        if self.destroyed: raise KaldiError("Cannot use a KaldiRule after calling destroy()")
+        self._require_compiler()
 
         was_loaded = self.loaded
         self.reloading = True
@@ -214,9 +214,9 @@ class KaldiRule(object):
             self.compiler.load_queue.add(self)
         self.reloading = False
 
-    def destroy(self):
-        """ Destructor. Unloads rule. The rule should not be used/referenced anymore after calling! """
-        if self.destroyed:
+    def close(self):
+        """Release this rule and its native FST, once."""
+        if self.closed:
             return
 
         compiler = self.compiler
@@ -235,11 +235,18 @@ class KaldiRule(object):
             del compiler.kaldi_rule_by_id_dict[self.id]
             compiler._kaldi_rule_id_allocator.free_id(self.id)
 
-        self.destroyed = True
+        self.closed = True
         self.loaded = False
         self.compiler = None
         if isinstance(self.fst, NativeWFST):
             self.fst.close()
+
+    def __enter__(self):
+        self._require_compiler()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
 
 ########################################################################################################################
@@ -331,7 +338,7 @@ class Compiler(object):
         self.load_queue.clear()
         for rule in rules:
             rule.loaded = False
-            rule.destroyed = True
+            rule.closed = True
             rule.compiler = None
             if isinstance(rule.fst, NativeWFST):
                 try:
@@ -342,8 +349,6 @@ class Compiler(object):
 
         if cleanup_error is not None:
             raise cleanup_error
-
-    destroy = close
 
     def __enter__(self):
         self._require_open()
@@ -438,7 +443,7 @@ class Compiler(object):
             self.decoder.load_lexicon()
             if self._agf_compiler:
                 # TODO: Just update the necessary files in the config
-                self._agf_compiler.destroy()
+                self._agf_compiler.close()
                 self._agf_compiler = self._init_agf_compiler()
             self._lexicon_files_stale = False
 

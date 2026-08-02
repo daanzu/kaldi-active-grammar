@@ -284,8 +284,6 @@ class KaldiPlainNNet3Decoder(KaldiNNet3Decoder):
     def close(self):
         self._release_native('_model', self._lib.nnet3_plain__destruct, 'plain nnet3 decoder')
 
-    destroy = close
-
     def decode(self, frames, finalize):
         """Continue decoding with given new audio data."""
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
@@ -402,8 +400,6 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
     def close(self):
         self._release_native('_model', self._lib.nnet3_agf__destruct, 'AGF nnet3 decoder')
 
-    destroy = close
-
     def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
         if isinstance(grammar_fst, NativeWFST):
@@ -479,8 +475,6 @@ class KaldiAgfCompiler(FFIObject):
     def close(self):
         self._release_native('_compiler', self._lib.nnet3_agf__destruct_compiler, 'AGF compiler')
 
-    destroy = close
-
     def _get_compiler(self):
         return self._require_native(getattr(self, '_compiler', None), 'AGF compiler')
 
@@ -540,8 +534,6 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
 
     def close(self):
         self._release_native('_model', self._lib.nnet3_laf__destruct, 'LAF nnet3 decoder')
-
-    destroy = close
 
     def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)

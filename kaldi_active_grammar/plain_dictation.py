@@ -57,8 +57,6 @@ class PlainDictationRecognizer(object):
             compiler.close()
         self._model = None
 
-    destroy = close
-
     def __enter__(self):
         return self
 

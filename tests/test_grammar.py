@@ -101,7 +101,7 @@ class TestGrammar:
 
         first_rule = self.make_rule('FirstRule', _build('hello'))
         second_rule = self.make_rule('SecondRule', _build('world'))
-        first_rule.destroy()
+        first_rule.close()
 
         self.decode("world", [second_rule.id], second_rule)
 

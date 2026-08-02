@@ -7,13 +7,14 @@ from types import SimpleNamespace
 import pytest
 
 from kaldi_active_grammar import KaldiError
-from kaldi_active_grammar import Compiler, KaldiRule, disable_donation_message
+from kaldi_active_grammar import Compiler, KaldiRule, PlainDictationRecognizer, disable_donation_message
 from kaldi_active_grammar.ffi import FFIObject, _ffi
 from kaldi_active_grammar.wfst import NativeWFST
 from kaldi_active_grammar.wrapper import (
     KaldiAgfCompiler,
     KaldiAgfNNet3Decoder,
     KaldiLafNNet3Decoder,
+    KaldiPlainNNet3Decoder,
 )
 
 
@@ -33,8 +34,6 @@ class NativeOwner(FFIObject):
 
     def close(self):
         self._release_native('pointer', self.destructor, 'test pointer')
-
-    destroy = close
 
 
 class RecordingNativeLibrary(object):
@@ -111,6 +110,25 @@ def test_context_manager_closes_on_exception():
             raise RuntimeError('test error')
 
     assert calls == [42]
+
+
+def test_public_lifecycle_uses_close_only():
+    resource_types = (
+        Compiler,
+        KaldiRule,
+        PlainDictationRecognizer,
+        KaldiPlainNNet3Decoder,
+        KaldiAgfNNet3Decoder,
+        KaldiLafNNet3Decoder,
+        KaldiAgfCompiler,
+        NativeWFST,
+    )
+    for resource_type in resource_types:
+        assert hasattr(resource_type, 'close')
+        assert hasattr(resource_type, '__enter__')
+        assert hasattr(resource_type, '__exit__')
+        assert not hasattr(resource_type, 'destroy')
+        assert not hasattr(resource_type, 'destruct')
 
 
 def test_explicit_close_reports_destructor_failure_and_remains_idempotent():
@@ -238,41 +256,57 @@ def test_rule_filepath_rejects_missing_temporary_directory():
     rule = object.__new__(KaldiRule)
     rule.compiler = SimpleNamespace(tmp_dir=None)
     rule.fst = SimpleNamespace(filename='rule.fst')
+    rule.closed = False
 
     with pytest.raises(KaldiError, match='temporary directory'):
         rule.filepath
 
 
-def make_destroyable_rule(compiler, rule_id=-1):
+def make_closable_rule(compiler, rule_id=-1):
     rule = object.__new__(KaldiRule)
     rule.compiler = compiler
     rule.id = rule_id
     rule.loaded = False
-    rule.destroyed = False
+    rule.closed = False
     rule.fst = SimpleNamespace(native=False)
     return rule
 
 
-def assert_destroyed_rule_accessors_raise(rule):
+def assert_closed_rule_accessors_raise(rule):
     for accessor in ('fst_cache', 'decoder', 'pending_compile', 'pending_load', 'filepath'):
-        with pytest.raises(KaldiError, match='Cannot use a KaldiRule after calling destroy\\(\\)'):
+        with pytest.raises(KaldiError, match='Cannot use a KaldiRule after calling close\\(\\)'):
             getattr(rule, accessor)
 
 
-def test_rule_destroy_rejects_post_destroy_accessor_access():
+def test_rule_close_rejects_post_close_accessor_access():
     compiler = SimpleNamespace(
         compile_queue=set(),
         compile_duplicate_filename_queue=set(),
         load_queue=set(),
         )
-    rule = make_destroyable_rule(compiler)
+    rule = make_closable_rule(compiler)
 
-    rule.destroy()
+    rule.close()
 
-    assert_destroyed_rule_accessors_raise(rule)
+    assert_closed_rule_accessors_raise(rule)
 
 
-def test_compiler_close_rejects_post_destroy_accessor_access():
+def test_rule_context_manager_closes_rule():
+    compiler = SimpleNamespace(
+        compile_queue=set(),
+        compile_duplicate_filename_queue=set(),
+        load_queue=set(),
+        )
+    rule = make_closable_rule(compiler)
+
+    with rule as entered:
+        assert entered is rule
+
+    assert rule.closed
+    assert_closed_rule_accessors_raise(rule)
+
+
+def test_compiler_close_rejects_post_close_accessor_access():
     compiler = object.__new__(Compiler)
     compiler._closed = False
     compiler.decoder = None
@@ -281,12 +315,12 @@ def test_compiler_close_rejects_post_destroy_accessor_access():
     compiler.compile_queue = set()
     compiler.compile_duplicate_filename_queue = set()
     compiler.load_queue = set()
-    rule = make_destroyable_rule(compiler)
+    rule = make_closable_rule(compiler)
     compiler.kaldi_rule_by_id_dict[rule.id] = rule
 
     compiler.close()
 
-    assert_destroyed_rule_accessors_raise(rule)
+    assert_closed_rule_accessors_raise(rule)
 
 
 def test_native_wfst_pointer_accessors_reject_closed_objects():

@@ -15,7 +15,6 @@
   release workflow; record the exact native fork revision used to build and
   test each Python revision.
 - Cleanup `Compiler.close()`?
-- Remove obsolete `destroy()` & `destruct()` aliases and other similar.
 
 ## LAF grammar FST storage
 

@@ -235,8 +235,6 @@ class NativeWFST(FFIObject):
         if cleanup_error is not None:
             raise cleanup_error
 
-    destruct = close
-
     @property
     def compiled_native_obj(self):
         return self._get_compiled_native_obj()

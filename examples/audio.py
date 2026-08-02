@@ -84,16 +84,32 @@ class MicAudio(object):
             else:
                 time.sleep(0.001)
 
-    def destroy(self):
-        self.stream.close()
-
-    def reconnect(self):
-        # FIXME: flapping
-        old_device_info = self.device_info
+    def _stop_thread(self):
         self.thread_cancelled = True
         if self.thread:
             self.thread.join()
             self.thread = None
+
+    def close(self):
+        self._stop_thread()
+        stream, self.stream = self.stream, None
+        if stream is not None:
+            stream.close()
+        try:
+            self.buffer_queue.put_nowait(None)  # Wake up a blocked read(), which treats None as "we are done"
+        except queue.Full:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def reconnect(self):
+        # FIXME: flapping
+        old_device_info = self.device_info
+        self._stop_thread()
         self.stream.close()
         self._connect(start=True)
         if self.reconnect_callback is not None:

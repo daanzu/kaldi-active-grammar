@@ -128,9 +128,8 @@ The KaldiAG API is fairly low level, but basically: you define a set of grammar 
 Native decoders and graph compilers can hold around a gigabyte of memory. They
 are released automatically when Python garbage-collects their owning objects,
 including reference cycles. For prompt, deterministic release, use `Compiler`,
-`PlainDictationRecognizer`, decoder wrappers, and `NativeWFST` as context
-managers, or call their idempotent `close()` method. The older `destroy()` and
-`NativeWFST.destruct()` names remain supported as aliases.
+`KaldiRule`, `PlainDictationRecognizer`, decoder wrappers, and `NativeWFST` as
+context managers, or call their idempotent `close()` method.
 
 ```python
 with Compiler() as compiler:
