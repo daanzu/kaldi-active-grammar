@@ -30,3 +30,9 @@ pip-wheel-metadata/
 .tox
 .cache
 .coverage
+
+# AI agents
+/.claude/
+/.codex/
+/.pi/
+.mcp.json

@@ -169,6 +169,11 @@ Utility functions for:
 - Run tests with `just test`
 - To setup virtual environment for tests: `uv venv && uv pip install -r requirements-test.txt -r requirements-editable.txt`
 
+#### Agent Test Polling
+- Let long-running test commands run with a polling interval of at least 60 seconds when supported; do not repeatedly check every few seconds.
+- Report only meaningful failures or the final test summary, rather than forwarding intermediate progress dots.
+- Prefer a focused test run first; run the full suite when useful, then wait for its final result with minimal status updates.
+
 ### Examples
 - `examples/plain_dictation.py`: Plain dictation usage
 - `examples/mix_dictation.py`: Mixed command+dictation
