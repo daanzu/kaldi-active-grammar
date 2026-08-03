@@ -14,6 +14,41 @@ def test_laf_rejects_runtime_pronunciation_updates():
         compiler.add_word('example')
 
 
+def test_compiler_rejects_removed_native_fst_option():
+    from kaldi_active_grammar import Compiler
+
+    # The option is gone from the signature, so this fails before any model directory is opened.
+    for value in (True, False):
+        with pytest.raises(TypeError, match='native_fst'):
+            Compiler(native_fst=value)
+
+
+def test_compiler_rejects_removed_agf_indirect_framework():
+    from kaldi_active_grammar import Compiler, KaldiError
+
+    with pytest.raises(KaldiError, match="framework='agf-indirect' was removed"):
+        Compiler(framework='agf-indirect')
+
+
+def test_compiler_rejects_unknown_framework():
+    from kaldi_active_grammar import Compiler, KaldiError
+
+    with pytest.raises(KaldiError, match='Invalid Compiler framework'):
+        Compiler(framework='not-a-framework')
+
+
+def test_agf_graph_compilation_rejects_laf_framework():
+    from kaldi_active_grammar import Compiler, KaldiError
+
+    compiler = Compiler.__new__(Compiler)
+    compiler._closed = False
+    compiler.decoding_framework = 'laf'
+    compiler._agf_compiler = None  # LAF does not construct one
+
+    with pytest.raises(KaldiError, match="not available with framework='laf'"):
+        compiler._compile_agf_graph(input_filename='dictation_G.fst')
+
+
 def test_activity_ids_are_normalized_for_native_abi():
     from kaldi_active_grammar.wrapper import _prepare_grammars_activity
     from kaldi_active_grammar.ffi import _ffi

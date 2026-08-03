@@ -4,16 +4,15 @@
 # Licensed under the AGPL-3.0; see LICENSE.txt file.
 #
 
-import collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess, threading, weakref
+import collections, multiprocessing, os, re, threading, weakref
 import concurrent.futures
 from contextlib import contextmanager
-from io import open
 
 from six.moves import range, zip
 
 from . import _log, KaldiError
-from .utils import ExternalProcess, debug_timer, platform, show_donation_message
-from .wfst import WFST, NativeWFST, SymbolTable
+from .utils import ExternalProcess, debug_timer, show_donation_message
+from .wfst import NativeWFST, SymbolTable
 from .model import Model
 from .wrapper import KaldiAgfCompiler, KaldiAgfNNet3Decoder, KaldiLafNNet3Decoder
 import kaldi_active_grammar.defaults as defaults
@@ -48,7 +47,6 @@ class KaldiRule(object):
             self.compiler.kaldi_rule_by_id_dict[self.id] = self
 
         # Private/protected
-        self._fst_text = None
         self.compiled = False
         self.loaded = False
         self.reloading = False  # KaldiRule is in the process of the reload contextmanager
@@ -56,7 +54,7 @@ class KaldiRule(object):
         self.closed = False  # KaldiRule must not be used/referenced anymore
 
         # Public
-        self.fst = WFST() if not self.compiler.native_fst else NativeWFST()
+        self.fst = NativeWFST()
         self.matcher = None
         self.active = True
         self.compiler._all_rules.add(self)
@@ -75,7 +73,6 @@ class KaldiRule(object):
     pending_compile = property(lambda self: (self in self._require_compiler().compile_queue) or (self in self._require_compiler().compile_duplicate_filename_queue))
     pending_load = property(lambda self: self in self._require_compiler().load_queue)
 
-    fst_wrapper = property(lambda self: self.fst if self.fst.native else self.filepath)
     filename = property(lambda self: self.fst.filename)
 
     @property
@@ -90,22 +87,13 @@ class KaldiRule(object):
         self._require_compiler()
         if self.compiled: return self
 
-        if self.fst.native:
-            if not self.filename:
-                self.fst.compute_hash(self.fst_cache.dependencies_hash)
-                assert self.filename
-
-        else:
-            # Handle compiling text WFST to binary
-            if not self._fst_text:
-                # self.fst.normalize_weights()
-                self._fst_text = self.fst.get_fst_text(fst_cache=self.fst_cache)
-                assert self.filename
-            # if 'dictation' in self._fst_text: _log.log(50, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
+        if not self.filename:
+            self.fst.compute_hash(self.fst_cache.dependencies_hash)
+            assert self.filename
 
         if self.compiler.cache_fsts and self.fst_cache.fst_is_current(self.filepath, touch=False):
             _log.debug("%s: Skipped FST compilation thanks to FileCache" % self)
-            if self.compiler.decoding_framework == 'agf' and self.fst.native:
+            if self.compiler.decoding_framework == 'agf':
                 self.fst.compiled_native_obj = NativeWFST.load_file(self.filepath)
             self.compiled = True
             return self
@@ -128,33 +116,25 @@ class KaldiRule(object):
         # Must be thread-safe!
         with self.cls_lock:
             self.compiler.prepare_for_compilation()
-        _log.log(15, "%s: Compiling %sstate/%sarc FST%s%s" % (self, self.fst.num_states, self.fst.num_arcs,
-                (" (%dbyte)" % len(self._fst_text)) if self._fst_text else "",
+        _log.log(15, "%s: Compiling %sstate/%sarc FST%s" % (self, self.fst.num_states, self.fst.num_arcs,
                 (" to " + self.filename) if self.filename else ""))
-        assert self.fst.native or self._fst_text
         if _log.isEnabledFor(3):
-            if self.fst.native: self.fst.write_file('tmp_G.fst')
+            self.fst.write_file('tmp_G.fst')
             if _log.isEnabledFor(2):
-                if self._fst_text: _log.log(2, '\n    '.join(["%s: FST text:" % self] + self._fst_text.splitlines()))  # log _fst_text
-                elif self.fst.native: self.fst.print()
+                self.fst.print()
 
         try:
             if self.compiler.decoding_framework == 'agf':
-                if self.fst.native:
-                    self.fst.compiled_native_obj = self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True,
-                        output_filename=(self.filepath if self.compiler.cache_fsts else None))
-                else:
-                    self.compiler._compile_agf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
-                    self._fst_text = None  # Free memory
+                self.fst.compiled_native_obj = self.compiler._compile_agf_graph(
+                    nonterm=self.nonterm, input_fst=self.fst, return_output_fst=True,
+                    output_filename=(self.filepath if self.compiler.cache_fsts else None))
 
             elif self.compiler.decoding_framework == 'laf':
-                # self.compiler._compile_laf_graph(compile=True, nonterm=self.nonterm, input_text=self._fst_text, output_filename=self.filepath)
-                # Keep self._fst_text, for adding directly later
                 pass
 
             else: raise KaldiError("unknown compiler.decoding_framework")
         except Exception as e:
-            raise KaldiError("Exception while compiling", self)  # Return this KaldiRule inside exception
+            raise KaldiError("Exception while compiling", self) from e  # Return this KaldiRule inside exception
 
         self.compiled = True
         return self
@@ -170,11 +150,7 @@ class KaldiRule(object):
             # FIXME: why is this necessary?
             self._do_reloading()
         else:
-            if self.compiler.decoding_framework == 'agf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))
-            elif self.compiler.decoding_framework == 'laf':
-                grammar_fst_index = self.decoder.add_grammar_fst(self.id, self.fst) if self.fst.native else self.decoder.add_grammar_fst_text(self.id, self._fst_text)
-            else: raise KaldiError("unknown compiler decoding_framework")
+            grammar_fst_index = self.decoder.add_grammar_fst(self.id, self.fst)
             self.decoder.set_mimic_grammar_fst(self.id, self.fst)
             assert self.id == grammar_fst_index, "add_grammar_fst allocated invalid grammar_fst_index %d != %d for %s" % (grammar_fst_index, self.id, self)
 
@@ -183,13 +159,7 @@ class KaldiRule(object):
         return self
 
     def _do_reloading(self):
-        if self.compiler.decoding_framework == 'agf':
-            self.decoder.reload_grammar_fst(self.id, (self.fst if self.fst.native else self.filepath))
-        elif self.compiler.decoding_framework == 'laf':
-            assert self.fst.native
-            self.decoder.reload_grammar_fst(self.id, self.fst)
-            # if not self.fst.native: self.decoder.reload_grammar_fst_text(self.id, self._fst_text)  # FIXME: not implemented
-        else: raise KaldiError("unknown compiler decoding_framework")
+        self.decoder.reload_grammar_fst(self.id, self.fst)
         self.decoder.set_mimic_grammar_fst(self.id, self.fst)
 
     @contextmanager
@@ -200,7 +170,6 @@ class KaldiRule(object):
         was_loaded = self.loaded
         self.reloading = True
         self.fst.clear()
-        self._fst_text = None
         self.compiled = False
         self.loaded = False
 
@@ -239,8 +208,7 @@ class KaldiRule(object):
         self.closed = True
         self.loaded = False
         self.compiler = None
-        if isinstance(self.fst, NativeWFST):
-            self.fst.close()
+        self.fst.close()
 
     def __enter__(self):
         self._require_compiler()
@@ -255,31 +223,28 @@ class KaldiRule(object):
 class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None,
-            framework='agf-direct', native_fst=True, cache_fsts=True):
-        # Supported parameter combinations:
-        #   framework='agf-indirect' native_fst=False (original method)
-        #   framework='agf-direct' native_fst=False (no external CLI programs needed)
-        #   framework='agf-direct' native_fst=True (no external CLI programs needed; no cache/temp files used)
-        #   framework='laf' native_fst=False (no reloading supported)
-        #   framework='laf' native_fst=True (no reloading supported)
+            framework='agf-direct', cache_fsts=True):
+        """Create a grammar compiler.
+
+        ``framework`` is either ``'agf-direct'`` or ``'laf'``.  Compiler-owned
+        rules always use :class:`NativeWFST`; the removed ``native_fst``
+        option is no longer accepted.  ``cache_fsts`` controls whether
+        compiled AGF graphs are written to and restored from the model cache.
+        """
 
         show_donation_message()
         self._log = _log
 
-        AGF_INTERNAL_COMPILATION = True
+        if framework == 'agf-indirect':
+            raise KaldiError("framework='agf-indirect' was removed; use framework='agf-direct'")
         if framework == 'agf-direct':
             framework = 'agf'
-            AGF_INTERNAL_COMPILATION = True
-        if framework == 'agf-indirect':
-            framework = 'agf'
-            AGF_INTERNAL_COMPILATION = False
-            assert not native_fst, "AGF with NativeWFST not supported"
-            assert cache_fsts, "AGF must cache FSTs"
         self.decoding_framework = framework
-        assert self.decoding_framework in ('agf', 'laf')
+        # 'agf' is accepted as well as 'agf-direct': it is the canonical form stored in
+        # decoding_framework, so that value can be passed back in.
+        if self.decoding_framework not in ('agf', 'laf'):
+            raise KaldiError("Invalid Compiler framework %r; expected 'agf-direct' (canonically 'agf') or 'laf'" % framework)
         self.parsing_framework = 'token'
-        assert self.parsing_framework in ('token', 'text')
-        self.native_fst = bool(native_fst)
         self.cache_fsts = bool(cache_fsts)
         self.alternative_dictation = alternative_dictation
         self._closed = False
@@ -288,13 +253,12 @@ class Compiler(object):
         self.model = Model(model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed)
         self._lexicon_files_stale = False
 
-        if self.native_fst:
-            NativeWFST.init_class(
-                osymbol_table=self.model.words_table,
-                isymbol_table=self.model.words_table if self.decoding_framework != 'laf' else SymbolTable(self.files_dict['words.relabeled.txt']),
-                wildcard_nonterms=self.wildcard_nonterms)
+        NativeWFST.init_class(
+            osymbol_table=self.model.words_table,
+            isymbol_table=self.model.words_table if self.decoding_framework != 'laf' else SymbolTable(self.files_dict['words.relabeled.txt']),
+            wildcard_nonterms=self.wildcard_nonterms)
         self._kaldi_rule_id_allocator = IdAllocator(max_num_exported_rules=1000, max_num_nonexported_rules=9000)
-        self._agf_compiler = self._init_agf_compiler() if AGF_INTERNAL_COMPILATION else None
+        self._agf_compiler = self._init_agf_compiler() if self.decoding_framework == 'agf' else None
         self.decoder = None
 
         words_set = frozenset(self.model.words_table.words)
@@ -343,12 +307,11 @@ class Compiler(object):
             rule.loaded = False
             rule.closed = True
             rule.compiler = None
-            if isinstance(rule.fst, NativeWFST):
-                try:
-                    rule.fst.close()
-                except Exception as error:
-                    if cleanup_error is None:
-                        cleanup_error = error
+            try:
+                rule.fst.close()
+            except Exception as error:
+                if cleanup_error is None:
+                    cleanup_error = error
 
         if cleanup_error is not None:
             raise cleanup_error
@@ -383,7 +346,7 @@ class Compiler(object):
             )
         if self.decoding_framework == 'agf':
             top_fst_rule = self.compile_top_fst()
-            decoder_kwargs.update(top_fst=top_fst_rule.fst_wrapper)
+            decoder_kwargs.update(top_fst=top_fst_rule.fst)
             self.decoder = KaldiAgfNNet3Decoder(**decoder_kwargs)
         elif self.decoding_framework == 'laf':
             self.decoder = KaldiLafNNet3Decoder(**decoder_kwargs)
@@ -450,134 +413,58 @@ class Compiler(object):
                 self._agf_compiler = self._init_agf_compiler()
             self._lexicon_files_stale = False
 
-    def _compile_laf_graph(self, input_text=None, input_filename=None, output_filename=None, **kwargs):
-        self._require_open()
-        # FIXME: documentation
-        with debug_timer(self._log.debug, "laf graph compilation"):
-            format_kwargs = dict(self.files_dict, **kwargs)
-
-            if input_text and input_filename: raise KaldiError("_compile_laf_graph passed both input_text and input_filename")
-            elif input_text: input = ExternalProcess.shell.echo(input_text.encode('utf-8'))
-            elif input_filename: input = input_filename
-            else: raise KaldiError("_compile_laf_graph passed neither input_text nor input_filename")
-            compile_command = input
-            format = ExternalProcess.get_list_formatter(format_kwargs)
-
-            compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
-            # g_filename = output_filename.replace('.fst', '.G.fst')
-            compile_command |= output_filename
-            compile_command()
-            # fstrelabel --relabel_ipairs=relabel G.fst | fstarcsort --sort_type=ilabel | fstconvert --fst_type=const > Gr.fst
-
     def _init_agf_compiler(self):
-        format_kwargs = dict(self.files_dict)
         config = dict(
-            tree_rxfilename = '{tree}',
-            model_rxfilename = '{final_mdl}',
-            lex_rxfilename = '{L_disambig_fst}',
-            disambig_rxfilename = '{disambig_int}',
-            word_syms_filename = '{words_txt}',
+            tree_rxfilename=self.files_dict['tree'],
+            model_rxfilename=self.files_dict['final_mdl'],
+            lex_rxfilename=self.files_dict['L_disambig_fst'],
+            disambig_rxfilename=self.files_dict['disambig_int'],
+            word_syms_filename=self.files_dict['words_txt'],
             )
-        config = { key: value.format(**format_kwargs) for (key, value) in config.items() }
         return KaldiAgfCompiler(config)
 
-    def _compile_agf_graph(self, compile=False, nonterm=False, simplify_lg=True,
-            input_text=None, input_filename=None, input_fst=None,
-            output_filename=None, return_output_fst=False, **kwargs):
+    def _compile_agf_graph(self, nonterm=False, simplify_lg=True,
+            input_filename=None, input_fst=None,
+            output_filename=None, return_output_fst=False):
         """
-        :param compile: bool whether to compile FST (False if it has already been compiled, like importing dictation FST)
         :param nonterm: bool whether rule represents a nonterminal in the active-grammar-fst (only False for the top FST?)
         :param simplify_lg: bool whether to simplify LG (disambiguate, and more) (do for command grammars, but not for dictation graph!)
         """
         self._require_open()
         # Must be thread-safe!
-        # Possible combinations of (compile,nonterm): (True,True) (True,False) (False,True)
-        # FIXME: documentation
+        if 1 != sum(int(i is not None) for i in [input_filename, input_fst]):
+            raise KaldiError("must pass exactly one input")
+        if self._agf_compiler is None:
+            raise KaldiError("AGF graph compilation is not available with framework=%r" % self.decoding_framework)
+
         verbose_level = 3 if self._log.isEnabledFor(5) else 0
-        format_kwargs = dict(self.files_dict, input_filename=input_filename, output_filename=output_filename, verbose=verbose_level, **kwargs)
-        format_kwargs.update(nonterm_phones_offset=self.model.nonterm_phones_offset)
-        format_kwargs.update(words_nonterm_begin=self.model.nonterm_words_offset, words_nonterm_end=self.model.nonterm_words_offset+1)
-        format_kwargs.update(simplify_lg=str(bool(simplify_lg)).lower())
-
-        if self._agf_compiler:
-            # Internal-style (no external CLI programs)
-            config = dict(
-                nonterm_phones_offset = self.model.nonterm_phones_offset,
-                disambig_rxfilename = '{disambig_int}',
-                simplify_lg = simplify_lg,
-                verbose = verbose_level,
-                tree_rxfilename = '{tree}',
-                model_rxfilename = '{final_mdl}',
-                lex_rxfilename = '{L_disambig_fst}',
-                word_syms_filename = '{words_txt}',
+        config = dict(
+            nonterm_phones_offset=self.model.nonterm_phones_offset,
+            disambig_rxfilename=self.files_dict['disambig_int'],
+            simplify_lg=bool(simplify_lg),
+            verbose=verbose_level,
+            tree_rxfilename=self.files_dict['tree'],
+            model_rxfilename=self.files_dict['final_mdl'],
+            lex_rxfilename=self.files_dict['L_disambig_fst'],
+            word_syms_filename=self.files_dict['words_txt'],
+            )
+        if output_filename:
+            config['hclg_wxfilename'] = output_filename
+        elif self.tmp_dir is not None and self._log.isEnabledFor(3):
+            import datetime
+            config['hclg_wxfilename'] = os.path.join(
+                self.tmp_dir, datetime.datetime.now().isoformat().replace(':', '') + '.fst')
+        if nonterm:
+            config.update(
+                grammar_prepend_nonterm=self.model.nonterm_words_offset,
+                grammar_append_nonterm=self.model.nonterm_words_offset + 1,
                 )
-            if output_filename:
-                config.update(hclg_wxfilename=output_filename)
-            elif self._log.isEnabledFor(3):
-                import datetime
-                config.update(hclg_wxfilename=os.path.join(self.tmp_dir, datetime.datetime.now().isoformat().replace(':', '') + '.fst'))
-            if nonterm:
-                config.update(grammar_prepend_nonterm=self.model.nonterm_words_offset, grammar_append_nonterm=self.model.nonterm_words_offset+1)
-            config = { key: value.format(**format_kwargs) if isinstance(value, str) else value for (key, value) in config.items() }
 
-            if 1 != sum(int(i is not None) for i in [input_text, input_filename, input_fst]):
-                raise KaldiError("must pass exactly one input")
-            if input_text:
-                return self._agf_compiler.compile_graph(config, grammar_fst_text=input_text, return_graph=return_output_fst)
-            if input_filename:
-                return self._agf_compiler.compile_graph(config, grammar_fst_file=input_filename, return_graph=return_output_fst)
-            if input_fst:
-                return self._agf_compiler.compile_graph(config, grammar_fst=input_fst, return_graph=return_output_fst)
-
-        elif True:
-            # Pipeline-style
-            assert not input_fst
-            if input_text and input_filename: raise KaldiError("_compile_agf_graph passed both input_text and input_filename")
-            elif input_text: input = ExternalProcess.shell.echo(input_text.encode('utf-8'))
-            elif input_filename: input = input_filename
-            else: raise KaldiError("_compile_agf_graph passed neither input_text nor input_filename")
-            compile_command = input
-            format = ExternalProcess.get_list_formatter(format_kwargs)
-            args = []
-
-            # if True: (input | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | ExternalProcess.fstinfo | 'stats.log+')()
-            # if True: (ExternalProcess.shell.echo(input_text) | ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}')) | (output_filename+'-G'))()
-
-            if compile:
-                compile_command |= ExternalProcess.fstcompile(*format('--isymbols={words_txt}', '--osymbols={words_txt}'))
-                if self._log.isEnabledFor(5):
-                    g_txt_filename = output_filename.replace('.fst', '.G.fst.txt')
-                    self._log.log(5, "Saving text grammar FST to %s", g_txt_filename)
-                    with open(g_txt_filename, 'wb') as f: shutil.copyfileobj(copy.deepcopy(compile_command.commands[0].get_opt('stdin')), f)
-                    g_filename = output_filename.replace('.fst', '.G.fst')
-                    self._log.log(5, "Saving compiled grammar FST to %s", g_filename)
-                    (copy.deepcopy(compile_command) | g_filename)()
-                args.extend(['--arcsort-grammar'])
-            if nonterm:
-                args.extend(format('--grammar-prepend-nonterm={words_nonterm_begin}', '--grammar-append-nonterm={words_nonterm_end}'))
-            args.extend(format(
-                '--nonterm-phones-offset={nonterm_phones_offset}',
-                '--read-disambig-syms={disambig_int}',
-                '--simplify-lg={simplify_lg}',
-                '--verbose={verbose}',
-                '{tree}', '{final_mdl}', '{L_disambig_fst}', '-', '{output_filename}'))
-            compile_command |= ExternalProcess.compile_graph_agf(*args, **ExternalProcess.get_debug_stderr_kwargs(self._log))
-            ExternalProcess.execute_command_safely(compile_command, self._log)
-
-            # if True: (ExternalProcess.shell.echo('%s -> %s\n' % (len(input_text), get_time_spent())) | ExternalProcess.shell('cat') | 'stats.log+')()
-
-        else:
-            # CLI-style (deprecated!)
-            assert not input_fst
-            run = lambda cmd, **kwargs: run_subprocess(cmd, format_kwargs, "agf graph compilation step", format_kwargs_update=dict(input_filename=output_filename), **kwargs)
-            if compile: run("{exec_dir}fstcompile --isymbols={words_txt} --osymbols={words_txt} {input_filename}.txt {output_filename}")
-            # run("cp {input_filename} {output_filename}-G")
-            if compile: run("{exec_dir}fstarcsort --sort_type=ilabel {input_filename} {output_filename}")
-            if nonterm: run("{exec_dir}fstconcat {tmp_dir}nonterm_begin.fst {input_filename} {output_filename}")
-            if nonterm: run("{exec_dir}fstconcat {input_filename} {tmp_dir}nonterm_end.fst {output_filename}")
-            # run("cp {input_filename} {output_filename}-G")
-            run("{exec_dir}compile-graph --nonterm-phones-offset={nonterm_phones_offset} --read-disambig-syms={disambig_int} --verbose={verbose}"
-                + " {tree} {final_mdl} {L_disambig_fst} {input_filename} {output_filename}")
+        if input_filename is not None:
+            return self._agf_compiler.compile_graph(
+                config, grammar_fst_file=input_filename, return_graph=return_output_fst)
+        return self._agf_compiler.compile_graph(
+            config, grammar_fst=input_fst, return_graph=return_output_fst)
 
     def compile_plain_dictation_fst(self, g_filename=None, output_filename=None):
         if g_filename is None: g_filename = self._default_dictation_g_fst_filepath
@@ -874,15 +761,6 @@ def remove_nonterms_in_words(words):
 
 def remove_nonterms_in_text(text):
     return remove_words_in_text(text, lambda word: word.startswith('#nonterm:'))
-
-def run_subprocess(cmd, format_kwargs, description=None, format_kwargs_update=None, **kwargs):
-    with debug_timer(_log.debug, description or "description", False), open(os.devnull, 'wb') as devnull:
-        output = None if _log.isEnabledFor(logging.DEBUG) else devnull
-        args = shlex.split(cmd.format(**format_kwargs), posix=(platform != 'windows'))
-        _log.log(5, "subprocess.check_call(%r)", args)
-        subprocess.check_call(args, stdout=output, stderr=output, **kwargs)
-        if format_kwargs_update:
-            format_kwargs.update(format_kwargs_update)
 
 class IdAllocator(object):
 

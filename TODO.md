@@ -1,13 +1,12 @@
 # TODO
 
+Test CLI path that still uses file-based AGF compilation: python -m kaldi_active_grammar compile_agf_dictation_graph.
+
 ## Develop-to-master merge follow-up
 
 - Fix the parser regression in `Compiler.parse_output_for_rule_token`, or
   remove the stale path and update its callers and tests so parser output is
   handled through the supported rule-matching API.
-- Restore support for the documented non-native `agf-direct` and `laf` modes,
-  or remove those modes from the public documentation and add explicit tests
-  for the supported combinations.
 - Add a memory regression test that repeatedly loads and closes real AGF and
   LAF grammars, checking that process memory reaches a stable plateau rather
   than only testing an empty `Compiler` context.

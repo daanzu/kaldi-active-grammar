@@ -4,7 +4,7 @@ from typing import Callable, Optional, Union
 
 import pytest
 
-from kaldi_active_grammar import Compiler, KaldiRule, NativeWFST, WFST
+from kaldi_active_grammar import Compiler, KaldiRule, NativeWFST
 from tests.helpers import *
 
 
@@ -28,10 +28,10 @@ class TestGrammar:
         yield
         self.compiler.close()
 
-    def make_rule(self, name: str, build_func: Callable[[Union[NativeWFST, WFST]], None], **kwargs) -> KaldiRule:
+    def make_rule(self, name: str, build_func: Callable[[NativeWFST], None], **kwargs) -> KaldiRule:
         rule = KaldiRule(self.compiler, name, **kwargs)
         assert rule.name == name
-        assert rule.fst is not None
+        assert isinstance(rule.fst, NativeWFST)
         build_func(rule.fst)
         rule.compile()
         assert rule.compiled

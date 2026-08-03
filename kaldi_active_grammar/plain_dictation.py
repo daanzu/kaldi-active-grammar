@@ -45,7 +45,7 @@ class PlainDictationRecognizer(object):
             top_fst_rule = self._compiler.compile_top_fst_dictation_only()
             dictation_fst_file = self._compiler.dictation_fst_filepath
             self.decoder = KaldiAgfNNet3Decoder(model_dir=self._compiler.model_dir, tmp_dir=self._compiler.tmp_dir,
-                top_fst=top_fst_rule.fst_wrapper, dictation_fst_file=dictation_fst_file, **kwargs)
+                top_fst=top_fst_rule.fst, dictation_fst_file=dictation_fst_file, **kwargs)
 
     def close(self):
         """Release the decoder and any internally owned compiler."""

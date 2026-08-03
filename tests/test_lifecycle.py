@@ -255,7 +255,7 @@ def test_agf_compiler_rejects_uninitialized_compiler():
 def test_rule_filepath_rejects_missing_temporary_directory():
     rule = object.__new__(KaldiRule)
     rule.compiler = SimpleNamespace(tmp_dir=None)
-    rule.fst = SimpleNamespace(filename='rule.fst')
+    rule.fst = SimpleNamespace(filename='rule.fst', close=lambda: None)
     rule.closed = False
 
     with pytest.raises(KaldiError, match='temporary directory'):
@@ -268,7 +268,7 @@ def make_closable_rule(compiler, rule_id=-1):
     rule.id = rule_id
     rule.loaded = False
     rule.closed = False
-    rule.fst = SimpleNamespace(native=False)
+    rule.fst = SimpleNamespace(close=lambda: None)
     return rule
 
 

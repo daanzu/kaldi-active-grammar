@@ -357,9 +357,7 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
         DRAGONFLY_API void* nnet3_agf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool nnet3_agf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
-        DRAGONFLY_API int32_t nnet3_agf__add_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
-        DRAGONFLY_API bool nnet3_agf__reload_grammar_fst_file(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_agf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool nnet3_agf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
             int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size, bool save_adaptation_state);
@@ -387,7 +385,6 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
             })
         if isinstance(top_fst, NativeWFST):
             self.config_dict.update({'top_fst': int(_ffi.cast("uint64_t", top_fst._get_compiled_native_obj()))})
-        elif isinstance(top_fst, str): self.config_dict.update({'top_fst_filename': os.path.normpath(top_fst)})
         else: raise KaldiError("unrecognized top_fst type")
         if config: self.config_dict.update(config)
 
@@ -402,12 +399,10 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
 
     def add_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.log(8, "%s: adding grammar_fst: %r", self, grammar_fst)
-        if isinstance(grammar_fst, NativeWFST):
-            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(
-                self._get_model(), grammar_fst_index, grammar_fst._get_compiled_native_obj())
-        elif isinstance(grammar_fst, str):
-            grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst_file(self._get_model(), grammar_fst_index, en(os.path.normpath(grammar_fst)))
-        else: raise KaldiError("unrecognized grammar_fst type")
+        if not isinstance(grammar_fst, NativeWFST):
+            raise KaldiError("unrecognized grammar_fst type")
+        grammar_fst_index = self._lib.nnet3_agf__add_grammar_fst(
+            self._get_model(), grammar_fst_index, grammar_fst._get_compiled_native_obj())
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst)
         self.num_grammars += 1
@@ -415,12 +410,10 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
 
     def reload_grammar_fst(self, grammar_fst_index, grammar_fst):
         _log.debug("%s: reloading grammar_fst_index: #%s %r", self, grammar_fst_index, grammar_fst)
-        if isinstance(grammar_fst, NativeWFST):
-            result = self._lib.nnet3_agf__reload_grammar_fst(
-                self._get_model(), grammar_fst_index, grammar_fst._get_compiled_native_obj())
-        elif isinstance(grammar_fst, str):
-            result = self._lib.nnet3_agf__reload_grammar_fst_file(self._get_model(), grammar_fst_index, en(os.path.normpath(grammar_fst)))
-        else: raise KaldiError("unrecognized grammar_fst type")
+        if not isinstance(grammar_fst, NativeWFST):
+            raise KaldiError("unrecognized grammar_fst type")
+        result = self._lib.nnet3_agf__reload_grammar_fst(
+            self._get_model(), grammar_fst_index, grammar_fst._get_compiled_native_obj())
         if not result:
             raise KaldiError("error reloading grammar #%s %r" % (grammar_fst_index, grammar_fst))
 
@@ -462,7 +455,6 @@ class KaldiAgfCompiler(FFIObject):
         DRAGONFLY_API void* nnet3_agf__construct_compiler(char* config_str_cp);
         DRAGONFLY_API bool nnet3_agf__destruct_compiler(void* compiler_vp);
         DRAGONFLY_API void* nnet3_agf__compile_graph(void* compiler_vp, char* config_str_cp, void* grammar_fst_cp, bool return_graph);
-        DRAGONFLY_API void* nnet3_agf__compile_graph_text(void* compiler_vp, char* config_str_cp, char* grammar_fst_text_cp, bool return_graph);
         DRAGONFLY_API void* nnet3_agf__compile_graph_file(void* compiler_vp, char* config_str_cp, char* grammar_fst_filename_cp, bool return_graph);
     """
 
@@ -478,8 +470,8 @@ class KaldiAgfCompiler(FFIObject):
     def _get_compiler(self):
         return self._require_native(getattr(self, '_compiler', None), 'AGF compiler')
 
-    def compile_graph(self, config, grammar_fst=None, grammar_fst_text=None, grammar_fst_file=None, return_graph=False):
-        if 1 != sum(int(g is not None) for g in [grammar_fst, grammar_fst_text, grammar_fst_file]):
+    def compile_graph(self, config, grammar_fst=None, grammar_fst_file=None, return_graph=False):
+        if 1 != sum(int(g is not None) for g in [grammar_fst, grammar_fst_file]):
             raise ValueError("must pass exactly one grammar")
         if grammar_fst is not None:
             if not isinstance(grammar_fst, NativeWFST):
@@ -487,10 +479,6 @@ class KaldiAgfCompiler(FFIObject):
             _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst=%r", config, grammar_fst)
             result = self._lib.nnet3_agf__compile_graph(
                 self._get_compiler(), en(json.dumps(config)), grammar_fst._get_native_obj(), return_graph)
-            return result
-        if grammar_fst_text is not None:
-            _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_text:\n%s", config, grammar_fst_text)
-            result = self._lib.nnet3_agf__compile_graph_text(self._get_compiler(), en(json.dumps(config)), en(grammar_fst_text), return_graph)
             return result
         if grammar_fst_file is not None:
             _log.log(5, "compile_graph:\n    config=%r\n    grammar_fst_file=%r", config, grammar_fst_file)
@@ -507,7 +495,6 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
         DRAGONFLY_API void* nnet3_laf__construct(char* model_dir_cp, char* config_str_cp, int32_t verbosity);
         DRAGONFLY_API bool nnet3_laf__destruct(void* model_vp);
         DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
-        DRAGONFLY_API int32_t nnet3_laf__add_grammar_fst_text(void* model_vp, int32_t grammar_fst_index, char* grammar_fst_text_cp);
         DRAGONFLY_API bool nnet3_laf__reload_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_laf__remove_grammar_fst(void* model_vp, int32_t grammar_fst_index);
         DRAGONFLY_API bool nnet3_laf__decode(void* model_vp, float samp_freq, uint32_t num_frames, float* frames, bool finalize,
@@ -544,15 +531,6 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
             self._get_model(), grammar_fst_index, grammar_fst._get_native_obj())
         if grammar_fst_index < 0:
             raise KaldiError("error adding grammar %r" % grammar_fst)
-        self.num_grammars += 1
-        return grammar_fst_index
-
-    def add_grammar_fst_text(self, grammar_fst_index, grammar_fst_text):
-        assert grammar_fst_text
-        _log.log(8, "%s: adding grammar_fst_text: %r", self, grammar_fst_text[:512])
-        grammar_fst_index = self._lib.nnet3_laf__add_grammar_fst_text(self._get_model(), grammar_fst_index, en(grammar_fst_text))
-        if grammar_fst_index < 0:
-            raise KaldiError("error adding grammar %r" % grammar_fst_text[:512])
         self.num_grammars += 1
         return grammar_fst_index
 

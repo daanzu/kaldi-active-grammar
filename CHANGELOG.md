@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * Rule IDs are stable for a rule's lifetime and do not shift when another rule is unloaded; a freed ID may later be reused by a new rule.
   * **This requires a matching Kaldi fork build**: the native side now interprets the activity array as a set of active rule IDs. The ABI signature is unchanged (`int32_t*`), so mixing this Python version with an older native library will silently misinterpret activity.
 * **Breaking: lifecycle cleanup now uses `close()` exclusively.** The obsolete `destroy()` and `NativeWFST.destruct()` aliases were removed, and `KaldiRule` now supports deterministic close and context-manager cleanup.
+* **Breaking: compiler FSTs are now native-only.** `Compiler` no longer accepts `native_fst`, `agf-indirect`, or non-native rule graphs; every `KaldiRule.fst` is a `NativeWFST`. `WFST` remains available as a standalone utility, while AGF graph caching continues to use native graph hashes and `NativeWFST.load_file`.
+  * AGF graph compilation is unavailable when `framework='laf'`; LAF receives native rule FSTs directly and does not construct an AGF compiler.
+  * AGF grammar add/reload and top-graph decoder inputs now use native FST pointers; file-backed inputs remain for AGF graph compilation and dictation graphs.
 
 ## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-11-02 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
 

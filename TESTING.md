@@ -18,8 +18,9 @@ just test
 just test-separately
 ```
 
-Grammar integration cases are parameterized for the direct active-grammar
-framework (`agf`) and lookahead framework (`laf`). LAF cases require
+Grammar integration cases are parameterized for the supported native-FST
+frameworks: direct active grammar (`agf-direct`) and lookahead (`laf`). Every
+case asserts that compiler-managed rules use `NativeWFST`. LAF cases require
 `HCLr.fst`, `Gr.fst`, `disambig_tid.int`, `relabel_ilabels.int`, and
 `words.relabeled.txt` in `tests/kaldi_model`; pytest reports a skip naming any
 missing files.

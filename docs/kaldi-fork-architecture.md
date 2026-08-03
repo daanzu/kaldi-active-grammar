@@ -61,9 +61,10 @@ flowchart LR
 
 The Python repository owns the public product:
 
-- `compiler.py` represents rules as WFSTs, assigns stable rule IDs, compiles them, and loads/reloads/removes them from the decoder.
+- `compiler.py` represents rules as `NativeWFST`s, assigns stable rule IDs, compiles them, and loads/reloads/removes them from the decoder.
 - `model.py` validates the model directory, maintains symbol tables and pronunciations, and regenerates lexicon-derived artifacts.
-- `wfst.py` offers Python and native-backed WFST representations.
+- `wfst.py` offers the standalone Python `WFST` utility and the native-backed
+  `NativeWFST` used by the compiler.
 - `wrapper.py` provides Python decoder/compiler classes over the C ABI.
 - `ffi.py` locates and loads the platform-specific native library with CFFI.
 - `plain_dictation.py` supplies the simpler monolithic-dictation API.
@@ -141,9 +142,9 @@ flowchart TB
 
 ### 4.1 Python grammar layer
 
-A `KaldiRule` has an integer `id`, a WFST, compile/load state, and a link to its `Compiler`. IDs are dense and ordered. This is not merely bookkeeping: rule ID `i`, decoder grammar index `i`, activity-vector element `i`, and nonterminal `#nonterm:rulei` must all identify the same rule.
+A `KaldiRule` has an integer `id`, a `NativeWFST`, compile/load state, and a link to its `Compiler`. Every compiler-managed rule uses `NativeWFST`; the standalone Python `WFST` is not consumed by `Compiler`. IDs are dense and ordered. This is not merely bookkeeping: rule ID `i`, decoder grammar index `i`, active-rule ID set membership, and nonterminal `#nonterm:rulei` must all identify the same rule.
 
-The default `NativeWFST` sends state and arc mutations directly to native OpenFST-backed storage. The older `WFST` representation can serialize text and use a file/pipeline compilation path. Native operation avoids subprocesses and, when caching is disabled, can keep the graph flow entirely in memory.
+`NativeWFST` sends state and arc mutations directly to native OpenFST-backed storage. AGF compilation can keep the compiled graph in memory or write it to the content-addressed cache; cache hits restore the compiled graph with `NativeWFST.load_file`. Decoder and dictation graphs supplied by model files remain file-backed where that is part of their native decoder interface.
 
 ### 4.2 Native graph compiler
 
@@ -186,9 +187,9 @@ Utterance-scoped state includes the online feature pipeline and `SingleUtterance
 
 Its 64-bit state IDs encode both an FST-instance index and a state within that instance. At a prepared nonterminal boundary it expands arcs into the called sub-FST while preserving the left-biphone context needed to enter and return correctly.
 
-Activity is represented by a Boolean vector parallel to the sub-FST list. When a target rule is inactive, the special-state arc iterator reports zero outgoing arcs for that call. The decoder therefore cannot traverse into that grammar. `UpdateActivity` updates cached expanded states selectively rather than rebuilding one monolithic HCLG graph for every context change.
+Activity is represented by a set of active rule IDs. When a target rule is inactive, the special-state arc iterator reports zero outgoing arcs for that call. The decoder therefore cannot traverse into that grammar. `UpdateActivity` updates cached expanded states selectively rather than rebuilding one monolithic HCLG graph for every context change.
 
-Activity is fixed for an utterance. The first decode call supplies the vector and causes decoder construction; later chunks use the same graph selection. This avoids changing the search space underneath live decoder tokens.
+Activity is fixed for an utterance. The first decode call supplies the active rule ID set and causes decoder construction; later chunks use the same graph selection. This avoids changing the search space underneath live decoder tokens.
 
 ## 5. Runtime interactions
 
@@ -210,10 +211,10 @@ sequenceDiagram
     Compiler->>FFI: construct decoder(model paths, offsets, top FST)
     FFI->>Native: nnet3_agf__construct
     Native->>Native: load acoustic model, lexicon, dictation graph
-    App->>Compiler: build KaldiRule WFST
+    App->>Compiler: build KaldiRule NativeWFST
     Compiler->>FFI: compile word FST
     FFI->>Native: nnet3_agf__compile_graph
-    Native-->>Compiler: compiled HCLG pointer or file
+    Native-->>Compiler: compiled HCLG pointer and optional cache file
     Compiler->>FFI: add grammar at rule ID
     FFI->>Native: nnet3_agf__add_grammar_fst
     Native-->>Compiler: grammar index
@@ -268,9 +269,9 @@ The interface has five groups:
 | Group | Representative operations | Data crossing boundary |
 |---|---|---|
 | Decoder lifecycle | `nnet3_agf__construct`, `__destruct` | model path, JSON config, opaque pointer |
-| Grammar lifecycle | `__add_grammar_fst`, `__reload_grammar_fst`, `__remove_grammar_fst` | FST pointer or filename, dense index |
-| Recognition | `nnet3_agf__decode`, `nnet3_base__get_output` | float samples, flags, Boolean vector, output buffers/scores |
-| Graph compilation | `__construct_compiler`, `__compile_graph*` | JSON config, FST/text/file, result pointer |
+| Grammar lifecycle | `__add_grammar_fst`, `__reload_grammar_fst`, `__remove_grammar_fst` | Native FST pointer, dense index |
+| Recognition | `nnet3_agf__decode`, `nnet3_base__get_output` | float samples, flags, active rule IDs, output buffers/scores |
+| Graph compilation | `__construct_compiler`, `__compile_graph`, `__compile_graph_file` | JSON config, native FST or input file, result pointer |
 | WFST/model utilities | `fst__*`, `utils__build_L_disambig` | states, arcs, labels, filenames, opaque pointers |
 
 Opaque `void*` handles keep C++ types out of Python, and JSON configuration limits ABI churn for decoder/compiler options. The cost is that type safety and lifetime rules are conventional rather than encoded in the C signature. Both sides must change together whenever a signature or ownership rule changes.
@@ -286,7 +287,7 @@ instructions.
 
 ### 8.1 LAF
 
-`framework='laf'` keeps word-level rule FSTs and constructs a delayed decode graph using OpenFST `ReplaceFst` and lookahead composition with `HCLr.fst`. At utterance start it includes only active rule FSTs, appends dictation if present, and builds a standard-FST decoder graph. It offers the same high-level activity-vector contract but uses graph replacement/composition rather than `ActiveGrammarFst`'s left-biphone stitching. It is an alternative/experimental implementation, not the default.
+`framework='laf'` keeps word-level rule FSTs and constructs a delayed decode graph using OpenFST `ReplaceFst` and lookahead composition with `HCLr.fst`. At utterance start it includes only active rule FSTs, appends dictation if present, and builds a standard-FST decoder graph. It offers the same high-level active-rule ID set contract but uses graph replacement/composition rather than `ActiveGrammarFst`'s left-biphone stitching. It is an alternative/experimental implementation, not the default.
 
 ### 8.2 Plain dictation
 
@@ -300,7 +301,7 @@ Maintainers should treat the following as hard contracts:
 2. **Stable IDs:** adding uses the compiler-assigned rule ID; removing releases that ID without shifting other rules.
 3. **Utterance immutability:** grammar activity and graph membership cannot change after an utterance decoder has started.
 4. **Activity IDs:** the supplied activity array contains active command-rule IDs only. Its length is the number of active rules; dictation is enabled internally when a dictation graph is configured.
-5. **Symbol agreement:** Python WFST labels, model symbol tables, compiler inputs, top graph, and decoder must share exact integer IDs.
+5. **Symbol agreement:** Python `NativeWFST` labels, model symbol tables, compiler inputs, top graph, and decoder must share exact integer IDs.
 6. **Model topology:** AGF graph compilation requires the supported left-biphone setup and KAG nonterminal augmentation.
 7. **Object lifetime:** native FST/compiler/decoder handles must be destroyed by the matching exported destructor; decoder-owned FST copies must outlive utterance decoders.
 8. **Threading:** a single `ActiveGrammarFst` is not thread-safe. Compilation also contains explicit thread-safety cautions; Python serializes critical preparation with a class lock, then parallelizes rule completion around it.
@@ -315,7 +316,7 @@ The design moves expense to the most reusable level:
 - the dictation graph is compiled and stored once;
 - each command rule is compiled independently and may be cached by content/dependency hash;
 - the active graph is stitched lazily;
-- changing application context sends a compact Boolean vector instead of recompiling a monolithic graph;
+- changing application context sends a compact active-rule ID set instead of recompiling a monolithic graph;
 - native FSTs avoid text serialization and subprocess overhead;
 - utterance decoders are recreated so activity can change safely between utterances while adaptation state may persist.
 
