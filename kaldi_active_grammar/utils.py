@@ -9,6 +9,7 @@ import fnmatch, glob, os
 import functools
 import hashlib, json
 import stat
+import tempfile
 import threading
 from contextlib import contextmanager
 from io import open
@@ -494,8 +495,19 @@ class FSTFileCache(object):
     dependencies_hash = property(lambda self: self.cache['dependencies_hash'])
 
     def save(self):
-        with open(self.cache_filename, 'w', encoding='utf-8') as f:
-            f.write(json.dumps(self.cache, ensure_ascii=False))
+        cache_directory = os.path.dirname(os.path.abspath(self.cache_filename)) or os.curdir
+        fd, temporary_filename = tempfile.mkstemp(prefix='.file_cache.', suffix='.tmp', dir=cache_directory)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(json.dumps(self.cache, ensure_ascii=False))
+            replace = getattr(os, 'replace', os.rename)
+            replace(temporary_filename, self.cache_filename)
+        except Exception:
+            try:
+                os.remove(temporary_filename)
+            except OSError:
+                pass
+            raise
         self.dirty = False
 
     def update_dependencies(self):

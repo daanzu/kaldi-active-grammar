@@ -465,3 +465,25 @@ def test_reloading_refreshed_metadata_returns_to_stat_only_path(tmp_path, monkey
     monkeypatch.setattr(cache, '_hash_file', lambda filepath: pytest.fail('refreshed file was hashed'))
 
     assert cache.file_is_current(str(path))
+
+
+def test_save_replaces_cache_after_closing_temporary_file(tmp_path, monkeypatch):
+    cache = make_cache(tmp_path, {})
+    cache.cache['entries']['entry.txt'] = cache.hash_data(b'entry')
+    cache.dirty = True
+    replacements = []
+    original_replace = os.replace
+
+    def replace(source, destination):
+        assert source != destination
+        with open(source, 'rb') as temporary:
+            temporary.read()
+        replacements.append(source)
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(os, 'replace', replace)
+    cache.save()
+
+    assert replacements
+    assert not os.path.exists(replacements[0])
+    assert not cache.dirty

@@ -339,7 +339,9 @@ class Model(object):
         return [phones]
 
     def create_missing_files(self):
-        utils.touch_file(os.path.join(self.model_dir, 'user_lexicon.txt'))
+        user_lexicon_filename = os.path.join(self.model_dir, 'user_lexicon.txt')
+        if not os.path.exists(user_lexicon_filename):
+            utils.touch_file(user_lexicon_filename)
         def check_file(filename, src_filename):
             # Create missing file from its base file
             if not find_file(self.model_dir, filename):
