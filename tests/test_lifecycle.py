@@ -280,6 +280,7 @@ def assert_closed_rule_accessors_raise(rule):
 
 def test_rule_close_rejects_post_close_accessor_access():
     compiler = SimpleNamespace(
+        decoder=None,
         compile_queue=set(),
         compile_duplicate_filename_queue=set(),
         load_queue=set(),
@@ -291,8 +292,24 @@ def test_rule_close_rejects_post_close_accessor_access():
     assert_closed_rule_accessors_raise(rule)
 
 
+def test_rule_close_skips_unload_when_decoder_is_gone():
+    compiler = SimpleNamespace(
+        decoder=None,
+        compile_queue=set(),
+        compile_duplicate_filename_queue=set(),
+        load_queue=set(),
+        )
+    rule = make_closable_rule(compiler)
+    rule.loaded = True
+
+    rule.close()
+
+    assert rule.closed
+
+
 def test_rule_context_manager_closes_rule():
     compiler = SimpleNamespace(
+        decoder=None,
         compile_queue=set(),
         compile_duplicate_filename_queue=set(),
         load_queue=set(),
@@ -312,15 +329,30 @@ def test_compiler_close_rejects_post_close_accessor_access():
     compiler.decoder = None
     compiler._agf_compiler = None
     compiler.kaldi_rule_by_id_dict = {}
+    compiler._all_rules = weakref.WeakSet()
     compiler.compile_queue = set()
     compiler.compile_duplicate_filename_queue = set()
     compiler.load_queue = set()
     rule = make_closable_rule(compiler)
+    compiler._all_rules.add(rule)
     compiler.kaldi_rule_by_id_dict[rule.id] = rule
 
     compiler.close()
 
     assert_closed_rule_accessors_raise(rule)
+
+
+def test_compiler_close_closes_nonterm_rule_native_fst(change_to_test_dir):
+    disable_donation_message()
+    compiler = Compiler()
+    rule = KaldiRule(compiler, 'top', nonterm=False, exported=False)
+    native_fst = rule.fst
+    assert isinstance(native_fst, NativeWFST)
+
+    compiler.close()
+
+    assert rule.closed
+    assert native_fst.native_obj is None
 
 
 def test_native_wfst_pointer_accessors_reject_closed_objects():

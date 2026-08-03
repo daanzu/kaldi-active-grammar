@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0; see LICENSE.txt file.
 #
 
-import collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess, threading
+import collections, copy, logging, multiprocessing, os, re, shlex, shutil, subprocess, threading, weakref
 import concurrent.futures
 from contextlib import contextmanager
 from io import open
@@ -59,6 +59,7 @@ class KaldiRule(object):
         self.fst = WFST() if not self.compiler.native_fst else NativeWFST()
         self.matcher = None
         self.active = True
+        self.compiler._all_rules.add(self)
 
     def __repr__(self):
         return "%s(%s, %s)" % (self.__class__.__name__, self.id, self.name)
@@ -221,7 +222,7 @@ class KaldiRule(object):
 
         compiler = self.compiler
 
-        if self.loaded:
+        if self.loaded and compiler.decoder is not None:
             self.decoder.remove_grammar_fst(self.id)
             assert self not in compiler.compile_queue
             assert self not in compiler.compile_duplicate_filename_queue
@@ -305,6 +306,7 @@ class Compiler(object):
         self.compile_queue = set()  # KaldiRule
         self.compile_duplicate_filename_queue = set()  # KaldiRule; queued KaldiRules with a duplicate filename (and thus contents), so can skip compilation
         self.load_queue = set()  # KaldiRule; must maintain same order as order of instantiation!
+        self._all_rules = weakref.WeakSet()  # Every KaldiRule created by this Compiler
 
     def close(self):
         """Release native resources owned by this compiler, once."""
@@ -331,11 +333,12 @@ class Compiler(object):
         # Rules point back to this compiler.  Break those cycles after native
         # decoder teardown; unloading individual grammars is neither necessary
         # nor valid once the decoder has gone away.
-        rules = list(self.kaldi_rule_by_id_dict.values())
+        rules = list(self._all_rules)
         self.kaldi_rule_by_id_dict.clear()
         self.compile_queue.clear()
         self.compile_duplicate_filename_queue.clear()
         self.load_queue.clear()
+        self._all_rules.clear()
         for rule in rules:
             rule.loaded = False
             rule.closed = True
