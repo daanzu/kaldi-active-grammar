@@ -227,7 +227,8 @@ class KaldiRule(object):
 class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None,
-            framework='agf-direct', cache_fsts=True):
+            framework='agf-direct', cache_fsts=True,
+            strict_content_validation=False):
         """Create a grammar compiler.
 
         ``framework`` is either ``'agf-direct'`` or ``'laf'``.  Compiler-owned
@@ -254,7 +255,10 @@ class Compiler(object):
         self._closed = False
 
         tmp_dir_needed = bool(self.cache_fsts)
-        self.model = Model(model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed)
+        self.model = Model(
+            model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed,
+            strict_content_validation=strict_content_validation,
+        )
         self._lexicon_files_stale = False
 
         NativeWFST.init_class(

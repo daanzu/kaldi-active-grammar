@@ -179,7 +179,8 @@ class Lexicon(object):
 ########################################################################################################################
 
 class Model(object):
-    def __init__(self, model_dir=None, tmp_dir=None, tmp_dir_needed=False):
+    def __init__(self, model_dir=None, tmp_dir=None, tmp_dir_needed=False,
+            strict_content_validation=False):
         show_donation_message()
 
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
@@ -212,7 +213,7 @@ class Model(object):
         self.create_missing_files()
         self.check_user_lexicon()
 
-        self.files_dict = {
+        primary_files = {
             'exec_dir': self.exec_dir,
             'model_dir': self.model_dir,
             'tmp_dir': self.tmp_dir,
@@ -237,8 +238,20 @@ class Model(object):
             'relabel_ilabels.int': find_file(self.model_dir, 'relabel_ilabels.int'),
             'words.relabeled.txt': find_file(self.model_dir, 'words.relabeled.txt', default=True),
         }
-        self.files_dict.update({ k.replace('.', '_'): v for (k, v) in self.files_dict.items() })  # For named placeholder access in str.format()
-        self.fst_cache = utils.FSTFileCache(os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME), dependencies_dict=self.files_dict, tmp_dir=self.tmp_dir)
+        dependency_files = {
+            name: path for name, path in primary_files.items()
+            if name not in {'exec_dir', 'model_dir', 'tmp_dir'} and path is not None
+        }
+        self.files_dict = dict(primary_files)
+        self.files_dict.update({
+            name.replace('.', '_'): path for name, path in primary_files.items()
+        })  # For named placeholder access in str.format()
+        self.fst_cache = utils.FSTFileCache(
+            os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME),
+            dependencies_dict=dependency_files,
+            tmp_dir=self.tmp_dir,
+            strict_content_validation=strict_content_validation,
+        )
 
         self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
         self.lexicon = Lexicon(self.phone_to_int_dict.keys())
