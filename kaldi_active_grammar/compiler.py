@@ -184,6 +184,13 @@ class KaldiRule(object):
             self.compiler.load_queue.add(self)
         self.reloading = False
 
+    def _release(self):
+        """Drop compiler/native references, marking this rule dead; idempotent."""
+        self.closed = True
+        self.loaded = False
+        self.compiler = None
+        self.fst.close()
+
     def close(self):
         """Release this rule and its native FST, once."""
         if self.closed:
@@ -205,10 +212,7 @@ class KaldiRule(object):
             del compiler.kaldi_rule_by_id_dict[self.id]
             compiler._kaldi_rule_id_allocator.free_id(self.id)
 
-        self.closed = True
-        self.loaded = False
-        self.compiler = None
-        self.fst.close()
+        self._release()
 
     def __enter__(self):
         self._require_compiler()
@@ -304,11 +308,8 @@ class Compiler(object):
         self.load_queue.clear()
         self._all_rules.clear()
         for rule in rules:
-            rule.loaded = False
-            rule.closed = True
-            rule.compiler = None
             try:
-                rule.fst.close()
+                rule._release()
             except Exception as error:
                 if cleanup_error is None:
                     cleanup_error = error

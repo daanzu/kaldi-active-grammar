@@ -13,7 +13,6 @@ Test CLI path that still uses file-based AGF compilation: python -m kaldi_active
 - Correct and enforce the paired Python/native commit metadata and lockstep
   release workflow; record the exact native fork revision used to build and
   test each Python revision.
-- Cleanup `Compiler.close()`?
 
 ## LAF grammar FST storage
 
