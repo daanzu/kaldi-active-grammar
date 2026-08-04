@@ -145,17 +145,20 @@ def test_dependency_hash_is_order_independent(tmp_path):
     assert one.dependencies_hash == two.dependencies_hash
 
 
-def test_content_change_changes_dependency_hash(tmp_path):
+def test_content_change_resets_once_then_warms(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'old')
     first = make_cache(tmp_path, {'dep': str(path)})
     old_hash = first.dependencies_hash
     path.write_bytes(b'new content')
 
-    second = make_cache(tmp_path, {'dep': str(path)})
+    reset = make_cache(tmp_path, {'dep': str(path)})
+    warm = make_cache(tmp_path, {'dep': str(path)})
 
-    assert second.cache_is_new
-    assert second.dependencies_hash != old_hash
+    assert reset.cache_is_new
+    assert reset.dependencies_hash != old_hash
+    assert not warm.cache_is_new
+    assert warm.dependencies_hash == reset.dependencies_hash
 
 
 def test_touching_dependency_refreshes_metadata_without_changing_hash(tmp_path):
@@ -233,7 +236,8 @@ def test_model_warms_when_optional_laf_files_are_absent(tmp_path, monkeypatch):
     assert first._fst_cache.cache_is_new
     assert not second._fst_cache.cache_is_new
     assert len(generated) == 1
-    assert 'words.relabeled.txt' not in first._fst_cache._state['dependency_ids']
+    assert 'words.relabeled.txt' in first._fst_cache._state['dependency_ids']
+    assert first._fst_cache._state['records']['words.relabeled.txt'] == {'absent': True}
 
 
 def test_model_records_generated_laf_file(tmp_path, monkeypatch):
@@ -256,6 +260,41 @@ def test_model_records_generated_laf_file(tmp_path, monkeypatch):
     assert not second._fst_cache.cache_is_new
     assert len(generated) == 1
     assert 'words.relabeled.txt' in first._fst_cache._state['records']
+
+
+def test_model_warms_after_optional_laf_dependency_appears(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    relabel_path = model_dir / 'relabel_ilabels.int'
+    words_relabeled_path = model_dir / 'words.relabeled.txt'
+    relabel_path.unlink()
+    words_relabeled_path.unlink()
+    lexicon_regenerations = []
+    relabeled_generations = []
+    monkeypatch.setattr(Model, 'generate_lexicon_files',
+        lambda self: lexicon_regenerations.append(self.model_dir))
+
+    first = Model(str(model_dir), tmp_dir_needed=False)
+    absent_warm = Model(str(model_dir), tmp_dir_needed=False)
+    relabel_path.write_bytes(b'2 2\n')
+
+    def generate_relabeled(words_filename, relabel_filename, output_filename):
+        relabeled_generations.append(output_filename)
+        shutil.copyfile(words_filename, output_filename)
+
+    monkeypatch.setattr(Model, 'generate_words_relabeled_file', staticmethod(generate_relabeled))
+    reset = Model(str(model_dir), tmp_dir_needed=False)
+    present_warm = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert first._fst_cache.cache_is_new
+    assert not absent_warm._fst_cache.cache_is_new
+    assert reset._fst_cache.cache_is_new
+    assert not present_warm._fst_cache.cache_is_new
+    assert len(lexicon_regenerations) == 2
+    assert relabeled_generations == [str(words_relabeled_path)]
+    assert reset._fst_cache._state['records']['relabel_ilabels.int']['digest']
+    assert reset._fst_cache._state['records']['words.relabeled.txt']['digest']
 
 
 def test_warm_model_stats_each_physical_dependency_once(tmp_path, monkeypatch):
@@ -293,13 +332,33 @@ def test_warm_model_hashes_each_dependency_once_in_strict_mode(tmp_path, monkeyp
     assert len(set(hash_paths)) == 18
 
 
-def test_missing_dependency_is_stale_on_reload(tmp_path):
+def test_deleted_dependency_resets_once_then_warms(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'present')
     make_cache(tmp_path, {'dep': str(path)})
     path.unlink()
 
-    assert make_cache(tmp_path, {'dep': str(path)}).cache_is_new
+    reset = make_cache(tmp_path, {'dep': str(path)})
+    warm = make_cache(tmp_path, {'dep': str(path)})
+
+    assert reset.cache_is_new
+    assert reset._state['records']['dependency.txt'] == {'absent': True}
+    assert not warm.cache_is_new
+
+
+def test_absent_dependency_appearing_resets_once_then_warms(tmp_path):
+    path = tmp_path / 'dependency.txt'
+    first = make_cache(tmp_path, {'dep': str(path)})
+    absent_hash = first.dependencies_hash
+    path.write_bytes(b'present')
+
+    reset = make_cache(tmp_path, {'dep': str(path)})
+    warm = make_cache(tmp_path, {'dep': str(path)})
+
+    assert reset.cache_is_new
+    assert reset._state['records']['dependency.txt']['digest']
+    assert reset.dependencies_hash != absent_hash
+    assert not warm.cache_is_new
 
 
 def test_unchanged_dependencies_use_stat_only(model_files, monkeypatch):

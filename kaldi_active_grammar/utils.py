@@ -445,6 +445,8 @@ class _FSTFileCache(object):
         stat_result, metadata = self._stat_file(spec['path'])
         result['metadata'] = metadata
         if stat_result is None:
+            result['current'] = bool(
+                isinstance(record, dict) and record.get('absent'))
             if memo is not None:
                 memo[runtime_path] = result
             return result
@@ -457,16 +459,14 @@ class _FSTFileCache(object):
             return result
         result['regular'] = True
 
-        if not isinstance(record, dict) or not record.get('digest'):
-            if memo is not None:
-                memo[runtime_path] = result
-            return result
-
-        recorded_metadata = (record.get('size'), record.get('mtime_ns'))
-        if (not self.strict_content_validation and
+        recorded_digest = record.get('digest') if isinstance(record, dict) else None
+        recorded_metadata = (
+            (record.get('size'), record.get('mtime_ns'))
+            if recorded_digest else None)
+        if (recorded_digest and not self.strict_content_validation and
                 recorded_metadata == metadata):
             result['current'] = True
-            result['digest'] = record['digest']
+            result['digest'] = recorded_digest
             if memo is not None:
                 memo[runtime_path] = result
             return result
@@ -475,7 +475,8 @@ class _FSTFileCache(object):
         result['metadata'] = final_metadata or metadata
         result['digest'] = digest
         result['stable'] = stable
-        result['current'] = bool(stable and digest == record.get('digest'))
+        result['current'] = bool(
+            recorded_digest and stable and digest == recorded_digest)
         if result['current'] and result['metadata'] is not None:
             if recorded_metadata != result['metadata']:
                 record['size'], record['mtime_ns'] = result['metadata']
@@ -525,6 +526,10 @@ class _FSTFileCache(object):
                     'size': size,
                     'mtime_ns': mtime_ns,
                 }
+            elif result['metadata'] is None:
+                # Absence is a dependency state. Persist it so an optional
+                # file that remains missing does not reset the cache forever.
+                records[spec['identity']] = {'absent': True}
 
         dependency_ids = self._expected_dependency_ids()
         new_hash = self._compute_dependencies_hash(dependency_ids, records)
@@ -548,6 +553,8 @@ class _FSTFileCache(object):
         stat_result, metadata = self._stat_file(spec['path'])
         result['metadata'] = metadata
         if stat_result is None:
+            result['current'] = bool(
+                isinstance(old_record, dict) and old_record.get('absent'))
             return result
         if not stat.S_ISREG(stat_result.st_mode):
             result['current'] = True
