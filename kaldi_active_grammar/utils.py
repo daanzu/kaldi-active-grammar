@@ -297,6 +297,10 @@ class FSTFileCache(object):
             # persist the refreshed metadata for the next stat-only startup.
             self.save()
 
+        # Constructor validation is an internal optimization for rebuilding the
+        # cache; public currency checks must always inspect the current file.
+        self._initial_validation.clear()
+
     def _load(self):
         with open(self.cache_filename, 'r', encoding='utf-8') as f:
             self.cache = json.load(f)
@@ -648,9 +652,7 @@ class FSTFileCache(object):
                 record = self.cache.get('records', {}).get(spec['identity'])
                 return (not self.cache_is_new and isinstance(record, dict) and
                         record.get('digest') == self.hash_data(data))
-            result = self._initial_validation.pop(spec['runtime_path'], None)
-            if result is None:
-                result = self._validate_dependency(spec)
+            result = self._validate_dependency(spec)
             return bool(result['current'] and result['regular'])
 
         if not os.path.isfile(filepath):

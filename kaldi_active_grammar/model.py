@@ -269,10 +269,7 @@ class Model(object):
         if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
 
         # Update files if needed, before loading words
-        necessary_files = ['user_lexicon.txt', 'words.txt',]
-        non_lazy_files = ['align_lexicon.int', 'lexiconp_disambig.txt', 'L_disambig.fst',]
-        files_are_not_current = lambda files: any(not self.fst_cache.file_is_current(self.files_dict[file]) for file in files)
-        if self.fst_cache.cache_is_new or files_are_not_current(necessary_files + non_lazy_files):
+        if self.fst_cache.cache_is_new:
             self.generate_lexicon_files()
 
         # Generate ``words.relabeled.txt`` if it is missing and ``relabel_ilabels.int`` is present (LAF model bundle).

@@ -467,12 +467,11 @@ def test_strict_warm_model_hashes_each_dependency_once(tmp_path, monkeypatch):
     assert len(set(hash_paths)) == 18
 
 
-def test_consumed_initial_validation_still_detects_later_change(model_files):
+def test_public_currency_check_detects_change_before_first_call(model_files):
     tmp_path, deps = model_files
     make_cache(tmp_path, deps)
     cache = make_cache(tmp_path, deps)
 
-    assert cache.file_is_current(deps['words.txt'])
     with open(deps['words.txt'], 'ab') as f:
         f.write(b'changed after validation\n')
 
