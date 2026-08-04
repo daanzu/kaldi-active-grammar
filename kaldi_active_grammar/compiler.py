@@ -67,7 +67,6 @@ class KaldiRule(object):
             raise KaldiError("Cannot use a KaldiRule after calling close()")
         return self.compiler
 
-    fst_cache = property(lambda self: self._require_compiler().fst_cache)
     decoder = property(lambda self: self._require_compiler().decoder)
 
     pending_compile = property(lambda self: (self in self._require_compiler().compile_queue) or (self in self._require_compiler().compile_duplicate_filename_queue))
@@ -87,11 +86,12 @@ class KaldiRule(object):
         self._require_compiler()
         if self.compiled: return self
 
+        fst_cache = self.compiler.model._fst_cache
         if not self.filename:
-            self.fst.compute_hash(self.fst_cache.dependencies_hash)
+            self.fst.compute_hash(fst_cache.dependencies_hash)
             assert self.filename
 
-        if self.compiler.cache_fsts and self.fst_cache.fst_is_current(self.filepath, touch=False):
+        if self.compiler.cache_fsts and fst_cache.fst_is_current(self.filepath, touch=False):
             _log.debug("%s: Skipped FST compilation thanks to FileCache" % self)
             if self.compiler.decoding_framework == 'agf':
                 self.fst.compiled_native_obj = NativeWFST.load_file(self.filepath)
@@ -228,13 +228,16 @@ class Compiler(object):
 
     def __init__(self, model_dir=None, tmp_dir=None, alternative_dictation=None,
             framework='agf-direct', cache_fsts=True,
-            strict_content_validation=False):
+            strict_content_validation=False, invalidate=False):
         """Create a grammar compiler.
 
-        ``framework`` is either ``'agf-direct'`` or ``'laf'``.  Compiler-owned
+        ``framework`` is either ``'agf-direct'`` or ``'laf'``. Compiler-owned
         rules always use :class:`NativeWFST`; the removed ``native_fst``
-        option is no longer accepted.  ``cache_fsts`` controls whether
+        option is no longer accepted. ``cache_fsts`` controls whether
         compiled AGF graphs are written to and restored from the model cache.
+        ``invalidate`` forces model and lexicon regeneration for this
+        construction only. When FST caching is enabled, regeneration also
+        discards cached grammar FSTs.
         """
 
         show_donation_message()
@@ -258,6 +261,7 @@ class Compiler(object):
         self.model = Model(
             model_dir, tmp_dir, tmp_dir_needed=tmp_dir_needed,
             strict_content_validation=strict_content_validation,
+            invalidate=invalidate,
         )
         self._lexicon_files_stale = False
 
@@ -366,7 +370,6 @@ class Compiler(object):
     model_dir = property(lambda self: self.model.model_dir)
     tmp_dir = property(lambda self: self.model.tmp_dir)
     files_dict = property(lambda self: self.model.files_dict)
-    fst_cache = property(lambda self: self.model.fst_cache)
 
     lexicon_words = property(lambda self: self.model.words_table.word_to_id_map)
     _longest_word = property(lambda self: self.model.longest_word)
@@ -485,21 +488,6 @@ class Compiler(object):
     def compile_agf_dictation_fst(self, g_filename=None):
         if g_filename is None: g_filename = self._default_dictation_g_fst_filepath
         self._compile_agf_graph(input_filename=g_filename, output_filename=self._default_dictation_fst_filepath, nonterm=True, simplify_lg=False)
-
-    # def _compile_base_fsts(self):
-    #     filepaths = [self.tmp_dir + filename for filename in ['nonterm_begin.fst', 'nonterm_end.fst']]
-    #     if all(self.fst_cache.is_current(filepath) for filepath in filepaths):
-    #         return
-    #     format_kwargs = dict(self.files_dict)
-    #     def run(cmd): subprocess.check_call(cmd.format(**format_kwargs), shell=True)  # FIXME: unsafe shell?
-    #     if platform == 'windows':
-    #     else:
-    #         run("(echo 0 1 #nonterm_begin 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
-    #         run("(echo 0 1 #nonterm_end 0^& echo 1) | {exec_dir}fstcompile.exe --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
-    #         run("(echo 0 1 \\#nonterm_begin 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_begin.fst")
-    #         run("(echo 0 1 \\#nonterm_end 0; echo 1) | {exec_dir}fstcompile --isymbols={words_txt} > {tmp_dir}nonterm_end.fst")
-    #     for filepath in filepaths:
-    #         self.fst_cache.add(filepath)
 
     def compile_top_fst(self):
         return self._build_top_fst(nonterms=['#nonterm:rule'+str(i) for i in range(self._kaldi_rule_id_allocator.max_num_exported_rules)], noise_words=self._noise_words).compile()
@@ -622,8 +610,8 @@ class Compiler(object):
         except Exception:
             raise KaldiError("Exception while compiling/loading rules in prepare_for_recognition")
         finally:
-            if self.fst_cache.dirty:
-                self.fst_cache.save()
+            if self.model._fst_cache.dirty:
+                self.model._fst_cache.save()
 
     def mimic(self, text, grammars_activity):
         """Mimic text using active compiler rule IDs.

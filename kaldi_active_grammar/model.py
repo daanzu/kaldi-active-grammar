@@ -4,7 +4,7 @@
 # Licensed under the AGPL-3.0; see LICENSE.txt file.
 #
 
-import os, re, shutil
+import glob, os, re, shutil
 from io import open
 
 from six import PY2, text_type
@@ -180,7 +180,7 @@ class Lexicon(object):
 
 class Model(object):
     def __init__(self, model_dir=None, tmp_dir=None, tmp_dir_needed=False,
-            strict_content_validation=False):
+            strict_content_validation=False, invalidate=False):
         show_donation_message()
 
         self.model_dir = os.path.join(model_dir or defaults.DEFAULT_MODEL_DIR, '')
@@ -254,10 +254,11 @@ class Model(object):
         self.files_dict.update({
             name.replace('.', '_'): path for name, path in primary_files.items()
         })  # For named placeholder access in str.format()
-        self.fst_cache = utils.FSTFileCache(
+        self._fst_cache = utils._FSTFileCache(
             os.path.join(self.model_dir, defaults.FILE_CACHE_FILENAME),
             dependencies_dict=dependency_files,
             tmp_dir=self.tmp_dir,
+            invalidate=invalidate,
             strict_content_validation=strict_content_validation,
         )
 
@@ -269,7 +270,7 @@ class Model(object):
         if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
 
         # Update files if needed, before loading words
-        if self.fst_cache.cache_is_new:
+        if self._fst_cache.cache_is_new:
             self.generate_lexicon_files()
 
         # Generate ``words.relabeled.txt`` if it is missing and ``relabel_ilabels.int`` is present (LAF model bundle).
@@ -282,8 +283,8 @@ class Model(object):
                 self.files_dict['words.relabeled.txt'])
             # This dependency did not exist when the cache was initialized;
             # record it now so the next startup can use the warm cache.
-            self.fst_cache.update_dependencies()
-            self.fst_cache.save()
+            self._fst_cache.update_dependencies()
+            self._fst_cache.save()
 
         self.words_table = SymbolTable()
         self.load_words()
@@ -378,7 +379,7 @@ class Model(object):
     def generate_lexicon_files(self):
         """ Generates: words.txt, align_lexicon.int, lexiconp_disambig.txt, L_disambig.fst """
         _log.info("generating lexicon files")
-        self.fst_cache.invalidate()
+        self._clear_cached_fsts()
 
         # FIXME: refactor this to use words_table/SymbolTable
         max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
@@ -451,8 +452,15 @@ class Model(object):
             command |= self.files_dict['L_disambig.fst']
             command()
 
-        self.fst_cache.update_dependencies()
-        self.fst_cache.save()
+        self._fst_cache.update_dependencies()
+        self._fst_cache.save()
+
+    def _clear_cached_fsts(self):
+        """Remove compiled grammar FSTs without changing dependency state."""
+        if self.tmp_dir is None:
+            return
+        for filename in glob.glob(os.path.join(self.tmp_dir, '*.fst')):
+            os.remove(filename)
 
     def reset_user_lexicon(self):
         utils.clear_file(self.files_dict['user_lexicon.txt'])

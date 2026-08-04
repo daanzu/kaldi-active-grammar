@@ -5,7 +5,7 @@
 #
 
 import logging, sys, time
-import fnmatch, glob, os
+import fnmatch, os
 import functools
 import hashlib, json
 import stat
@@ -221,7 +221,7 @@ def is_file_up_to_date(filename, *parent_filenames):
 
 ########################################################################################################################
 
-class FSTFileCache(object):
+class _FSTFileCache(object):
 
     SCHEMA_VERSION = 2
     HASH_BLOCK_SIZE = 1024 * 1024
@@ -233,16 +233,14 @@ class FSTFileCache(object):
         is necessary. Dependency identities are paths relative to the cache
         directory whenever possible, never basenames.
 
-        ``entries`` contains the compatibility API's generic file entries.
-        Dependency records live separately in ``records`` so a generic entry
-        cannot collide with a dependency in another directory.
-
         Normal validation trusts a matching size and ``mtime_ns``. A replacement
         that preserves both values is outside that mode's guarantee; set
         ``strict_content_validation`` to hash every dependency instead.
 
-        FST files are a special case: they aren't stored in the cache object, because their filename is itself a hash of its content mixed with a hash of its dependencies.
-        If ``invalidate``, then initialize a fresh cache.
+        FST files are a special case: they aren't stored in the cache object,
+        because their filename is itself a hash of its content mixed with a
+        hash of its dependencies. If ``invalidate``, discard the loaded state
+        and mark the cache new for the owning Model to rebuild.
         """
 
         self.cache_filename = cache_filename
@@ -259,26 +257,26 @@ class FSTFileCache(object):
             self._load()
         except Exception as e:
             _log.info("%s: failed to load cache from %r", self, cache_filename)
-            self.cache = None
+            self._state = None
 
         must_reset_cache = False
         if invalidate:
             _log.debug("%s: forced invalidate", self)
             must_reset_cache = True
-        elif self.cache is None:
+        elif self._state is None:
             _log.debug("%s: could not load cache", self)
             must_reset_cache = True
-        elif self.cache.get('schema_version') != self.SCHEMA_VERSION:
+        elif self._state.get('schema_version') != self.SCHEMA_VERSION:
             _log.debug("%s: cache schema changed or is legacy", self)
             must_reset_cache = True
-        elif self.cache.get('version') != __version__:
+        elif self._state.get('version') != __version__:
             _log.debug("%s: version changed", self)
             must_reset_cache = True
         elif self._dependency_ids() != self._expected_dependency_ids():
             _log.debug("%s: list of dependencies has changed", self)
             must_reset_cache = True
         elif self._stored_dependencies_hash() != self._compute_dependencies_hash(
-                self.cache.get('dependency_ids', []), self.cache.get('records', {})):
+                self._state.get('dependency_ids', []), self._state.get('records', {})):
             _log.debug("%s: stored dependency hash is inconsistent", self)
             must_reset_cache = True
         elif not self._validate_dependencies():
@@ -288,7 +286,7 @@ class FSTFileCache(object):
         if must_reset_cache:
             # Then reset cache
             _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
-            self.cache = self._empty_cache()
+            self._state = self._empty_state()
             self.cache_is_new = True
             self.update_dependencies()
             self.save()
@@ -297,15 +295,24 @@ class FSTFileCache(object):
             # persist the refreshed metadata for the next stat-only startup.
             self.save()
 
-        # Constructor validation is an internal optimization for rebuilding the
-        # cache; public currency checks must always inspect the current file.
+        # Constructor validation is only reused by internal cache rebuilding;
+        # discard it once initialization is complete.
         self._initial_validation.clear()
 
     def _load(self):
         with open(self.cache_filename, 'r', encoding='utf-8') as f:
-            self.cache = json.load(f)
+            loaded_state = json.load(f)
+        if not isinstance(loaded_state, dict):
+            raise ValueError("cache state must be a JSON object")
+        self._state = {
+            field: loaded_state[field]
+            for field in ('schema_version', 'version', 'dependency_ids', 'records', 'dependencies_hash')
+            if field in loaded_state
+        }
         self.cache_is_new = False
-        self.dirty = False
+        self.dirty = set(loaded_state) != {
+            'schema_version', 'version', 'dependency_ids', 'records', 'dependencies_hash'
+        }
 
     @staticmethod
     def _canonical_path(filepath):
@@ -356,27 +363,19 @@ class FSTFileCache(object):
         return sorted(set(spec['identity'] for spec in self._dependency_specs))
 
     def _dependency_ids(self):
-        return sorted(set(self.cache.get('dependency_ids', [])))
+        return sorted(set(self._state.get('dependency_ids', [])))
 
     def _stored_dependencies_hash(self):
-        return self.cache.get('dependencies_hash')
+        return self._state.get('dependencies_hash')
 
-    def _empty_cache(self):
-        # dependencies_list and top-level identity keys are retained as a
-        # compatibility view for older callers; authoritative state is in
-        # dependency_ids/records and entries.
+    def _empty_state(self):
         return {
             'schema_version': self.SCHEMA_VERSION,
             'version': text_type(__version__),
             'dependency_ids': [],
             'records': {},
             'dependencies_hash': '',
-            'entries': {},
-            'dependencies_list': [],
         }
-
-    def _dependency_name_list(self):
-        return sorted(set(spec['name'] for spec in self._dependency_specs))
 
     @staticmethod
     def _stat_metadata(stat_result):
@@ -411,13 +410,6 @@ class FSTFileCache(object):
             return None, False, after_metadata
         return digest, True, after_metadata
 
-    def _spec_for_path(self, filepath):
-        runtime_path = self._canonical_path(filepath)
-        for spec in self._dependency_specs:
-            if spec['runtime_path'] == runtime_path:
-                return spec
-        return None
-
     def _compute_dependencies_hash(self, dependency_ids, records):
         pairs = []
         for identity in sorted(set(dependency_ids)):
@@ -432,7 +424,7 @@ class FSTFileCache(object):
         if memo is not None and runtime_path in memo:
             return memo[runtime_path]
 
-        record = self.cache.get('records', {}).get(spec['identity'])
+        record = self._state.get('records', {}).get(spec['identity'])
         result = {
             'spec': spec,
             'current': False,
@@ -444,7 +436,7 @@ class FSTFileCache(object):
 
         # A fresh cache intentionally reports its dependency files as stale to
         # preserve Model's regeneration path.
-        if self.cache_is_new and spec['identity'] in self.cache.get('dependency_ids', []):
+        if self.cache_is_new and spec['identity'] in self._state.get('dependency_ids', []):
             result['current'] = False
             if memo is not None:
                 memo[runtime_path] = result
@@ -501,14 +493,14 @@ class FSTFileCache(object):
                 all_current = False
         return all_current
 
-    dependencies_hash = property(lambda self: self.cache['dependencies_hash'])
+    dependencies_hash = property(lambda self: self._state['dependencies_hash'])
 
     def save(self):
         cache_directory = os.path.dirname(os.path.abspath(self.cache_filename)) or os.curdir
         fd, temporary_filename = tempfile.mkstemp(prefix='.file_cache.', suffix='.tmp', dir=cache_directory)
         try:
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                f.write(json.dumps(self.cache, ensure_ascii=False))
+                f.write(json.dumps(self._state, ensure_ascii=False))
             replace = getattr(os, 'replace', os.rename)
             replace(temporary_filename, self.cache_filename)
         except Exception:
@@ -520,7 +512,7 @@ class FSTFileCache(object):
         self.dirty = False
 
     def update_dependencies(self):
-        old_records = self.cache.get('records', {})
+        old_records = self._state.get('records', {})
         records = {}
         for spec in self._dependency_specs:
             result = self._initial_validation.pop(spec['runtime_path'], None)
@@ -536,21 +528,11 @@ class FSTFileCache(object):
 
         dependency_ids = self._expected_dependency_ids()
         new_hash = self._compute_dependencies_hash(dependency_ids, records)
-        self.cache['schema_version'] = self.SCHEMA_VERSION
-        self.cache['version'] = text_type(__version__)
-        self.cache['dependency_ids'] = dependency_ids
-        self.cache['records'] = records
-        self.cache['dependencies_hash'] = new_hash
-        self.cache['dependencies_list'] = self._dependency_name_list()
-
-        # Keep the old top-level dependency digest view for callers that only
-        # inspect it. It is not used for identity, validation, or hashing.
-        for identity in dependency_ids:
-            if identity in records:
-                self.cache[identity] = records[identity]['digest']
-            elif identity in self.cache:
-                del self.cache[identity]
-        self.cache.setdefault('entries', {})
+        self._state['schema_version'] = self.SCHEMA_VERSION
+        self._state['version'] = text_type(__version__)
+        self._state['dependency_ids'] = dependency_ids
+        self._state['records'] = records
+        self._state['dependencies_hash'] = new_hash
         self.dirty = True
 
     def _validate_dependency_for_update(self, spec, old_record):
@@ -587,23 +569,6 @@ class FSTFileCache(object):
         result['current'] = stable
         return result
 
-    def invalidate(self, filename=None):
-        if filename is None:
-            _log.info("%s: invalidating all file entries in cache", self)
-            # Does not invalidate dependencies or their records.
-            self.cache['entries'] = {}
-            self.dirty = True
-            if self.tmp_dir is not None:
-                for filename in glob.glob(os.path.join(self.tmp_dir, '*.fst')):
-                    os.remove(filename)
-        else:
-            entry_identity = self._entry_identity(filename)
-            if entry_identity not in self.cache.get('entries', {}):
-                return
-            _log.info("%s: invalidating cache entry for %r", self, filename)
-            del self.cache['entries'][entry_identity]
-            self.dirty = True
-
     def hash_data(self, data, mix_dependencies=False):
         if not isinstance(data, binary_type):
             if not isinstance(data, text_type):
@@ -614,52 +579,6 @@ class FSTFileCache(object):
             hasher.update(self.dependencies_hash.encode('utf-8'))
         hasher.update(data)
         return text_type(hasher.hexdigest())
-
-    def add_file(self, filepath, data=None):
-        # Generic entries are separate from dependency records.
-        if data is None:
-            data = self._read_file(filepath)
-        filename = self._persisted_identity(filepath)
-        self.cache.setdefault('entries', {})[filename] = self.hash_data(data)
-        self.dirty = True
-
-    def contains(self, filename, data):
-        entries = self.cache.get('entries', {})
-        identity = filename if filename in entries else self._entry_identity(filename)
-        return (identity in entries) and (entries[identity] == self.hash_data(data))
-
-    def _entry_identity(self, filename):
-        if filename in self.cache.get('entries', {}):
-            return filename
-        # A relative compatibility key is interpreted relative to the cache
-        # directory; absolute paths still use their canonical persisted ID.
-        if not os.path.isabs(filename):
-            candidate = os.path.join(self.cache_dir, filename)
-        else:
-            candidate = filename
-        return self._persisted_identity(candidate)
-
-    @staticmethod
-    def _read_file(filepath):
-        with open(filepath, 'rb') as f:
-            return f.read()
-
-    def file_is_current(self, filepath, data=None):
-        """Returns bool whether generic filepath file exists and the cache contains the given data (or the file's current data if none given)."""
-        spec = self._spec_for_path(filepath)
-        if spec is not None:
-            if data is not None:
-                record = self.cache.get('records', {}).get(spec['identity'])
-                return (not self.cache_is_new and isinstance(record, dict) and
-                        record.get('digest') == self.hash_data(data))
-            result = self._validate_dependency(spec)
-            return bool(result['current'] and result['regular'])
-
-        if not os.path.isfile(filepath):
-            return False
-        if data is None:
-            data = self._read_file(filepath)
-        return self.contains(self._persisted_identity(filepath), data)
 
     def fst_is_current(self, filepath, touch=True):
         """Returns bool whether FST file in directory path exists."""

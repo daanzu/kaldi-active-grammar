@@ -4,12 +4,11 @@
 # Licensed under the AGPL-3.0; see LICENSE.txt file.
 #
 
-import collections, itertools, math
+import collections, hashlib, itertools, math
 
 from six import iteritems, itervalues, text_type
 
 from . import KaldiError
-from .utils import FSTFileCache
 
 
 class WFST(object):
@@ -68,7 +67,7 @@ class WFST(object):
         self._arc_table_dict[src_state].append(
             [int(src_state), int(dst_state), text_type(label), text_type(olabel), float(weight)])
 
-    def get_fst_text(self, fst_cache, eps2disambig=False):
+    def get_fst_text(self, eps2disambig=False):
         eps_replacement = self.eps_disambig if eps2disambig else self.eps
         arcs_text = u''.join("%d %d %s %s %f\n" % (
                 src_state,
@@ -84,9 +83,17 @@ class WFST(object):
             )
             for (id, weight) in iteritems(self._state_table)
             if weight != 0)
-        text = arcs_text + states_text
-        self.filename = fst_cache.hash_data(text, mix_dependencies=True) + '.fst'
-        return text
+        return arcs_text + states_text
+
+    def compute_hash(self, dependencies_seed_hash_str='0'*32, eps2disambig=False):
+        if not isinstance(dependencies_seed_hash_str, text_type):
+            dependencies_seed_hash_str = text_type(dependencies_seed_hash_str)
+        hasher = hashlib.md5()
+        hasher.update(dependencies_seed_hash_str.encode('utf-8'))
+        hasher.update(self.get_fst_text(eps2disambig=eps2disambig).encode('utf-8'))
+        hash_str = text_type(hasher.hexdigest())
+        self.filename = hash_str + '.fst'
+        return hash_str
 
     ####################################################################################################################
 

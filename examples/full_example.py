@@ -7,8 +7,8 @@ tmp_dir = None  # Default
 
 ##### Set up grammar compiler & decoder
 
+# Pass invalidate=True to regenerate the lexicon and discard cached grammar FSTs.
 compiler = kaldi_active_grammar.Compiler(model_dir=model_dir, tmp_dir=tmp_dir)
-# compiler.fst_cache.invalidate()
 decoder = compiler.init_decoder()
 
 ##### Set up a rule

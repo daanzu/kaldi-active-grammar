@@ -273,7 +273,7 @@ def make_closable_rule(compiler, rule_id=-1):
 
 
 def assert_closed_rule_accessors_raise(rule):
-    for accessor in ('fst_cache', 'decoder', 'pending_compile', 'pending_load', 'filepath'):
+    for accessor in ('decoder', 'pending_compile', 'pending_load', 'filepath'):
         with pytest.raises(KaldiError, match='Cannot use a KaldiRule after calling close\\(\\)'):
             getattr(rule, accessor)
 

@@ -1,7 +1,25 @@
 
+import hashlib
 import re
 
 import pytest
+
+
+def test_python_wfst_hashing_does_not_require_a_cache():
+    from kaldi_active_grammar import WFST
+
+    fst = WFST()
+    final_state = fst.add_state(final=True)
+    fst.add_arc(fst.start_state, final_state, 'hello')
+    text = fst.get_fst_text()
+    dependency_seed = 'a' * 32
+    expected_hash = hashlib.md5(
+        dependency_seed.encode('utf-8') + text.encode('utf-8')).hexdigest()
+
+    assert fst.filename is None
+    assert fst.compute_hash(dependency_seed) == expected_hash
+    assert fst.filename == expected_hash + '.fst'
+    assert fst.compute_hash('b' * 32) != expected_hash
 
 
 def test_laf_rejects_runtime_pronunciation_updates():

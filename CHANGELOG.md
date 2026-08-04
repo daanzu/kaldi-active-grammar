@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* **Breaking: cache invalidation is now a construction-time compiler option.** Use `Compiler(..., invalidate=True)` to rebuild model lexicon state and, when FST caching is enabled, discard cached grammar FSTs; the former public cache invalidation access is no longer supported. The standalone `WFST.compute_hash()` method now accepts a dependency-hash seed directly instead of requiring a cache object.
 * **Breaking: grammar activity is now a sparse set of active rule IDs instead of a positional Boolean mask.** `decoder.decode(...)`, `decoder.mimic(...)`, and `Compiler.mimic(...)` now expect `grammars_activity` to be an iterable of `KaldiRule.id` values (e.g. `[rule.id]`) rather than one Boolean per loaded rule (e.g. `[True, False, ...]`). `None` still means "keep the current native activity" (use it for utterance continuation chunks); an empty iterable explicitly disables all rules. Booleans are now rejected to prevent the legacy mask from being silently misread as rule ID 1.
   * Rule IDs are stable for a rule's lifetime and do not shift when another rule is unloaded; a freed ID may later be reused by a new rule.
   * **This requires a matching Kaldi fork build**: the native side now interprets the activity array as a set of active rule IDs. The ABI signature is unchanged (`int32_t*`), so mixing this Python version with an older native library will silently misinterpret activity.

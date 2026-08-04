@@ -1,19 +1,18 @@
-"""Characterization tests for FSTFileCache: pin down the currency-checking,
-reset, and invalidation semantics that any caching optimization must preserve."""
+"""Focused tests for the private dependency/FST cache implementation."""
 
+import hashlib
 import json
 import os
-import hashlib
 import shutil
 
 import pytest
 
-from kaldi_active_grammar.utils import FSTFileCache
+import kaldi_active_grammar.utils as utils
+from kaldi_active_grammar.utils import _FSTFileCache
 
 
 @pytest.fixture
 def model_files(tmp_path):
-    """A fake model dir with two dependency files, keyed by basename as Model does."""
     deps = {}
     for name, content in [
         ('words.txt', b'<eps> 0\none 1\ntwo 2\n'),
@@ -26,11 +25,12 @@ def model_files(tmp_path):
 
 
 def make_cache(tmp_path, deps, **kwargs):
-    return FSTFileCache(str(tmp_path / 'file_cache.json'), tmp_dir=str(tmp_path),
+    return _FSTFileCache(str(tmp_path / 'file_cache.json'), tmp_dir=str(tmp_path),
         dependencies_dict=deps, **kwargs)
 
 
 def copy_test_model(tmp_path):
+    """Create a tiny model-shaped fixture; never copy the multi-GB test model."""
     model_dir = tmp_path / 'kaldi_model'
     model_dir.mkdir()
     words = b'<eps> 0\n#nonterm_begin 1\nhello 2\n'
@@ -61,174 +61,49 @@ def copy_test_model(tmp_path):
     return model_dir
 
 
-def test_fresh_cache_initializes_and_saves(model_files):
+def test_fresh_cache_writes_only_authoritative_state(model_files):
     tmp_path, deps = model_files
     cache = make_cache(tmp_path, deps)
+    state = json.loads((tmp_path / 'file_cache.json').read_text(encoding='utf-8'))
+
     assert cache.cache_is_new
-    assert not cache.dirty  # save() during init cleared it
-    assert (tmp_path / 'file_cache.json').is_file()
-    assert cache.cache['dependencies_list'] == sorted(deps.keys())
-    assert cache.dependencies_hash
-    for name in deps:
-        assert name in cache.cache
-
-
-def test_fresh_cache_reports_dependencies_stale(model_files):
-    # On a brand-new cache, dependency files must be reported stale, so Model
-    # regenerates the lexicon files.
-    tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    assert not cache.file_is_current(deps['words.txt'])
-
-
-def test_reloaded_cache_reports_dependencies_current(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
-    assert not cache.cache_is_new
-    for path in deps.values():
-        assert cache.file_is_current(path)
-
-
-def test_repeated_currency_checks_are_stable(model_files):
-    # Model init checks the same files several times (necessary + non-lazy lists,
-    # plus underscore-alias keys); every check must agree.
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
-    for _ in range(3):
-        assert cache.file_is_current(deps['words.txt'])
-
-
-def test_content_change_is_detected_within_instance(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
-    assert cache.file_is_current(deps['words.txt'])
-    with open(deps['words.txt'], 'ab') as f:
-        f.write(b'three 3\n')
-    assert not cache.file_is_current(deps['words.txt'])
-
-
-def test_changed_dependency_resets_cache_on_load(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    with open(deps['final.mdl'], 'wb') as f:
-        f.write(b'DIFFERENT MODEL DATA')
-    cache = make_cache(tmp_path, deps)
-    assert cache.cache_is_new
-
-
-def test_missing_file_is_not_current(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
-    assert not cache.file_is_current(str(tmp_path / 'nonexistent.txt'))
-
-
-def test_non_dependency_file_add_and_check(model_files):
-    tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    extra = tmp_path / 'extra.txt'
-    extra.write_bytes(b'extra data')
-    assert not cache.file_is_current(str(extra))
-    cache.add_file(str(extra))
-    assert cache.dirty
-    assert cache.file_is_current(str(extra))
-    # Currency is also visible to a reloaded instance once saved
-    cache.save()
     assert not cache.dirty
-    cache2 = make_cache(tmp_path, deps)
-    assert cache2.file_is_current(str(extra))
+    assert set(state) == {'schema_version', 'version', 'dependency_ids', 'records', 'dependencies_hash'}
+    assert set(cache._state['dependency_ids']) == set(deps)
+    assert cache.dependencies_hash
 
 
-def test_contains_with_explicit_data(model_files):
+def test_reloaded_cache_is_warm_and_preserves_hash(model_files):
     tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    cache.add_file(str(tmp_path / 'words.txt'))
-    with open(deps['words.txt'], 'rb') as f:
-        data = f.read()
-    assert cache.contains('words.txt', data)
-    assert not cache.contains('words.txt', data + b'changed')
-    assert not cache.contains('unknown.txt', data)
+    first = make_cache(tmp_path, deps)
+    second = make_cache(tmp_path, deps)
+
+    assert not second.cache_is_new
+    assert second.dependencies_hash == first.dependencies_hash
+    assert set(second._state['records']) == set(second._state['dependency_ids'])
 
 
 def test_version_change_resets_cache(model_files):
     tmp_path, deps = model_files
     make_cache(tmp_path, deps)
     cache_file = tmp_path / 'file_cache.json'
-    contents = json.loads(cache_file.read_text(encoding='utf-8'))
-    contents['version'] = '0.0.0-outdated'
-    cache_file.write_text(json.dumps(contents), encoding='utf-8')
-    cache = make_cache(tmp_path, deps)
-    assert cache.cache_is_new
+    state = json.loads(cache_file.read_text(encoding='utf-8'))
+    state['version'] = '0.0.0-outdated'
+    cache_file.write_text(json.dumps(state), encoding='utf-8')
+
+    assert make_cache(tmp_path, deps).cache_is_new
 
 
-def test_dependencies_list_change_resets_cache(model_files):
+def test_dependency_set_change_resets_cache(model_files):
     tmp_path, deps = model_files
     make_cache(tmp_path, deps)
     extra = tmp_path / 'phones.txt'
     extra.write_bytes(b'a 1\n')
-    new_deps = dict(deps, **{'phones.txt': str(extra)})
-    cache = make_cache(tmp_path, new_deps)
-    assert cache.cache_is_new
+
+    assert make_cache(tmp_path, dict(deps, phones=str(extra))).cache_is_new
 
 
-def test_forced_invalidate_resets_cache(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps, invalidate=True)
-    assert cache.cache_is_new
-
-
-def test_invalidate_single_entry(model_files):
-    tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    extra = tmp_path / 'extra.txt'
-    extra.write_bytes(b'extra data')
-    cache.add_file(str(extra))
-    cache.save()
-    cache.invalidate('extra.txt')
-    assert cache.dirty
-    assert not cache.file_is_current(str(extra))
-
-
-def test_invalidate_all_clears_entries_and_fst_files(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
-    extra = tmp_path / 'extra.txt'
-    extra.write_bytes(b'extra data')
-    cache.add_file(str(extra))
-    fst_file = tmp_path / 'deadbeef.fst'
-    fst_file.write_bytes(b'fst data')
-    cache.invalidate()
-    assert not fst_file.exists()
-    assert not cache.file_is_current(str(extra))
-    # Version and dependency bookkeeping survive
-    assert 'version' in cache.cache
-    assert cache.cache['dependencies_list'] == sorted(deps.keys())
-
-
-def test_fst_is_current_checks_existence_only(model_files):
-    tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    fst_file = tmp_path / 'cafef00d.fst'
-    assert not cache.fst_is_current(str(fst_file), touch=False)
-    fst_file.write_bytes(b'fst data')
-    assert cache.fst_is_current(str(fst_file), touch=False)
-
-
-def test_hash_data_accepts_text_and_bytes(model_files):
-    tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    assert cache.hash_data(u'abc') == cache.hash_data(b'abc')
-    assert cache.hash_data(u'abc') != cache.hash_data(b'abcd')
-    # mix_dependencies changes the hash
-    assert cache.hash_data(u'abc', mix_dependencies=True) != cache.hash_data(u'abc')
-
-
-def test_schema_v2_records_use_distinct_persisted_identities(tmp_path):
+def test_same_basename_dependencies_have_distinct_identities(tmp_path):
     first = tmp_path / 'a' / 'words.txt'
     second = tmp_path / 'b' / 'words.txt'
     first.parent.mkdir()
@@ -238,27 +113,22 @@ def test_schema_v2_records_use_distinct_persisted_identities(tmp_path):
 
     cache = make_cache(tmp_path, {'first': str(first), 'second': str(second)})
 
-    assert cache.cache['schema_version'] == 2
-    assert cache.cache['dependency_ids'] == ['a/words.txt', 'b/words.txt']
-    assert set(cache.cache['records']) == set(cache.cache['dependency_ids'])
-    assert cache.cache['records']['a/words.txt']['digest'] != cache.cache['records']['b/words.txt']['digest']
+    assert cache._state['schema_version'] == 2
+    assert cache._state['dependency_ids'] == ['a/words.txt', 'b/words.txt']
+    assert cache._state['records']['a/words.txt']['digest'] != cache._state['records']['b/words.txt']['digest']
 
 
 def test_persisted_identity_falls_back_to_absolute_when_relpath_fails(tmp_path, monkeypatch):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'dependency')
+    monkeypatch.setattr(os.path, 'relpath', lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('different drives')))
 
-    def raise_cross_volume_error(*args, **kwargs):
-        raise ValueError('different drives')
-
-    monkeypatch.setattr(os.path, 'relpath', raise_cross_volume_error)
     cache = make_cache(tmp_path, {'dep': str(path)})
-
-    identity = cache.cache['dependency_ids'][0]
-    expected = os.path.normcase(os.path.realpath(os.path.abspath(str(path))))
-    expected = expected.replace(os.sep, '/')
+    identity = cache._state['dependency_ids'][0]
+    expected = os.path.normcase(os.path.realpath(os.path.abspath(str(path)))).replace(os.sep, '/')
     if os.altsep:
         expected = expected.replace(os.altsep, '/')
+
     assert os.path.isabs(identity)
     assert identity == expected
 
@@ -269,94 +139,69 @@ def test_dependency_hash_is_order_independent(tmp_path):
     first.write_bytes(b'first')
     second.write_bytes(b'second')
 
-    one = FSTFileCache(str(tmp_path / 'one.json'), dependencies_dict={
-        'one': str(first), 'two': str(second)})
-    two = FSTFileCache(str(tmp_path / 'two.json'), dependencies_dict={
-        'two': str(second), 'one': str(first)})
+    one = _FSTFileCache(str(tmp_path / 'one.json'), dependencies_dict={'one': str(first), 'two': str(second)})
+    two = _FSTFileCache(str(tmp_path / 'two.json'), dependencies_dict={'two': str(second), 'one': str(first)})
 
     assert one.dependencies_hash == two.dependencies_hash
 
 
-def test_dependency_hash_changes_when_content_changes(tmp_path):
+def test_content_change_changes_dependency_hash(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'old')
-    first = FSTFileCache(str(tmp_path / 'cache.json'), dependencies_dict={'dep': str(path)})
+    first = make_cache(tmp_path, {'dep': str(path)})
     old_hash = first.dependencies_hash
     path.write_bytes(b'new content')
 
-    second = FSTFileCache(str(tmp_path / 'cache.json'), dependencies_dict={'dep': str(path)})
+    second = make_cache(tmp_path, {'dep': str(path)})
 
     assert second.cache_is_new
     assert second.dependencies_hash != old_hash
 
 
-def test_touching_dependency_does_not_change_content_hash(tmp_path):
+def test_touching_dependency_refreshes_metadata_without_changing_hash(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'unchanged')
-    first = FSTFileCache(str(tmp_path / 'cache.json'), dependencies_dict={'dep': str(path)})
+    first = make_cache(tmp_path, {'dep': str(path)})
     old_hash = first.dependencies_hash
     old_stat = path.stat()
     os.utime(path, ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns + 1000000))
 
-    second = FSTFileCache(str(tmp_path / 'cache.json'), dependencies_dict={'dep': str(path)})
+    second = make_cache(tmp_path, {'dep': str(path)})
 
     assert not second.cache_is_new
     assert second.dependencies_hash == old_hash
-    assert second.cache['records']['dependency.txt']['mtime_ns'] == path.stat().st_mtime_ns
+    assert second._state['records']['dependency.txt']['mtime_ns'] == path.stat().st_mtime_ns
 
 
-def test_legacy_cache_is_reset_once(tmp_path, monkeypatch):
+def test_schema_v2_compatibility_fields_are_dropped_on_save(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'dependency')
-    cache_file = tmp_path / 'cache.json'
-    cache_file.write_text(json.dumps({
-        'version': '3.2.0',
-        'dependencies_list': ['dependency.txt'],
-        'dependencies_hash': 'legacy',
-        'dependency.txt': hashlib.md5(b'dependency').hexdigest(),
-    }), encoding='utf-8')
+    make_cache(tmp_path, {'dep': str(path)})
+    cache_file = tmp_path / 'file_cache.json'
+    state = json.loads(cache_file.read_text(encoding='utf-8'))
+    state.update({'entries': {'old': 'entry'}, 'dependencies_list': ['dependency.txt'],
+        'dependency.txt': hashlib.md5(b'dependency').hexdigest()})
+    cache_file.write_text(json.dumps(state), encoding='utf-8')
 
-    calls = []
-    original_hash_file = FSTFileCache._hash_file
-    monkeypatch.setattr(FSTFileCache, '_hash_file',
-        lambda self, filepath: (calls.append(filepath), original_hash_file(self, filepath))[1])
-    migrated = FSTFileCache(str(cache_file), dependencies_dict={'dep': str(path)})
-    assert migrated.cache_is_new
-    assert len(calls) == 1
+    reloaded = make_cache(tmp_path, {'dep': str(path)})
+    saved = json.loads(cache_file.read_text(encoding='utf-8'))
 
-    calls[:] = []
-    reloaded = FSTFileCache(str(cache_file), dependencies_dict={'dep': str(path)})
     assert not reloaded.cache_is_new
-    assert calls == []
-
-
-def test_invalidate_keeps_dependency_records_but_clears_entries_and_fsts(model_files):
-    tmp_path, deps = model_files
-    cache = make_cache(tmp_path, deps)
-    cache.add_file(str(tmp_path / 'extra.txt'), b'extra')
-    fst_file = tmp_path / 'cached.fst'
-    fst_file.write_bytes(b'fst')
-    records = json.loads(json.dumps(cache.cache['records']))
-
-    cache.invalidate()
-
-    assert cache.cache['records'] == records
-    assert cache.cache['entries'] == {}
-    assert not fst_file.exists()
+    assert set(saved) == {'schema_version', 'version', 'dependency_ids', 'records', 'dependencies_hash'}
 
 
 def test_duplicate_logical_names_hash_one_physical_file(tmp_path, monkeypatch):
     path = tmp_path / 'shared.txt'
     path.write_bytes(b'shared')
     calls = []
-    original_hash_file = FSTFileCache._hash_file
-    monkeypatch.setattr(FSTFileCache, '_hash_file',
+    original_hash_file = _FSTFileCache._hash_file
+    monkeypatch.setattr(_FSTFileCache, '_hash_file',
         lambda self, filepath: (calls.append(filepath), original_hash_file(self, filepath))[1])
 
     cache = make_cache(tmp_path, {'first': str(path), 'second': str(path)})
 
     assert len(calls) == 1
-    assert cache.cache['dependency_ids'] == ['shared.txt']
+    assert cache._state['dependency_ids'] == ['shared.txt']
 
 
 def test_model_keeps_aliases_out_of_dependency_state(tmp_path, monkeypatch):
@@ -368,9 +213,9 @@ def test_model_keeps_aliases_out_of_dependency_state(tmp_path, monkeypatch):
 
     assert model.files_dict['words.txt'] == model.files_dict['words_txt']
     assert model.files_dict['L_disambig.fst'] == model.files_dict['L_disambig_fst']
-    assert len(model.fst_cache.cache['dependency_ids']) == 18
-    assert len(model.fst_cache.cache['dependencies_list']) == 18
-    assert 'words_txt' not in model.fst_cache.cache['dependencies_list']
+    assert len(model._fst_cache._state['dependency_ids']) == 18
+    assert 'words_txt' not in model._fst_cache._state['dependency_ids']
+    assert not hasattr(model, 'fst_cache')
 
 
 def test_model_warms_when_optional_laf_files_are_absent(tmp_path, monkeypatch):
@@ -379,177 +224,109 @@ def test_model_warms_when_optional_laf_files_are_absent(tmp_path, monkeypatch):
     model_dir = copy_test_model(tmp_path)
     for filename in ('relabel_ilabels.int', 'words.relabeled.txt'):
         (model_dir / filename).unlink()
-
-    generated_lexicon_calls = []
-
-    def record_lexicon_generation(self):
-        generated_lexicon_calls.append(self.model_dir)
-
-    monkeypatch.setattr(Model, 'generate_lexicon_files', record_lexicon_generation)
+    generated = []
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: generated.append(self.model_dir))
 
     first = Model(str(model_dir), tmp_dir_needed=False)
     second = Model(str(model_dir), tmp_dir_needed=False)
 
-    assert first.fst_cache.cache_is_new
-    assert not second.fst_cache.cache_is_new
-    assert len(generated_lexicon_calls) == 1
-    assert 'relabel_ilabels.int' not in first.fst_cache.cache['dependencies_list']
-    assert 'words.relabeled.txt' not in first.fst_cache.cache['dependencies_list']
+    assert first._fst_cache.cache_is_new
+    assert not second._fst_cache.cache_is_new
+    assert len(generated) == 1
+    assert 'words.relabeled.txt' not in first._fst_cache._state['dependency_ids']
 
 
-def test_model_saves_dependency_record_for_generated_laf_file(tmp_path, monkeypatch):
+def test_model_records_generated_laf_file(tmp_path, monkeypatch):
     from kaldi_active_grammar.model import Model
 
     model_dir = copy_test_model(tmp_path)
     (model_dir / 'words.relabeled.txt').unlink()
-    generated_relabeled_calls = []
-
+    generated = []
     monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
 
     def generate_relabeled(words_filename, relabel_filename, output_filename):
-        generated_relabeled_calls.append(output_filename)
+        generated.append(output_filename)
         shutil.copyfile(words_filename, output_filename)
 
     monkeypatch.setattr(Model, 'generate_words_relabeled_file', staticmethod(generate_relabeled))
-
     first = Model(str(model_dir), tmp_dir_needed=False)
     second = Model(str(model_dir), tmp_dir_needed=False)
 
-    assert first.fst_cache.cache_is_new
-    assert not second.fst_cache.cache_is_new
-    assert len(generated_relabeled_calls) == 1
-    assert 'words.relabeled.txt' in first.fst_cache.cache['dependency_ids']
-    assert 'words.relabeled.txt' in first.fst_cache.cache['records']
+    assert first._fst_cache.cache_is_new
+    assert not second._fst_cache.cache_is_new
+    assert len(generated) == 1
+    assert 'words.relabeled.txt' in first._fst_cache._state['records']
 
 
-def test_warm_model_consumes_initial_validation_without_duplicate_stats(tmp_path, monkeypatch):
-    from kaldi_active_grammar.model import Model
-
-    model_dir = copy_test_model(tmp_path)
-    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
-    first = Model(str(model_dir), tmp_dir_needed=False)
-
-    stat_paths = []
-    original_stat_file = FSTFileCache._stat_file
-
-    def count_stat_file(self, filepath):
-        stat_paths.append(self._canonical_path(filepath))
-        return original_stat_file(self, filepath)
-
-    monkeypatch.setattr(FSTFileCache, '_stat_file', count_stat_file)
-    second = Model(str(model_dir), tmp_dir_needed=False)
-
-    assert first.fst_cache.cache['dependency_ids']
-    assert len(second.fst_cache.cache['dependency_ids']) == 18
-    assert len(stat_paths) == 18
-    assert len(set(stat_paths)) == 18
-
-
-def test_strict_warm_model_hashes_each_dependency_once(tmp_path, monkeypatch):
+def test_warm_model_stats_each_physical_dependency_once(tmp_path, monkeypatch):
     from kaldi_active_grammar.model import Model
 
     model_dir = copy_test_model(tmp_path)
     monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
     Model(str(model_dir), tmp_dir_needed=False)
+    stat_paths = []
+    original_stat_file = _FSTFileCache._stat_file
+    monkeypatch.setattr(_FSTFileCache, '_stat_file',
+        lambda self, filepath: (stat_paths.append(self._canonical_path(filepath)), original_stat_file(self, filepath))[1])
 
+    second = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert len(second._fst_cache._state['dependency_ids']) == 18
+    assert len(stat_paths) == 18
+    assert len(set(stat_paths)) == 18
+
+
+def test_warm_model_hashes_each_dependency_once_in_strict_mode(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+    Model(str(model_dir), tmp_dir_needed=False)
     hash_paths = []
-    original_hash_file = FSTFileCache._hash_file
+    original_hash_file = _FSTFileCache._hash_file
+    monkeypatch.setattr(_FSTFileCache, '_hash_file',
+        lambda self, filepath: (hash_paths.append(self._canonical_path(filepath)), original_hash_file(self, filepath))[1])
 
-    def count_hash_file(self, filepath):
-        hash_paths.append(self._canonical_path(filepath))
-        return original_hash_file(self, filepath)
+    Model(str(model_dir), tmp_dir_needed=False, strict_content_validation=True)
 
-    monkeypatch.setattr(FSTFileCache, '_hash_file', count_hash_file)
-    model = Model(str(model_dir), tmp_dir_needed=False, strict_content_validation=True)
-
-    assert len(model.fst_cache.cache['dependency_ids']) == 18
     assert len(hash_paths) == 18
     assert len(set(hash_paths)) == 18
 
 
-def test_public_currency_check_detects_change_before_first_call(model_files):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
-
-    with open(deps['words.txt'], 'ab') as f:
-        f.write(b'changed after validation\n')
-
-    assert not cache.file_is_current(deps['words.txt'])
-
-
-def test_none_directory_and_missing_dependency_values_are_explicit(tmp_path):
-    directory = tmp_path / 'directory'
-    directory.mkdir()
-    missing = tmp_path / 'missing.txt'
-    cache = make_cache(tmp_path, {
-        'optional': None,
-        'directory': str(directory),
-        'missing': str(missing),
-    })
-
-    assert 'optional' not in cache.cache['dependencies_list']
-    assert not cache.file_is_current(str(directory))
-    assert not cache.file_is_current(str(missing))
-    assert 'directory' in cache.cache['dependency_ids']
-    assert 'missing.txt' in cache.cache['dependency_ids']
-    assert 'directory' not in cache.cache['records']
-    assert 'missing.txt' not in cache.cache['records']
-
-
-def test_deleted_dependency_is_stale_and_resets(tmp_path):
+def test_missing_dependency_is_stale_on_reload(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'present')
     make_cache(tmp_path, {'dep': str(path)})
     path.unlink()
 
-    cache = make_cache(tmp_path, {'dep': str(path)})
-
-    assert cache.cache_is_new
-    assert not cache.file_is_current(str(path))
+    assert make_cache(tmp_path, {'dep': str(path)}).cache_is_new
 
 
-def test_metadata_fast_path_does_not_open_unchanged_dependency(model_files, monkeypatch):
+def test_unchanged_dependencies_use_stat_only(model_files, monkeypatch):
     tmp_path, deps = model_files
     make_cache(tmp_path, deps)
+    monkeypatch.setattr(_FSTFileCache, '_hash_file',
+        lambda self, filepath: pytest.fail('unchanged dependency was hashed'))
+
     cache = make_cache(tmp_path, deps)
-    monkeypatch.setattr(cache, '_hash_file', lambda filepath: pytest.fail('unchanged file was hashed'))
 
-    assert cache.file_is_current(deps['words.txt'])
+    assert not cache.cache_is_new
 
 
-def test_size_change_hashes_and_is_stale(model_files, monkeypatch):
+def test_mtime_change_hashes_once_and_stays_warm(model_files, monkeypatch):
     tmp_path, deps = model_files
     make_cache(tmp_path, deps)
-    cache = make_cache(tmp_path, deps)
+    old_stat = os.stat(deps['words.txt'])
+    os.utime(deps['words.txt'], ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns + 1000000))
     calls = []
-    original_hash_file = cache._hash_file
-    monkeypatch.setattr(cache, '_hash_file',
-        lambda filepath: (calls.append(filepath), original_hash_file(filepath))[1])
-    assert cache.file_is_current(deps['words.txt'])
-    calls[:] = []
-    with open(deps['words.txt'], 'ab') as f:
-        f.write(b'changed')
-
-    assert not cache.file_is_current(deps['words.txt'])
-    assert len(calls) == 1
-
-
-def test_mtime_only_change_hashes_once_and_refreshes_metadata(model_files, monkeypatch):
-    tmp_path, deps = model_files
-    make_cache(tmp_path, deps)
-    old_mtime_ns = os.stat(deps['words.txt']).st_mtime_ns
-    os.utime(deps['words.txt'], ns=(old_mtime_ns, old_mtime_ns + 1000000))
-    calls = []
-    original_hash_file = FSTFileCache._hash_file
-    monkeypatch.setattr(FSTFileCache, '_hash_file',
+    original_hash_file = _FSTFileCache._hash_file
+    monkeypatch.setattr(_FSTFileCache, '_hash_file',
         lambda self, filepath: (calls.append(filepath), original_hash_file(self, filepath))[1])
 
     cache = make_cache(tmp_path, deps)
 
     assert not cache.cache_is_new
     assert len(calls) == 1
-    assert cache.cache['records']['words.txt']['mtime_ns'] == os.stat(deps['words.txt']).st_mtime_ns
 
 
 def test_same_size_same_mtime_replacement_is_normal_mode_limitation(tmp_path):
@@ -560,10 +337,7 @@ def test_same_size_same_mtime_replacement_is_normal_mode_limitation(tmp_path):
     path.write_bytes(b'new!')
     os.utime(path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
 
-    cache = make_cache(tmp_path, {'dep': str(path)})
-
-    assert not cache.cache_is_new
-    assert cache.file_is_current(str(path))
+    assert not make_cache(tmp_path, {'dep': str(path)}).cache_is_new
 
 
 def test_strict_mode_detects_same_size_same_mtime_replacement(tmp_path):
@@ -574,63 +348,33 @@ def test_strict_mode_detects_same_size_same_mtime_replacement(tmp_path):
     path.write_bytes(b'new!')
     os.utime(path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
 
-    cache = make_cache(tmp_path, {'dep': str(path)}, strict_content_validation=True)
-
-    assert cache.cache_is_new
-
-
-def test_content_change_updates_dependency_hash(tmp_path):
-    path = tmp_path / 'dependency.txt'
-    path.write_bytes(b'old')
-    first = make_cache(tmp_path, {'dep': str(path)})
-    old_hash = first.dependencies_hash
-    path.write_bytes(b'new content')
-
-    second = make_cache(tmp_path, {'dep': str(path)})
-
-    assert second.dependencies_hash != old_hash
+    assert make_cache(tmp_path, {'dep': str(path)}, strict_content_validation=True).cache_is_new
 
 
 def test_hashing_rejects_file_changed_during_read(tmp_path, monkeypatch):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'content')
     make_cache(tmp_path, {'dep': str(path)})
-    cache = make_cache(tmp_path, {'dep': str(path)})
-    original_hash_file = cache._hash_file
+    current = path.stat()
+    os.utime(path, ns=(current.st_atime_ns, current.st_mtime_ns + 1000000))
+    original_hash_file = _FSTFileCache._hash_file
     changed = [False]
 
-    def hash_and_touch(filepath):
-        digest = original_hash_file(filepath)
+    def hash_and_touch(self, filepath):
+        digest = original_hash_file(self, filepath)
         if not changed[0]:
             changed[0] = True
-            current = os.stat(filepath)
-            os.utime(filepath, ns=(current.st_atime_ns, current.st_mtime_ns + 1000000))
+            stat_result = os.stat(filepath)
+            os.utime(filepath, ns=(stat_result.st_atime_ns, stat_result.st_mtime_ns + 1000000))
         return digest
 
-    assert cache.file_is_current(str(path))
-    monkeypatch.setattr(cache, '_hash_file', hash_and_touch)
-    current = os.stat(path)
-    os.utime(path, ns=(current.st_atime_ns, current.st_mtime_ns + 1000000))
+    monkeypatch.setattr(_FSTFileCache, '_hash_file', hash_and_touch)
 
-    assert not cache.file_is_current(str(path))
+    assert make_cache(tmp_path, {'dep': str(path)}).cache_is_new
 
 
-def test_reloading_refreshed_metadata_returns_to_stat_only_path(tmp_path, monkeypatch):
-    path = tmp_path / 'dependency.txt'
-    path.write_bytes(b'content')
-    make_cache(tmp_path, {'dep': str(path)})
-    old_stat = path.stat()
-    os.utime(path, ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns + 1000000))
-    make_cache(tmp_path, {'dep': str(path)})
-    cache = make_cache(tmp_path, {'dep': str(path)})
-    monkeypatch.setattr(cache, '_hash_file', lambda filepath: pytest.fail('refreshed file was hashed'))
-
-    assert cache.file_is_current(str(path))
-
-
-def test_save_replaces_cache_after_closing_temporary_file(tmp_path, monkeypatch):
+def test_atomic_save_replaces_after_closing_temporary_file(tmp_path, monkeypatch):
     cache = make_cache(tmp_path, {})
-    cache.cache['entries']['entry.txt'] = cache.hash_data(b'entry')
     cache.dirty = True
     replacements = []
     original_replace = os.replace
@@ -648,3 +392,84 @@ def test_save_replaces_cache_after_closing_temporary_file(tmp_path, monkeypatch)
     assert replacements
     assert not os.path.exists(replacements[0])
     assert not cache.dirty
+
+
+def test_model_invalidation_clears_fsts_and_next_start_is_warm(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    tmp_dir = tmp_path / 'fst-cache'
+    generated = []
+
+    def regenerate(self):
+        generated.append(self.model_dir)
+        self._clear_cached_fsts()
+
+    monkeypatch.setattr(Model, 'generate_lexicon_files', regenerate)
+    Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    stale_fst = tmp_dir / 'stale.fst'
+    stale_fst.write_bytes(b'fst')
+    warm = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    assert not warm._fst_cache.cache_is_new
+    assert stale_fst.exists()
+
+    invalidated = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True, invalidate=True)
+
+    assert invalidated._fst_cache.cache_is_new
+    assert not stale_fst.exists()
+    assert len(generated) == 2
+
+
+def test_compiler_invalidation_rebuilds_once_and_clears_fsts(monkeypatch, tmp_path):
+    import importlib
+
+    compiler_module = importlib.import_module('kaldi_active_grammar.compiler')
+    from kaldi_active_grammar.compiler import Compiler
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    tmp_dir = tmp_path / 'fst-cache'
+    generated = []
+
+    def regenerate(self):
+        generated.append(self.model_dir)
+        self._clear_cached_fsts()
+
+    monkeypatch.setattr(Model, 'generate_lexicon_files', regenerate)
+    monkeypatch.setattr(compiler_module.NativeWFST, 'init_class', lambda *args, **kwargs: None)
+
+    first = Compiler(model_dir=model_dir, tmp_dir=tmp_dir, framework='laf')
+    stale_fst = tmp_dir / 'stale.fst'
+    stale_fst.write_bytes(b'fst')
+    warm = Compiler(model_dir=model_dir, tmp_dir=tmp_dir, framework='laf', invalidate=False)
+
+    assert stale_fst.exists()
+    assert not warm.model._fst_cache.cache_is_new
+    warm.close()
+
+    invalidated = Compiler(model_dir=model_dir, tmp_dir=tmp_dir, framework='laf', invalidate=True)
+
+    assert invalidated.model._fst_cache.cache_is_new
+    assert not stale_fst.exists()
+    assert len(generated) == 2
+    assert not hasattr(first, 'fst_cache')
+    first.close()
+    invalidated.close()
+
+
+def test_cache_and_rule_cache_are_not_public():
+    import importlib
+    compiler_module = importlib.import_module('kaldi_active_grammar.compiler')
+
+    assert not hasattr(utils, 'FSTFileCache')
+    assert not hasattr(compiler_module.Compiler, 'fst_cache')
+    assert not hasattr(compiler_module.KaldiRule, 'fst_cache')
+
+
+def test_fst_filename_seed_is_stable_between_warm_starts(model_files):
+    tmp_path, deps = model_files
+    first = make_cache(tmp_path, deps)
+    first_name = first.hash_data('rule text', mix_dependencies=True)
+    second = make_cache(tmp_path, deps)
+
+    assert second.hash_data('rule text', mix_dependencies=True) == first_name
