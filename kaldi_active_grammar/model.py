@@ -238,9 +238,17 @@ class Model(object):
             'relabel_ilabels.int': find_file(self.model_dir, 'relabel_ilabels.int'),
             'words.relabeled.txt': find_file(self.model_dir, 'words.relabeled.txt', default=True),
         }
+        # Do not register a default-only optional LAF path: without a file,
+        # it has no record and would make AGF-only caches stale on every start.
         dependency_files = {
             name: path for name, path in primary_files.items()
-            if name not in {'exec_dir', 'model_dir', 'tmp_dir'} and path is not None
+            if name not in {'exec_dir', 'model_dir', 'tmp_dir'}
+            and path is not None
+            and (
+                name != 'words.relabeled.txt'
+                or os.path.isfile(path)
+                or primary_files['relabel_ilabels.int'] is not None
+            )
         }
         self.files_dict = dict(primary_files)
         self.files_dict.update({
@@ -275,6 +283,10 @@ class Model(object):
                 self.files_dict['words.txt'],
                 self.files_dict['relabel_ilabels.int'],
                 self.files_dict['words.relabeled.txt'])
+            # This dependency did not exist when the cache was initialized;
+            # record it now so the next startup can use the warm cache.
+            self.fst_cache.update_dependencies()
+            self.fst_cache.save()
 
         self.words_table = SymbolTable()
         self.load_words()

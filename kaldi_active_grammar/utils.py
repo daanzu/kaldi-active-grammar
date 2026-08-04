@@ -311,12 +311,17 @@ class FSTFileCache(object):
     def _persisted_identity(self, filepath):
         """Return a stable identity relative to the cache directory."""
         canonical = self._canonical_path(filepath)
-        relative = os.path.relpath(canonical, self.cache_dir)
-        parent = os.pardir
-        if relative == parent or relative.startswith(parent + os.sep):
+        try:
+            relative = os.path.relpath(canonical, self.cache_dir)
+        except ValueError:
+            # On Windows, relpath() raises for paths on different drives.
             identity = canonical
         else:
-            identity = relative
+            parent = os.pardir
+            if relative == parent or relative.startswith(parent + os.sep):
+                identity = canonical
+            else:
+                identity = relative
         identity = os.path.normcase(identity)
         identity = identity.replace(os.sep, '/')
         if os.altsep:
@@ -643,7 +648,9 @@ class FSTFileCache(object):
                 record = self.cache.get('records', {}).get(spec['identity'])
                 return (not self.cache_is_new and isinstance(record, dict) and
                         record.get('digest') == self.hash_data(data))
-            result = self._validate_dependency(spec)
+            result = self._initial_validation.pop(spec['runtime_path'], None)
+            if result is None:
+                result = self._validate_dependency(spec)
             return bool(result['current'] and result['regular'])
 
         if not os.path.isfile(filepath):

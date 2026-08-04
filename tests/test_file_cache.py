@@ -4,6 +4,7 @@ reset, and invalidation semantics that any caching optimization must preserve.""
 import json
 import os
 import hashlib
+import shutil
 
 import pytest
 
@@ -27,6 +28,37 @@ def model_files(tmp_path):
 def make_cache(tmp_path, deps, **kwargs):
     return FSTFileCache(str(tmp_path / 'file_cache.json'), tmp_dir=str(tmp_path),
         dependencies_dict=deps, **kwargs)
+
+
+def copy_test_model(tmp_path):
+    model_dir = tmp_path / 'kaldi_model'
+    model_dir.mkdir()
+    words = b'<eps> 0\n#nonterm_begin 1\nhello 2\n'
+    phones = b'<eps> 0\nSIL 1\n#nonterm_bos 2\n#nonterm_begin 3\n'
+    files = {
+        'KAG_VERSION': b'0.5.0\n',
+        'words.base.txt': words,
+        'words.txt': words,
+        'phones.txt': phones,
+        'align_lexicon.base.int': b'0 0 1\n',
+        'align_lexicon.int': b'0 0 1\n',
+        'disambig.int': b'0\n',
+        'L_disambig.fst': b'fst\n',
+        'tree': b'tree\n',
+        'final.mdl': b'model\n',
+        'user_lexicon.txt': b'',
+        'left_context_phones.txt': b'1\n',
+        'nonterminals.txt': b'#nonterm_begin\n',
+        'wdisambig_phones.int': b'0\n',
+        'wdisambig_words.int': b'0\n',
+        'lexiconp_disambig.base.txt': b'hello 1.0 SIL\n',
+        'lexiconp_disambig.txt': b'hello 1.0 SIL\n',
+        'relabel_ilabels.int': b'2 2\n',
+        'words.relabeled.txt': words,
+    }
+    for filename, contents in files.items():
+        (model_dir / filename).write_bytes(contents)
+    return model_dir
 
 
 def test_fresh_cache_initializes_and_saves(model_files):
@@ -212,6 +244,25 @@ def test_schema_v2_records_use_distinct_persisted_identities(tmp_path):
     assert cache.cache['records']['a/words.txt']['digest'] != cache.cache['records']['b/words.txt']['digest']
 
 
+def test_persisted_identity_falls_back_to_absolute_when_relpath_fails(tmp_path, monkeypatch):
+    path = tmp_path / 'dependency.txt'
+    path.write_bytes(b'dependency')
+
+    def raise_cross_volume_error(*args, **kwargs):
+        raise ValueError('different drives')
+
+    monkeypatch.setattr(os.path, 'relpath', raise_cross_volume_error)
+    cache = make_cache(tmp_path, {'dep': str(path)})
+
+    identity = cache.cache['dependency_ids'][0]
+    expected = os.path.normcase(os.path.realpath(os.path.abspath(str(path))))
+    expected = expected.replace(os.sep, '/')
+    if os.altsep:
+        expected = expected.replace(os.altsep, '/')
+    assert os.path.isabs(identity)
+    assert identity == expected
+
+
 def test_dependency_hash_is_order_independent(tmp_path):
     first = tmp_path / 'first.txt'
     second = tmp_path / 'second.txt'
@@ -308,16 +359,124 @@ def test_duplicate_logical_names_hash_one_physical_file(tmp_path, monkeypatch):
     assert cache.cache['dependency_ids'] == ['shared.txt']
 
 
-def test_model_keeps_aliases_out_of_dependency_state():
+def test_model_keeps_aliases_out_of_dependency_state(tmp_path, monkeypatch):
     from kaldi_active_grammar.model import Model
 
-    model = Model('tests/kaldi_model', tmp_dir_needed=False)
+    model_dir = copy_test_model(tmp_path)
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+    model = Model(str(model_dir), tmp_dir_needed=False)
 
     assert model.files_dict['words.txt'] == model.files_dict['words_txt']
     assert model.files_dict['L_disambig.fst'] == model.files_dict['L_disambig_fst']
     assert len(model.fst_cache.cache['dependency_ids']) == 18
     assert len(model.fst_cache.cache['dependencies_list']) == 18
     assert 'words_txt' not in model.fst_cache.cache['dependencies_list']
+
+
+def test_model_warms_when_optional_laf_files_are_absent(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    for filename in ('relabel_ilabels.int', 'words.relabeled.txt'):
+        (model_dir / filename).unlink()
+
+    generated_lexicon_calls = []
+
+    def record_lexicon_generation(self):
+        generated_lexicon_calls.append(self.model_dir)
+
+    monkeypatch.setattr(Model, 'generate_lexicon_files', record_lexicon_generation)
+
+    first = Model(str(model_dir), tmp_dir_needed=False)
+    second = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert first.fst_cache.cache_is_new
+    assert not second.fst_cache.cache_is_new
+    assert len(generated_lexicon_calls) == 1
+    assert 'relabel_ilabels.int' not in first.fst_cache.cache['dependencies_list']
+    assert 'words.relabeled.txt' not in first.fst_cache.cache['dependencies_list']
+
+
+def test_model_saves_dependency_record_for_generated_laf_file(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    (model_dir / 'words.relabeled.txt').unlink()
+    generated_relabeled_calls = []
+
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+
+    def generate_relabeled(words_filename, relabel_filename, output_filename):
+        generated_relabeled_calls.append(output_filename)
+        shutil.copyfile(words_filename, output_filename)
+
+    monkeypatch.setattr(Model, 'generate_words_relabeled_file', staticmethod(generate_relabeled))
+
+    first = Model(str(model_dir), tmp_dir_needed=False)
+    second = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert first.fst_cache.cache_is_new
+    assert not second.fst_cache.cache_is_new
+    assert len(generated_relabeled_calls) == 1
+    assert 'words.relabeled.txt' in first.fst_cache.cache['dependency_ids']
+    assert 'words.relabeled.txt' in first.fst_cache.cache['records']
+
+
+def test_warm_model_consumes_initial_validation_without_duplicate_stats(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+    first = Model(str(model_dir), tmp_dir_needed=False)
+
+    stat_paths = []
+    original_stat_file = FSTFileCache._stat_file
+
+    def count_stat_file(self, filepath):
+        stat_paths.append(self._canonical_path(filepath))
+        return original_stat_file(self, filepath)
+
+    monkeypatch.setattr(FSTFileCache, '_stat_file', count_stat_file)
+    second = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert first.fst_cache.cache['dependency_ids']
+    assert len(second.fst_cache.cache['dependency_ids']) == 18
+    assert len(stat_paths) == 18
+    assert len(set(stat_paths)) == 18
+
+
+def test_strict_warm_model_hashes_each_dependency_once(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+    Model(str(model_dir), tmp_dir_needed=False)
+
+    hash_paths = []
+    original_hash_file = FSTFileCache._hash_file
+
+    def count_hash_file(self, filepath):
+        hash_paths.append(self._canonical_path(filepath))
+        return original_hash_file(self, filepath)
+
+    monkeypatch.setattr(FSTFileCache, '_hash_file', count_hash_file)
+    model = Model(str(model_dir), tmp_dir_needed=False, strict_content_validation=True)
+
+    assert len(model.fst_cache.cache['dependency_ids']) == 18
+    assert len(hash_paths) == 18
+    assert len(set(hash_paths)) == 18
+
+
+def test_consumed_initial_validation_still_detects_later_change(model_files):
+    tmp_path, deps = model_files
+    make_cache(tmp_path, deps)
+    cache = make_cache(tmp_path, deps)
+
+    assert cache.file_is_current(deps['words.txt'])
+    with open(deps['words.txt'], 'ab') as f:
+        f.write(b'changed after validation\n')
+
+    assert not cache.file_is_current(deps['words.txt'])
 
 
 def test_none_directory_and_missing_dependency_values_are_explicit(tmp_path):
@@ -368,6 +527,8 @@ def test_size_change_hashes_and_is_stale(model_files, monkeypatch):
     original_hash_file = cache._hash_file
     monkeypatch.setattr(cache, '_hash_file',
         lambda filepath: (calls.append(filepath), original_hash_file(filepath))[1])
+    assert cache.file_is_current(deps['words.txt'])
+    calls[:] = []
     with open(deps['words.txt'], 'ab') as f:
         f.write(b'changed')
 
@@ -447,6 +608,7 @@ def test_hashing_rejects_file_changed_during_read(tmp_path, monkeypatch):
             os.utime(filepath, ns=(current.st_atime_ns, current.st_mtime_ns + 1000000))
         return digest
 
+    assert cache.file_is_current(str(path))
     monkeypatch.setattr(cache, '_hash_file', hash_and_touch)
     current = os.stat(path)
     os.utime(path, ns=(current.st_atime_ns, current.st_mtime_ns + 1000000))
