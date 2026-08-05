@@ -73,6 +73,30 @@ else:
     def clock():
         return time.clock()
 
+def _atomic_write_text(filename, write_func, prefix='.atomic.', suffix='.tmp'):
+    """Write text through a same-directory temporary file and replace atomically."""
+    directory = os.path.dirname(os.path.abspath(filename)) or os.curdir
+    fd, temporary_filename = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=directory)
+    try:
+        file = os.fdopen(fd, 'w', encoding='utf-8', newline='\n')
+        fd = None
+        with file:
+            write_func(file)
+        replace = getattr(os, 'replace', os.rename)
+        replace(temporary_filename, filename)
+        temporary_filename = None
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if temporary_filename is not None:
+            try:
+                os.remove(temporary_filename)
+            except OSError:
+                pass
+
 
 ########################################################################################################################
 
@@ -227,7 +251,8 @@ class _FSTFileCache(object):
     HASH_BLOCK_SIZE = 1024 * 1024
 
     def __init__(self, cache_filename, tmp_dir=None, dependencies_dict=None,
-            invalidate=False, strict_content_validation=False):
+            invalidate=False, strict_content_validation=False,
+            defer_initial_save=False):
         """
         Stores dependency content hashes and metadata to detect when recalculation
         is necessary. Dependency identities are paths relative to the cache
@@ -240,7 +265,9 @@ class _FSTFileCache(object):
         FST files are a special case: they aren't stored in the cache object,
         because their filename is itself a hash of its content mixed with a
         hash of its dependencies. If ``invalidate``, discard the loaded state
-        and mark the cache new for the owning Model to rebuild.
+        and mark the cache new for the owning Model to rebuild. The private
+        ``defer_initial_save`` mode writes a cold marker until that rebuild
+        completes successfully.
         """
 
         self.cache_filename = cache_filename
@@ -249,7 +276,7 @@ class _FSTFileCache(object):
         if dependencies_dict is None: dependencies_dict = dict()
         self.dependencies_dict = dependencies_dict
         self.strict_content_validation = bool(strict_content_validation)
-        self.lock = threading.Lock()
+        self._saves_deferred = False
         self._dependency_specs = self._make_dependency_specs()
         self._initial_validation = dict()
 
@@ -265,6 +292,9 @@ class _FSTFileCache(object):
             must_reset_cache = True
         elif self._state is None:
             _log.debug("%s: could not load cache", self)
+            must_reset_cache = True
+        elif self._state.get('incomplete'):
+            _log.debug("%s: previous initialization did not complete", self)
             must_reset_cache = True
         elif self._state.get('schema_version') != self.SCHEMA_VERSION:
             _log.debug("%s: cache schema changed or is legacy", self)
@@ -288,8 +318,17 @@ class _FSTFileCache(object):
             _log.info("%s: version or dependencies did not match cache from %r; initializing empty", self, cache_filename)
             self._state = self._empty_state()
             self.cache_is_new = True
+            if defer_initial_save:
+                # Leave a cold marker on disk while the owning Model performs
+                # its generation transaction.  A failed generation must not
+                # leave the previous cache looking warm on the next startup.
+                self._state['incomplete'] = True
+                self.dirty = True
+                self.save()
+                self._state.pop('incomplete', None)
             self.update_dependencies()
-            self.save()
+            if not defer_initial_save:
+                self.save()
         elif self.dirty:
             # A valid content digest with changed metadata is still current, but
             # persist the refreshed metadata for the next stat-only startup.
@@ -299,20 +338,97 @@ class _FSTFileCache(object):
         # discard it once initialization is complete.
         self._initial_validation.clear()
 
+    @contextmanager
+    def _transaction(self):
+        """Defer cache commits until the owning initialization succeeds."""
+        if self._saves_deferred:
+            raise RuntimeError("cache transactions cannot be nested")
+        self._saves_deferred = True
+        committed = False
+        try:
+            yield
+            committed = True
+        finally:
+            self._saves_deferred = False
+            if committed and self.dirty:
+                self._save()
+
     def _load(self):
         with open(self.cache_filename, 'r', encoding='utf-8') as f:
             loaded_state = json.load(f)
-        if not isinstance(loaded_state, dict):
-            raise ValueError("cache state must be a JSON object")
+        self._validate_loaded_state(loaded_state)
         self._state = {
             field: loaded_state[field]
             for field in ('schema_version', 'version', 'dependency_ids', 'records', 'dependencies_hash')
             if field in loaded_state
         }
+        if loaded_state.get('incomplete'):
+            self._state['incomplete'] = True
         self.cache_is_new = False
         self.dirty = set(loaded_state) != {
             'schema_version', 'version', 'dependency_ids', 'records', 'dependencies_hash'
         }
+
+    @staticmethod
+    def _validate_loaded_state(loaded_state):
+        if not isinstance(loaded_state, dict):
+            raise ValueError("cache state must be a JSON object")
+        schema_version = loaded_state.get('schema_version')
+        if (schema_version is not None and
+                (isinstance(schema_version, bool) or
+                 not isinstance(schema_version, six.integer_types))):
+            raise ValueError("cache schema_version must be an integer")
+        version = loaded_state.get('version')
+        if version is not None:
+            _FSTFileCache._validate_text(version, "cache version")
+        dependency_ids = loaded_state.get('dependency_ids', [])
+        if (not isinstance(dependency_ids, list) or
+                any(not isinstance(identity, text_type) for identity in dependency_ids)):
+            raise ValueError("cache dependency_ids must be a list of text identities")
+        for identity in dependency_ids:
+            _FSTFileCache._validate_text(identity, "cache dependency identity")
+        if ('incomplete' in loaded_state and
+                not isinstance(loaded_state['incomplete'], bool)):
+            raise ValueError("cache incomplete marker must be boolean")
+        if 'dependencies_hash' in loaded_state:
+            dependencies_hash = loaded_state['dependencies_hash']
+            if not (loaded_state.get('incomplete') and dependencies_hash == ''):
+                _FSTFileCache._validate_digest(dependencies_hash, "cache dependencies_hash")
+
+        records = loaded_state.get('records', {})
+        if not isinstance(records, dict):
+            raise ValueError("cache records must be an object")
+        for identity, record in records.items():
+            if not isinstance(identity, text_type) or not isinstance(record, dict):
+                raise ValueError("cache records must map text identities to objects")
+            _FSTFileCache._validate_text(identity, "cache record identity")
+            if record.get('absent') is True:
+                if set(record) != {'absent'}:
+                    raise ValueError("absent cache records cannot contain other fields")
+                continue
+            if set(record) != {'digest', 'size', 'mtime_ns'}:
+                raise ValueError("cache records have invalid fields")
+            _FSTFileCache._validate_digest(record['digest'], "cache record digest")
+            for field in ('size', 'mtime_ns'):
+                value = record[field]
+                if (isinstance(value, bool) or
+                        not isinstance(value, six.integer_types)):
+                    raise ValueError("cache record metadata must be integers")
+
+    @staticmethod
+    def _validate_text(value, description):
+        if not isinstance(value, text_type):
+            raise ValueError("%s must be text" % description)
+        try:
+            value.encode('utf-8')
+        except UnicodeEncodeError:
+            raise ValueError("%s must be valid UTF-8" % description)
+
+    @staticmethod
+    def _validate_digest(value, description):
+        if (not isinstance(value, text_type) or len(value) != 32 or
+                any(character not in '0123456789abcdef' for character in value)):
+            raise ValueError("%s must be a lowercase MD5 digest" % description)
 
     @staticmethod
     def _canonical_path(filepath):
@@ -497,19 +613,16 @@ class _FSTFileCache(object):
     dependencies_hash = property(lambda self: self._state['dependencies_hash'])
 
     def save(self):
-        cache_directory = os.path.dirname(os.path.abspath(self.cache_filename)) or os.curdir
-        fd, temporary_filename = tempfile.mkstemp(prefix='.file_cache.', suffix='.tmp', dir=cache_directory)
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                f.write(json.dumps(self._state, ensure_ascii=False))
-            replace = getattr(os, 'replace', os.rename)
-            replace(temporary_filename, self.cache_filename)
-        except Exception:
-            try:
-                os.remove(temporary_filename)
-            except OSError:
-                pass
-            raise
+        if self._saves_deferred:
+            _log.debug("%s: deferring cache save until transaction completes", self)
+            return
+        self._save()
+
+    def _save(self):
+        _atomic_write_text(
+            self.cache_filename,
+            lambda file: file.write(json.dumps(self._state, ensure_ascii=False)),
+            prefix='.file_cache.', suffix='.tmp')
         self.dirty = False
 
     def update_dependencies(self):

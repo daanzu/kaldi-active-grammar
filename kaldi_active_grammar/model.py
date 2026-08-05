@@ -253,34 +253,47 @@ class Model(object):
             tmp_dir=self.tmp_dir,
             invalidate=invalidate,
             strict_content_validation=strict_content_validation,
+            defer_initial_save=True,
         )
 
-        self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
-        self.lexicon = Lexicon(self.phone_to_int_dict.keys())
-        self.nonterm_phones_offset = self.phone_to_int_dict.get('#nonterm_bos')
-        if self.nonterm_phones_offset is None: raise KaldiError("missing nonterms in 'phones.txt'")
-        self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.base.txt'], '#nonterm_begin')
-        if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
+        # Keep a reset cache cold until every generated file and the word table
+        # load successfully; a failed constructor must retry on next startup.
+        with self._fst_cache._transaction():
+            self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
+            self.lexicon = Lexicon(self.phone_to_int_dict.keys())
+            self.nonterm_phones_offset = self.phone_to_int_dict.get('#nonterm_bos')
+            if self.nonterm_phones_offset is None: raise KaldiError("missing nonterms in 'phones.txt'")
+            self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.base.txt'], '#nonterm_begin')
+            if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
 
-        # Update files if needed, before loading words
-        if self._fst_cache.cache_is_new:
-            self.generate_lexicon_files()
+            # Update files if needed, before loading words
+            if self._fst_cache.cache_is_new:
+                self.generate_lexicon_files()
 
-        # Generate ``words.relabeled.txt`` if it is missing and ``relabel_ilabels.int`` is present (LAF model bundle).
-        if (not os.path.isfile(self.files_dict['words.relabeled.txt'])
-                and self.files_dict['relabel_ilabels.int'] is not None):
-            _log.info("generating missing words.relabeled.txt from relabel_ilabels.int")
-            self.generate_words_relabeled_file(
-                self.files_dict['words.txt'],
-                self.files_dict['relabel_ilabels.int'],
-                self.files_dict['words.relabeled.txt'])
-            # This dependency did not exist when the cache was initialized;
-            # record it now so the next startup can use the warm cache.
-            self._fst_cache.update_dependencies()
-            self._fst_cache.save()
+            # Generate ``words.relabeled.txt`` if it is missing and ``relabel_ilabels.int`` is present (LAF model bundle).
+            if (not os.path.isfile(self.files_dict['words.relabeled.txt'])
+                    and self.files_dict['relabel_ilabels.int'] is not None):
+                _log.info("generating missing words.relabeled.txt from relabel_ilabels.int")
+                try:
+                    self.generate_words_relabeled_file(
+                        self.files_dict['words.txt'],
+                        self.files_dict['relabel_ilabels.int'],
+                        self.files_dict['words.relabeled.txt'])
+                except BaseException:
+                    # A replaceable non-atomic generator may have written a
+                    # partial destination. Do not let it suppress the retry.
+                    try:
+                        os.remove(self.files_dict['words.relabeled.txt'])
+                    except OSError:
+                        pass
+                    raise
+                # This dependency did not exist when the cache was initialized;
+                # record it now so the next startup can use the warm cache.
+                self._fst_cache.update_dependencies()
+                self._fst_cache.save()
 
-        self.words_table = SymbolTable()
-        self.load_words()
+            self.words_table = SymbolTable()
+            self.load_words()
 
     def load_words(self, words_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']
@@ -446,6 +459,8 @@ class Model(object):
             command()
 
         self._fst_cache.update_dependencies()
+        # During Model construction, save() is deferred until the surrounding
+        # transaction confirms that all initialization steps completed.
         self._fst_cache.save()
 
     def _clear_cached_fsts(self):
@@ -472,9 +487,14 @@ class Model(object):
             _log.warning("generate_words_relabeled_file: word_ids < relabel_from_ids")
         # if word_ids > relabel_from_ids:
         #     _log.warning("generate_words_relabeled_file: word_ids > relabel_from_ids")
-        with open(words_relabel_filename, 'w', encoding='utf-8') as file:
+        def write_relabeled_file(file):
             for (word, id) in word_id_pairs:
                 file.write("%s %s\n" % (word, (relabel_map.get(id, id))))
+
+        utils._atomic_write_text(
+            words_relabel_filename,
+            write_relabeled_file,
+            prefix='.words.relabeled.')
 
 
 ########################################################################################################################

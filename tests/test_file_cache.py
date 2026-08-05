@@ -83,6 +83,82 @@ def test_reloaded_cache_is_warm_and_preserves_hash(model_files):
     assert set(second._state['records']) == set(second._state['dependency_ids'])
 
 
+def test_deferred_zero_dependency_cache_has_explicit_cold_marker(tmp_path):
+    cache_filename = tmp_path / 'file_cache.json'
+    first = _FSTFileCache(str(cache_filename), dependencies_dict={}, defer_initial_save=True)
+    state = json.loads(cache_filename.read_text(encoding='utf-8'))
+
+    assert state['incomplete'] is True
+    assert first.cache_is_new
+
+    second = _FSTFileCache(str(cache_filename), dependencies_dict={}, defer_initial_save=True)
+    assert second.cache_is_new
+
+    second.save()
+    warm = _FSTFileCache(str(cache_filename), dependencies_dict={})
+    assert not warm.cache_is_new
+
+
+def test_malformed_cache_records_reset_instead_of_crashing(model_files):
+    tmp_path, deps = model_files
+    make_cache(tmp_path, deps)
+    cache_filename = tmp_path / 'file_cache.json'
+    state = json.loads(cache_filename.read_text(encoding='utf-8'))
+    state['records'] = []
+    cache_filename.write_text(json.dumps(state), encoding='utf-8')
+
+    reset = make_cache(tmp_path, deps)
+    warm = make_cache(tmp_path, deps)
+
+    assert reset.cache_is_new
+    assert not warm.cache_is_new
+
+
+@pytest.mark.parametrize('malformed_field', [
+    'version', 'dependency_id', 'record_identity', 'record_digest', 'dependencies_hash'])
+def test_malformed_cache_text_resets_instead_of_crashing(model_files, malformed_field):
+    tmp_path, deps = model_files
+    make_cache(tmp_path, deps)
+    cache_filename = tmp_path / 'file_cache.json'
+    state = json.loads(cache_filename.read_text(encoding='utf-8'))
+    if malformed_field == 'version':
+        state['version'] = '\ud800'
+    elif malformed_field == 'dependency_id':
+        state['dependency_ids'][0] = '\ud800'
+    elif malformed_field == 'record_identity':
+        identity = state['dependency_ids'][0]
+        state['records']['\ud800'] = state['records'].pop(identity)
+    elif malformed_field == 'record_digest':
+        state['records'][state['dependency_ids'][0]]['digest'] = '\ud800'
+    else:
+        state['dependencies_hash'] = '\ud800'
+    cache_filename.write_text(json.dumps(state), encoding='utf-8')
+
+    reset = make_cache(tmp_path, deps)
+    warm = make_cache(tmp_path, deps)
+
+    assert reset.cache_is_new
+    assert not warm.cache_is_new
+
+
+@pytest.mark.parametrize('malformed_digest', [
+    None, 17, '0' * 31, 'A' * 32, 'g' * 32])
+def test_malformed_cache_digests_reset_instead_of_crashing(model_files, malformed_digest):
+    tmp_path, deps = model_files
+    make_cache(tmp_path, deps)
+    cache_filename = tmp_path / 'file_cache.json'
+    state = json.loads(cache_filename.read_text(encoding='utf-8'))
+    identity = state['dependency_ids'][0]
+    state['records'][identity]['digest'] = malformed_digest
+    cache_filename.write_text(json.dumps(state), encoding='utf-8')
+
+    reset = make_cache(tmp_path, deps)
+    warm = make_cache(tmp_path, deps)
+
+    assert reset.cache_is_new
+    assert not warm.cache_is_new
+
+
 def test_version_change_resets_cache(model_files):
     tmp_path, deps = model_files
     make_cache(tmp_path, deps)
@@ -260,6 +336,125 @@ def test_model_records_generated_laf_file(tmp_path, monkeypatch):
     assert not second._fst_cache.cache_is_new
     assert len(generated) == 1
     assert 'words.relabeled.txt' in first._fst_cache._state['records']
+
+
+def test_failed_lexicon_generation_leaves_cache_cold_for_retry(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    attempts = []
+
+    def generate_lexicon_files(self):
+        attempts.append(self.model_dir)
+        if len(attempts) == 1:
+            raise RuntimeError('lexicon generation failed')
+
+    monkeypatch.setattr(Model, 'generate_lexicon_files', generate_lexicon_files)
+
+    with pytest.raises(RuntimeError, match='lexicon generation failed'):
+        Model(str(model_dir), tmp_dir_needed=False)
+
+    cache_state = json.loads((model_dir / 'file_cache.json').read_text(encoding='utf-8'))
+    assert cache_state['dependency_ids'] == []
+    assert cache_state['records'] == {}
+    assert cache_state['dependencies_hash'] == ''
+
+    retry = Model(str(model_dir), tmp_dir_needed=False)
+    warm = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert retry._fst_cache.cache_is_new
+    assert not warm._fst_cache.cache_is_new
+    assert len(attempts) == 2
+
+
+def test_failed_forced_regeneration_retries_instead_of_using_old_cache(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    attempts = []
+
+    def generate_lexicon_files(self):
+        attempts.append(self.model_dir)
+        if len(attempts) == 2:
+            raise RuntimeError('forced lexicon generation failed')
+
+    monkeypatch.setattr(Model, 'generate_lexicon_files', generate_lexicon_files)
+    Model(str(model_dir), tmp_dir_needed=False)
+
+    with pytest.raises(RuntimeError, match='forced lexicon generation failed'):
+        Model(str(model_dir), tmp_dir_needed=False, invalidate=True)
+
+    retry = Model(str(model_dir), tmp_dir_needed=False)
+    warm = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert retry._fst_cache.cache_is_new
+    assert not warm._fst_cache.cache_is_new
+    assert len(attempts) == 3
+
+
+def test_failed_laf_generation_leaves_cache_cold_for_retry(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    (model_dir / 'words.relabeled.txt').unlink()
+    attempts = []
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+
+    def generate_words_relabeled(words_filename, relabel_filename, output_filename):
+        attempts.append(output_filename)
+        if len(attempts) == 1:
+            with open(output_filename, 'w', encoding='utf-8') as output:
+                output.write('partial\n')
+            raise RuntimeError('LAF generation failed')
+        shutil.copyfile(words_filename, output_filename)
+
+    monkeypatch.setattr(Model, 'generate_words_relabeled_file', staticmethod(generate_words_relabeled))
+
+    with pytest.raises(RuntimeError, match='LAF generation failed'):
+        Model(str(model_dir), tmp_dir_needed=False)
+
+    assert not (model_dir / 'words.relabeled.txt').exists()
+    cache_state = json.loads((model_dir / 'file_cache.json').read_text(encoding='utf-8'))
+    assert cache_state['dependency_ids'] == []
+    assert cache_state['records'] == {}
+
+    retry = Model(str(model_dir), tmp_dir_needed=False)
+    warm = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert retry._fst_cache.cache_is_new
+    assert not warm._fst_cache.cache_is_new
+    assert len(attempts) == 2
+
+
+def test_failed_model_load_leaves_cache_cold_after_generation(tmp_path, monkeypatch):
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    original_load_words = Model.load_words
+    attempts = []
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+
+    def load_words(self, words_file=None):
+        attempts.append(self.model_dir)
+        if len(attempts) == 1:
+            raise RuntimeError('model load failed')
+        return original_load_words(self, words_file)
+
+    monkeypatch.setattr(Model, 'load_words', load_words)
+
+    with pytest.raises(RuntimeError, match='model load failed'):
+        Model(str(model_dir), tmp_dir_needed=False)
+
+    cache_state = json.loads((model_dir / 'file_cache.json').read_text(encoding='utf-8'))
+    assert cache_state['dependency_ids'] == []
+    assert cache_state['records'] == {}
+
+    retry = Model(str(model_dir), tmp_dir_needed=False)
+    warm = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert retry._fst_cache.cache_is_new
+    assert not warm._fst_cache.cache_is_new
+    assert len(attempts) == 3
 
 
 def test_model_warms_after_optional_laf_dependency_appears(tmp_path, monkeypatch):
@@ -451,6 +646,88 @@ def test_atomic_save_replaces_after_closing_temporary_file(tmp_path, monkeypatch
     assert replacements
     assert not os.path.exists(replacements[0])
     assert not cache.dirty
+
+
+def test_atomic_save_cleans_temporary_file_on_interrupt(tmp_path, monkeypatch):
+    cache = make_cache(tmp_path, {})
+    cache.dirty = True
+    temporary_files = []
+
+    def replace(source, destination):
+        temporary_files.append(source)
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(os, 'replace', replace)
+    with pytest.raises(KeyboardInterrupt):
+        cache.save()
+
+    assert temporary_files
+    assert not os.path.exists(temporary_files[0])
+
+
+def test_atomic_write_closes_fd_if_fdopen_fails(tmp_path, monkeypatch):
+    file_descriptors = []
+
+    def fail_fdopen(fd, *args, **kwargs):
+        file_descriptors.append(fd)
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(utils.os, 'fdopen', fail_fdopen)
+    with pytest.raises(KeyboardInterrupt):
+        utils._atomic_write_text(str(tmp_path / 'output.txt'), lambda file: None)
+
+    assert file_descriptors
+    with pytest.raises(OSError):
+        os.fstat(file_descriptors[0])
+    assert not list(tmp_path.glob('.atomic.*'))
+
+
+def test_transaction_rejects_nesting_and_cleans_up_on_baseexception(tmp_path):
+    cache = make_cache(tmp_path, {})
+
+    with pytest.raises(KeyboardInterrupt):
+        with cache._transaction():
+            with pytest.raises(RuntimeError, match='cannot be nested'):
+                with cache._transaction():
+                    pass
+            raise KeyboardInterrupt()
+
+    assert not cache._saves_deferred
+
+
+@pytest.mark.parametrize('error', [RuntimeError, KeyboardInterrupt])
+def test_transaction_restores_runtime_saves_after_failure(tmp_path, monkeypatch, error):
+    cache = make_cache(tmp_path, {})
+    cache.dirty = True
+    saves = []
+    monkeypatch.setattr(cache, '_save', lambda: saves.append(True))
+
+    with pytest.raises(error):
+        with cache._transaction():
+            cache.save()
+            raise error()
+
+    assert not cache._saves_deferred
+    assert not saves
+    cache.save()
+    assert saves == [True]
+
+
+def test_relabeled_generation_writes_lf_and_replaces_atomically(tmp_path):
+    from kaldi_active_grammar.model import Model
+
+    words_filename = tmp_path / 'words.txt'
+    relabel_filename = tmp_path / 'relabel_ilabels.int'
+    output_filename = tmp_path / 'words.relabeled.txt'
+    words_filename.write_bytes(b'one 1\ntwo 2\n')
+    relabel_filename.write_bytes(b'1 2\n')
+    output_filename.write_bytes(b'old\n')
+
+    Model.generate_words_relabeled_file(
+        str(words_filename), str(relabel_filename), str(output_filename))
+
+    assert output_filename.read_bytes() == b'one 2\ntwo 2\n'
+    assert not list(tmp_path.glob('.words.relabeled.*'))
 
 
 def test_model_invalidation_clears_fsts_and_next_start_is_warm(tmp_path, monkeypatch):

@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   * AGF graph compilation is unavailable when `framework='laf'`; LAF receives native rule FSTs directly and does not construct an AGF compiler.
   * AGF grammar add/reload and top-graph decoder inputs now use native FST pointers; file-backed inputs remain for AGF graph compilation and dictation graphs.
 
+### Fixed
+
+* **Fixed: failed model initialization no longer leaves a warm dependency cache.** Cache commits are now deferred until lexicon generation, optional LAF file generation, and word-table loading all complete, so a later startup retries after an initialization failure.
+
 ## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-11-02 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)
 
 ### Added
