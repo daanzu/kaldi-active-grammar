@@ -235,6 +235,10 @@ class Compiler(object):
         rules always use :class:`NativeWFST`; the removed ``native_fst``
         option is no longer accepted. ``cache_fsts`` controls whether
         compiled AGF graphs are written to and restored from the model cache.
+        ``strict_content_validation`` forces every model dependency to be
+        content-hashed during cache validation, detecting replacements that
+        preserve both file size and modification time at the cost of reading
+        the dependency files on each initialization.
         ``invalidate`` forces model and lexicon regeneration for this
         construction only. When FST caching is enabled, regeneration also
         discards cached grammar FSTs.
