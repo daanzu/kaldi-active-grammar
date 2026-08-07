@@ -4,8 +4,8 @@ One Compiler and one decoder stay alive for the whole run while many grammars
 (each a group of rules) are decoded against, activated/deactivated per
 utterance, and periodically closed, recreated (with recycled rule IDs and
 FileCache hits), and reloaded in place.  Resource metrics are sampled at
-checkpoints and the run fails on within-run drift (RSS slope, fd growth,
-latency drift) or any recognition error, making it usable both as an
+checkpoints and the run fails on incomplete execution, resource drift,
+performance regression, or any recognition error, making it usable both as an
 interactive soak test and as a scripted regression gate.
 
 Run directly for full knob control (see ``--help``)::
@@ -38,6 +38,15 @@ import time
 import weakref
 from pathlib import Path
 
+try:
+    import psutil
+except ImportError:  # Reported as an explicit failed verdict in gated runs.
+    psutil = None
+
+PROCESS_METRIC_ERRORS = (OSError, RuntimeError)
+if psutil is not None:
+    PROCESS_METRIC_ERRORS += (psutil.Error,)
+
 TESTS_DIR = Path(__file__).resolve().parents[1]
 
 LAF_MODEL_FILES = (
@@ -54,6 +63,15 @@ NUMBERS = ('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine
 # No empty payload: trailing-audio decoding of a zero-word dictation span is
 # not reliable enough for a correctness-gated bulk run.
 DICTATION_PAYLOADS = ('hello world', 'hello')
+
+BASELINE_CONFIG_KEYS = (
+    'framework', 'utterances', 'num_grammars', 'rules_per_grammar',
+    'dictation_rules_per_grammar', 'decode_mode', 'activity_pattern',
+    'active_grammar_fraction', 'context_switch_prob', 'context_drift_prob',
+    'empty_activity_fraction', 'garbage_audio_fraction', 'churn_every',
+    'churn_fraction', 'novel_fraction', 'phrase_pool_factor', 'reload_every',
+    'lazy_fraction', 'seed',
+)
 
 
 def build_phrase_universe():
@@ -102,12 +120,19 @@ class StressConfig:
     max_failures: int = 25              # abort the run after this many recognition failures
 
     observe_only: bool = False          # collect and report, but never fail on drift verdicts
+    allow_truncated: bool = False       # allow a partial workload to pass its completion gate
+    allow_missing_process_metrics: bool = False
     max_rss_slope_kib_per_1k: float = 512.0
     rss_noise_floor_kib: float = 4096.0  # ignore slope when net post-warmup growth is under allocator jitter
     max_rss_drain_return_kib: float = 32768.0  # RSS retained after closing all rules, vs post-build baseline
     max_fd_growth: int = 5
     max_latency_drift_pct: float = 75.0
     max_gc_objects_slope_per_1k: float = 2000.0
+    max_p95_ms: float = 0.0             # absolute performance gates; 0 disables
+    max_real_time_factor: float = 0.0
+    max_prepare_seconds: float = 0.0
+    baseline_json: str = ''             # compare performance with a compatible prior report
+    max_baseline_regression_pct: float = 25.0
 
     json_out: str = ''
     label: str = ''
@@ -119,8 +144,25 @@ class StressConfig:
             raise ValueError('decode_mode must be audio or mimic')
         if self.activity_pattern not in ('bursty', 'random', 'cycling'):
             raise ValueError('unknown activity_pattern %r' % self.activity_pattern)
+        if self.utterances <= 0 or self.num_grammars <= 0 or self.rules_per_grammar <= 0:
+            raise ValueError('utterances, num_grammars, and rules_per_grammar must be positive')
         if not (0 <= self.dictation_rules_per_grammar <= self.rules_per_grammar):
             raise ValueError('dictation_rules_per_grammar out of range')
+        if self.decode_mode == 'mimic' and self.dictation_rules_per_grammar == self.rules_per_grammar:
+            raise ValueError('mimic mode requires at least one non-dictation rule per grammar')
+        for name in ('active_grammar_fraction', 'context_switch_prob', 'context_drift_prob',
+                     'empty_activity_fraction', 'garbage_audio_fraction', 'churn_fraction',
+                     'novel_fraction', 'lazy_fraction', 'warmup_fraction'):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ValueError('%s must be between 0 and 1' % name)
+        if self.empty_activity_fraction + self.garbage_audio_fraction > 1.0:
+            raise ValueError('empty and garbage utterance fractions must sum to at most 1')
+        if self.checkpoint_every <= 0 or self.report_every <= 0:
+            raise ValueError('checkpoint_every and report_every must be positive')
+        if self.churn_every < 0 or self.reload_every < 0 or self.max_minutes < 0:
+            raise ValueError('cadences and max_minutes cannot be negative')
+        if self.max_baseline_regression_pct < 0:
+            raise ValueError('max_baseline_regression_pct cannot be negative')
         if self.phrase_pool_factor < 1.5:
             raise ValueError('phrase_pool_factor must be at least 1.5 so churn can find free phrases')
         universe_size = len(build_phrase_universe())
@@ -184,22 +226,25 @@ def linear_slope(xs, ys):
     return sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / denominator
 
 
-def read_proc_status_kib(field):
+def read_process_metrics(process):
+    """Return cross-platform RSS and descriptor/handle counts via psutil."""
+    if process is None:
+        return dict(available=False, error='psutil is not installed')
     try:
-        with open('/proc/self/status') as status:
-            for line in status:
-                if line.startswith(field + ':'):
-                    return int(line.split()[1])
-    except OSError:
-        return None
-    return None
-
-
-def count_open_fds():
-    try:
-        return len(os.listdir('/proc/self/fd'))
-    except OSError:
-        return None
+        rss_kib = process.memory_info().rss // 1024
+        if hasattr(process, 'num_fds'):
+            resource_count = process.num_fds()
+            resource_kind = 'file descriptors'
+        elif hasattr(process, 'num_handles'):
+            resource_count = process.num_handles()
+            resource_kind = 'process handles'
+        else:
+            resource_count = None
+            resource_kind = None
+        return dict(available=True, rss_kib=rss_kib,
+                    process_resources=resource_count, process_resource_kind=resource_kind)
+    except PROCESS_METRIC_ERRORS as error:
+        return dict(available=False, error='%s: %s' % (type(error).__name__, error))
 
 
 def malloc_trim():
@@ -312,6 +357,11 @@ class LongTermStressSession:
         self.prepare_seconds = 0.0
         self.truncated = False
         self.started_at = None
+        self._rss_high_water_kib = None
+        try:
+            self.process = psutil.Process() if psutil is not None else None
+        except PROCESS_METRIC_ERRORS:
+            self.process = None
 
     # ----- population management -------------------------------------------------
 
@@ -590,13 +640,23 @@ class LongTermStressSession:
     def _sample(self, phase, utterance_index):
         gc.collect()
         malloc_trim()
+        process_metrics = read_process_metrics(self.process)
+        rss_kib = process_metrics.get('rss_kib')
+        if rss_kib is not None:
+            self._rss_high_water_kib = max(self._rss_high_water_kib or rss_kib, rss_kib)
         checkpoint = dict(
             phase=phase,
             utterance=utterance_index,
             elapsed_s=round(time.monotonic() - self.started_at, 3),
-            rss_kib=read_proc_status_kib('VmRSS'),
-            hwm_kib=read_proc_status_kib('VmHWM'),
-            fds=count_open_fds(),
+            process_metrics_available=process_metrics['available'],
+            process_metrics_error=process_metrics.get('error'),
+            rss_kib=rss_kib,
+            hwm_kib=self._rss_high_water_kib,
+            process_resources=process_metrics.get('process_resources'),
+            process_resource_kind=process_metrics.get('process_resource_kind'),
+            # Retain the old key for schema-1 report consumers. On Windows its
+            # value is a process-handle count rather than a POSIX fd count.
+            fds=process_metrics.get('process_resources'),
             threads=threading.active_count(),
             gc_objects=len(gc.get_objects()),
             active_rules=getattr(self, '_last_active_count', 0),
@@ -654,7 +714,27 @@ class LongTermStressSession:
                                  passed=bool(passed), detail=detail))
 
         verdict('correctness', len(self.failures), 0, len(self.failures) == 0,
-                'recognition mismatches')
+                'recognition, harness, or teardown failures')
+
+        completed_target = completed == config.utterances
+        verdict('completion', completed, config.utterances,
+                completed_target or config.allow_truncated,
+                'utterances completed%s' % (' (partial runs allowed)'
+                                             if config.allow_truncated else ''))
+
+        rss_metrics_available = any(checkpoint.get('rss_kib') is not None
+                                    for checkpoint in self.checkpoints)
+        resource_metrics_available = any(checkpoint.get('process_resources') is not None
+                                         for checkpoint in self.checkpoints)
+        metrics_required = not config.allow_missing_process_metrics
+        verdict('rss-metrics-available', rss_metrics_available, True,
+                rss_metrics_available or not metrics_required,
+                'cross-platform process RSS sampling%s' %
+                (' (missing metrics allowed)' if not metrics_required else ''))
+        verdict('process-resource-metrics-available', resource_metrics_available, True,
+                resource_metrics_available or not metrics_required,
+                'file-descriptor or process-handle sampling%s' %
+                (' (missing metrics allowed)' if not metrics_required else ''))
 
         xs, ys = series('rss_kib')
         slope = linear_slope(xs, ys)
@@ -674,11 +754,15 @@ class LongTermStressSession:
             verdict('rss-slope', None, config.max_rss_slope_kib_per_1k, True,
                     'insufficient checkpoints or platform data')
 
-        xs, ys = series('fds')
+        xs, ys = series('process_resources')
         if len(ys) >= 2:
-            fd_growth = ys[-1] - ys[0]
-            verdict('fd-growth', fd_growth, config.max_fd_growth,
-                    fd_growth <= config.max_fd_growth, 'open fd change post-warmup')
+            resource_growth = ys[-1] - ys[0]
+            resource_kind = next((checkpoint.get('process_resource_kind')
+                                  for checkpoint in run_points
+                                  if checkpoint.get('process_resource_kind')), 'process resources')
+            verdict('process-resource-growth', resource_growth, config.max_fd_growth,
+                    resource_growth <= config.max_fd_growth,
+                    '%s change post-warmup' % resource_kind)
 
         xs, ys = series('gc_objects')
         slope = linear_slope(xs, ys)
@@ -703,6 +787,27 @@ class LongTermStressSession:
                         latency_drift_pct <= config.max_latency_drift_pct,
                         'p95 change, last vs first post-warmup quarter (%)')
 
+        latency_summary = self._summarize_latency()
+        if config.max_p95_ms > 0:
+            p95_ms = latency_summary.get('p95_ms')
+            verdict('p95-latency', p95_ms, config.max_p95_ms,
+                    p95_ms is not None and p95_ms <= config.max_p95_ms,
+                    'absolute p95 utterance latency (ms)')
+        if config.max_real_time_factor > 0:
+            real_time_factor = latency_summary.get('real_time_factor')
+            verdict('real-time-factor', real_time_factor, config.max_real_time_factor,
+                    real_time_factor is not None and
+                    real_time_factor <= config.max_real_time_factor,
+                    'total decode time divided by audio duration')
+        if config.max_prepare_seconds > 0:
+            verdict('prepare-seconds', round(self.prepare_seconds, 2),
+                    config.max_prepare_seconds,
+                    self.prepare_seconds <= config.max_prepare_seconds,
+                    'total compile/load preparation time')
+
+        if config.baseline_json:
+            self._add_baseline_verdicts(verdict, latency_summary)
+
         # The strongest leak discriminator: after every rule is closed, RSS
         # must return to near the post-build baseline no matter how large the
         # decode-graph working set was in between.
@@ -723,6 +828,63 @@ class LongTermStressSession:
 
         return verdicts, latency_drift_pct
 
+    def _add_baseline_verdicts(self, verdict, latency_summary):
+        """Compare this run with a compatible prior JSON report."""
+        config = self.config
+        try:
+            baseline = json.loads(Path(config.baseline_json).read_text())
+        except (OSError, ValueError, TypeError) as error:
+            verdict('baseline-load', None, config.baseline_json, False,
+                    '%s: %s' % (type(error).__name__, error))
+            return
+
+        baseline_config = baseline.get('config') or {}
+        current_config = dataclasses.asdict(config)
+        mismatches = []
+        for key in BASELINE_CONFIG_KEYS:
+            current = current_config.get(key)
+            previous = baseline_config.get(key)
+            if key == 'framework':
+                current = 'agf-direct' if current == 'agf' else current
+                previous = 'agf-direct' if previous == 'agf' else previous
+            if current != previous:
+                mismatches.append('%s=%r (baseline %r)' % (key, current, previous))
+        compatible = not mismatches
+        verdict('baseline-compatible', compatible, True, compatible,
+                'matching workload configuration' if compatible else '; '.join(mismatches[:5]))
+        if not compatible:
+            return
+
+        current_metrics = {
+            'p95-ms': latency_summary.get('p95_ms'),
+            'prepare-seconds': round(self.prepare_seconds, 2),
+        }
+        baseline_latency = baseline.get('latency') or {}
+        baseline_counters = baseline.get('counters') or {}
+        baseline_metrics = {
+            'p95-ms': baseline_latency.get('p95_ms'),
+            'prepare-seconds': baseline_counters.get('prepare_seconds'),
+        }
+        if config.decode_mode == 'audio':
+            current_metrics['real-time-factor'] = latency_summary.get('real_time_factor')
+            baseline_metrics['real-time-factor'] = baseline_latency.get('real_time_factor')
+
+        for name, current in current_metrics.items():
+            previous = baseline_metrics.get(name)
+            if current is None or previous is None:
+                verdict('baseline-%s' % name, None,
+                        config.max_baseline_regression_pct, False,
+                        'metric missing from current or baseline report')
+                continue
+            if previous == 0:
+                regression_pct = 0.0 if current == 0 else float('inf')
+            else:
+                regression_pct = (current / previous - 1.0) * 100.0
+            rounded = round(regression_pct, 1) if math.isfinite(regression_pct) else 'infinity'
+            verdict('baseline-%s' % name, rounded, config.max_baseline_regression_pct,
+                    regression_pct <= config.max_baseline_regression_pct,
+                    'percent change from baseline (%s -> %s)' % (previous, current))
+
     def _summarize_latency(self):
         seconds = [latency for _, latency in self.latencies]
         if not seconds:
@@ -742,36 +904,39 @@ class LongTermStressSession:
     # ----- main entry ------------------------------------------------------------
 
     def run(self):
-        from kaldi_active_grammar import Compiler, disable_donation_message
         config = self.config
-        disable_donation_message()
         self.started_at = time.monotonic()
-
-        if config.decode_mode == 'audio':
-            if self.piper_voice is None:
-                self.piper_voice = load_piper_voice()
-            self.audio_pool = AudioPool(self.piper_voice)
-            self._garbage_bytes = self._garbage_audio()
-
-        self.compiler = Compiler(framework=config.framework)
-        self.decoder = self.compiler.init_decoder()
-        self._sample('startup', -1)
-
-        for grammar_index in range(config.num_grammars):
-            self.grammars.append(self._create_grammar(grammar_index, generation=0))
-        self._prepare_for_recognition()
-        if self.audio_pool is not None:
-            self._presynthesize_audio()
-            self.log('[%s] pre-synthesized %d texts in %.1fs'
-                     % (config.framework, self.audio_pool.synth_calls,
-                        self.audio_pool.synth_seconds))
-        self._sample('built', -1)
-        self.log('[%s] population built: %d grammars x %d rules (%d dictation each); starting %d utterances'
-                 % (config.framework, config.num_grammars, config.rules_per_grammar,
-                    config.dictation_rules_per_grammar, config.utterances))
-
-        deadline = (self.started_at + config.max_minutes * 60.0) if config.max_minutes else None
+        caught_error = None
         try:
+            from kaldi_active_grammar import Compiler, disable_donation_message
+            disable_donation_message()
+            if config.decode_mode == 'audio':
+                if self.piper_voice is None:
+                    self.piper_voice = load_piper_voice()
+                self.audio_pool = AudioPool(self.piper_voice)
+                self._garbage_bytes = self._garbage_audio()
+
+            self.compiler = Compiler(framework=config.framework)
+            self.decoder = self.compiler.init_decoder()
+            self._sample('startup', -1)
+
+            for grammar_index in range(config.num_grammars):
+                self.grammars.append(self._create_grammar(grammar_index, generation=0))
+            self._prepare_for_recognition()
+            if self.audio_pool is not None:
+                self._presynthesize_audio()
+                self.log('[%s] pre-synthesized %d texts in %.1fs'
+                         % (config.framework, self.audio_pool.synth_calls,
+                            self.audio_pool.synth_seconds))
+            self._sample('built', -1)
+            self.log('[%s] population built: %d grammars x %d rules (%d dictation each); starting %d utterances'
+                     % (config.framework, config.num_grammars, config.rules_per_grammar,
+                        config.dictation_rules_per_grammar, config.utterances))
+
+            # The cap applies to the measured workload, not model loading and
+            # bounded audio pre-synthesis performed before the baseline.
+            deadline = ((time.monotonic() + config.max_minutes * 60.0)
+                        if config.max_minutes else None)
             for utterance_index in range(config.utterances):
                 if deadline is not None and time.monotonic() > deadline:
                     self.truncated = True
@@ -794,28 +959,20 @@ class LongTermStressSession:
                     self._sample('run', utterance_index)
                 if (utterance_index + 1) % config.report_every == 0:
                     self._progress_line(utterance_index)
-        except KeyboardInterrupt:
+        except BaseException as error:
             self.truncated = True
-            self.log('[%s] interrupted; producing report from partial run' % config.framework)
+            caught_error = sys.exc_info()
+            kind = 'interrupted' if isinstance(error, KeyboardInterrupt) else 'harness-error'
+            self.failures.append(dict(
+                utterance=self.counters['utterances'], kind=kind,
+                expected='successful workload execution',
+                got='%s: %s' % (type(error).__name__, error)))
+            self.log('[%s] %s; producing report after teardown: %s: %s'
+                     % (config.framework, kind, type(error).__name__, error))
 
-        # Teardown: everything must release cleanly.  Pop rather than iterate
-        # so no loop variable in this live frame pins the last grammar.
-        while self.grammars:
-            self._close_grammar(self.grammars.pop())
-        allocator_rules = self.compiler._kaldi_rule_id_allocator.num_rules
-        self._sample('drained', self.counters['utterances'])
-        self.compiler.close()
-        self.compiler = None
-        self.decoder = None
-        for _ in range(3):  # multiple passes: weakref/cffi finalizers can defer collection
-            gc.collect()
-        alive_rule_objects = sum(1 for reference in self.rule_refs if reference() is not None)
-        if alive_rule_objects:
-            self._log_alive_rule_referrers()
-        self._sample('closed', self.counters['utterances'])
-
-        teardown_stats = dict(allocator_rules=allocator_rules,
-                              alive_rule_objects=alive_rule_objects)
+        teardown_stats, teardown_error = self._teardown()
+        if caught_error is None and teardown_error is not None:
+            caught_error = teardown_error
         verdicts, latency_drift_pct = self._analyze(teardown_stats)
         report = self._build_report(verdicts, teardown_stats)
         self._print_summary(report, latency_drift_pct)
@@ -823,7 +980,69 @@ class LongTermStressSession:
             Path(config.json_out).parent.mkdir(parents=True, exist_ok=True)
             Path(config.json_out).write_text(json.dumps(report, indent=2))
             self.log('[%s] JSON report written to %s' % (config.framework, config.json_out))
+        if caught_error is not None:
+            _, error, traceback = caught_error
+            raise error.with_traceback(traceback)
         return report
+
+    def _teardown(self):
+        """Release every reachable native resource, continuing after failures."""
+        first_error = None
+
+        def note_error(kind, error):
+            nonlocal first_error
+            if first_error is None:
+                first_error = (type(error), error, error.__traceback__)
+            self.failures.append(dict(
+                utterance=self.counters['utterances'], kind=kind,
+                expected='successful teardown',
+                got='%s: %s' % (type(error).__name__, error)))
+            self.log('[%s] %s: %s: %s'
+                     % (self.config.framework, kind, type(error).__name__, error))
+
+        # Pop all containers and close rules individually so one bad close
+        # cannot prevent the remaining rules or compiler from being released.
+        while self.grammars:
+            grammar = self.grammars.pop()
+            while grammar.rules:
+                stress_rule = grammar.rules.pop()
+                try:
+                    stress_rule.rule.close()
+                    self.counters['rules_closed'] += 1
+                except BaseException as error:
+                    note_error('rule-teardown-error', error)
+                del stress_rule
+            del grammar
+
+        allocator_rules = 0
+        if self.compiler is not None:
+            allocator_rules = self.compiler._kaldi_rule_id_allocator.num_rules
+            try:
+                self._sample('drained', self.counters['utterances'])
+            except BaseException as error:
+                note_error('drained-sample-error', error)
+            try:
+                self.compiler.close()
+            except BaseException as error:
+                note_error('compiler-teardown-error', error)
+        self.compiler = None
+        self.decoder = None
+
+        for _ in range(3):  # multiple passes: weakref/cffi finalizers can defer collection
+            gc.collect()
+        alive_rule_objects = sum(1 for reference in self.rule_refs if reference() is not None)
+        if alive_rule_objects:
+            try:
+                self._log_alive_rule_referrers()
+            except BaseException as error:
+                note_error('teardown-diagnostic-error', error)
+        try:
+            self._sample('closed', self.counters['utterances'])
+        except BaseException as error:
+            note_error('closed-sample-error', error)
+
+        return (dict(allocator_rules=allocator_rules,
+                     alive_rule_objects=alive_rule_objects), first_error)
 
     def _build_report(self, verdicts, teardown_stats):
         config = self.config
@@ -834,7 +1053,7 @@ class LongTermStressSession:
             counters['synth_seconds'] = round(self.audio_pool.synth_seconds, 1)
         counters['prepare_seconds'] = round(self.prepare_seconds, 2)
         return dict(
-            schema=1,
+            schema=2,
             label=config.label,
             timestamp=time.strftime('%Y-%m-%dT%H:%M:%S'),
             config=dataclasses.asdict(config),
@@ -901,6 +1120,11 @@ def build_config(profile=None, **overrides):
     return StressConfig(**values)
 
 
+def framework_report_path(path_value, framework):
+    path = Path(path_value)
+    return path.with_name('%s-%s%s' % (path.stem, framework, path.suffix or '.json'))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--profile', choices=sorted(PROFILES), default='standard')
@@ -908,10 +1132,18 @@ def main(argv=None):
     parser.add_argument('--json-out', default=None, help='write JSON report(s); with --framework both, the framework name is appended')
     parser.add_argument('--observe', action='store_true', help='report drift but never fail on it')
     parser.add_argument('--label', default=None, help='free-form label recorded in the report')
+    parser.add_argument('--allow-truncated', action='store_true', default=None,
+                        help='allow a wall-clock-limited partial workload to pass completion')
+    parser.add_argument('--allow-missing-process-metrics', action='store_true', default=None,
+                        help='do not fail when RSS or descriptor/handle metrics are unavailable')
+    parser.add_argument('--baseline-json', default=None,
+                        help='compare performance with a compatible prior JSON report')
 
     knobs = parser.add_argument_group('workload knobs (override the profile)')
     for field in dataclasses.fields(StressConfig):
-        if field.name in ('framework', 'observe_only', 'json_out', 'label'):
+        if field.name in ('framework', 'observe_only', 'json_out', 'label',
+                          'allow_truncated', 'allow_missing_process_metrics',
+                          'baseline_json'):
             continue
         option = '--' + field.name.replace('_', '-')
         if field.type == 'bool':
@@ -919,6 +1151,14 @@ def main(argv=None):
         else:
             knobs.add_argument(option, type=type(field.default), default=None)
     args = parser.parse_args(argv)
+
+    # The worker changes into tests/ to locate its model. Keep paths relative
+    # to the caller's directory, which is what CLI users expect.
+    invocation_dir = Path.cwd()
+    if args.json_out:
+        args.json_out = str((invocation_dir / args.json_out).resolve())
+    if args.baseline_json:
+        args.baseline_json = str((invocation_dir / args.baseline_json).resolve())
 
     if args.framework == 'both':
         # One process per framework: RSS and fd measurements are meaningless
@@ -928,19 +1168,20 @@ def main(argv=None):
         base_argv = []
         arguments = iter(list(argv) if argv is not None else sys.argv[1:])
         for argument in arguments:
-            if argument in ('--framework', '--json-out'):
+            if argument in ('--framework', '--json-out', '--baseline-json'):
                 next(arguments, None)
                 continue
-            if argument.startswith(('--framework=', '--json-out=')):
+            if argument.startswith(('--framework=', '--json-out=', '--baseline-json=')):
                 continue
             base_argv.append(argument)
         exit_code = 0
         for framework in ('agf-direct', 'laf'):
             child_argv = base_argv + ['--framework', framework]
             if args.json_out:
-                path = Path(args.json_out)
-                child_argv += ['--json-out', str(path.with_name(
-                    '%s-%s%s' % (path.stem, framework, path.suffix or '.json')))]
+                child_argv += ['--json-out', str(framework_report_path(args.json_out, framework))]
+            if args.baseline_json:
+                child_argv += ['--baseline-json',
+                               str(framework_report_path(args.baseline_json, framework))]
             result = subprocess.run([sys.executable, __file__] + child_argv)
             exit_code = exit_code or result.returncode
         return exit_code
@@ -953,7 +1194,6 @@ def main(argv=None):
                  if hasattr(args, field.name) and field.name not in
                  ('framework', 'observe_only', 'json_out', 'label')}
 
-    piper_voice = None
     all_passed = True
     for framework in frameworks:
         if framework == 'laf':
@@ -967,9 +1207,7 @@ def main(argv=None):
             config.label = args.label
         if args.json_out:
             config.json_out = args.json_out
-        if config.decode_mode == 'audio' and piper_voice is None:
-            piper_voice = load_piper_voice()
-        session = LongTermStressSession(config, piper_voice=piper_voice)
+        session = LongTermStressSession(config)
         report = session.run()
         all_passed = all_passed and report['passed']
     return 0 if all_passed else 1

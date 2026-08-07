@@ -83,20 +83,34 @@ per-utterance activity changes, and are periodically closed and recreated
 (exercising rule-ID recycling, FileCache-hit recompilation, and the lazy
 compile/load queues), and reloaded in place via `KaldiRule.reload()`. Resource
 metrics are sampled at checkpoints after `gc.collect()` and `malloc_trim`:
-RSS/HWM, open fds, thread count, Python object count, live rule and decoder
-grammar counts, and tmp-dir/cache disk usage. Per-utterance latency is
-recorded throughout.
+cross-platform process RSS/HWM and file-descriptor or Windows handle counts
+(via `psutil`), thread count, Python object count, live rule and decoder grammar
+counts, and tmp-dir/cache disk usage. Per-utterance latency is recorded
+throughout. A gated run fails explicitly if required process metrics are not
+available; `--allow-missing-process-metrics` is available for diagnostic-only
+environments.
 
-A run fails on any recognition mismatch, or (unless `--observe`) on
-within-run drift after a discarded warmup window: RSS growth slope (with a
-noise floor, since decode-graph working sets wobble), fd growth, Python
-object growth slope, p95 latency drift (last vs first post-warmup quarter),
-RSS failing to return to the post-build baseline after all rules are closed
-(the most direct leak discriminator, immune to working-set wobble), or rules
-failing to release at teardown. These self-relative gates are
-machine-independent; every run can also write a JSON metrics report for
-trend tracking across commits. `--framework both` runs each framework in its
-own subprocess so memory measurements stay uncontaminated.
+A run fails on any recognition mismatch, incomplete workload, or (unless
+`--observe`) within-run drift after a discarded warmup window: RSS growth slope
+(with a noise floor, since decode-graph working sets wobble), descriptor/handle
+growth, Python object growth slope, p95 latency drift (last vs first
+post-warmup quarter), RSS failing to return to the post-build baseline after
+all rules are closed, or rules failing to release at teardown. Truncation due
+to the workload time cap fails the completion gate by default; use
+`--allow-truncated` only when a deliberately partial run should pass.
+
+Unexpected setup, compile, decode, and teardown exceptions still trigger
+best-effort cleanup and JSON report generation before being re-raised. Both
+`--framework both` and the pytest wrappers run every framework case in a fresh
+subprocess so allocator state cannot contaminate another measurement.
+
+For performance regression gating, `--max-p95-ms`,
+`--max-real-time-factor`, and `--max-prepare-seconds` provide absolute limits.
+`--baseline-json` compares p95 latency, real-time factor, and preparation time
+with a compatible prior schema-2 report; `--max-baseline-regression-pct`
+controls the allowed increase (25% by default). With `--framework both`, pass
+the common baseline stem and the runner selects the corresponding
+`-agf-direct.json` and `-laf.json` reports.
 
 Run it directly for full knob control (population size, utterance count or
 wall-clock cap, activity pattern, churn/reload cadence, utterance mix, seed,
@@ -105,6 +119,8 @@ thresholds — see `--help`):
 ```sh
 just stress --profile smoke --framework both
 just stress --profile standard --framework agf --json-out report.json
+just stress --profile standard --framework agf --baseline-json baseline.json --max-baseline-regression-pct 15
+just stress --profile standard --framework agf --max-p95-ms 500 --max-real-time-factor 0.5
 just stress --profile overnight --framework laf --max-minutes 480 --observe
 ```
 
@@ -120,5 +136,5 @@ The `standard` profile (12 grammars × 8 rules, 5,000 utterances with churn
 every 250, roughly ten minutes per healthy framework) is the intended
 regression gate; `smoke` is a minutes-scale end-to-end check; `overnight`
 (24 × 10, 200,000 utterances) is for soak testing. Every profile carries a
-`--max-minutes` wall-clock cap; a truncated run still reports and gates on
-whatever it collected.
+`--max-minutes` measured-workload cap. A truncated run still reports and runs
+all available gates, but it fails completion unless explicitly allowed.

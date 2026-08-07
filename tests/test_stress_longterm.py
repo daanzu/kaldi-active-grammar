@@ -12,18 +12,18 @@ trend tracking across commits.  For interactive or overnight runs with custom
 knobs, invoke the harness CLI directly (see its module docstring).
 """
 
+import json
+import subprocess
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
-from tests.stress.longterm import (
-    LongTermStressSession,
-    build_config,
-    missing_laf_model_files,
-)
+from tests.stress.longterm import missing_laf_model_files
 
 REPORTS_DIR = Path(__file__).parent / '.stress_reports'
+RUNNER = Path(__file__).parent / 'stress' / 'longterm.py'
 
 pytestmark = pytest.mark.stress
 
@@ -32,25 +32,35 @@ pytestmark = pytest.mark.stress
 class TestLongTermStress:
 
     @pytest.fixture(autouse=True)
-    def setup(self, change_to_test_dir, piper_voice, framework):
+    def setup(self, framework):
         if framework == 'laf':
             missing = missing_laf_model_files()
             if missing:
                 pytest.skip('lookahead test model is missing: %s' % ', '.join(missing))
         self.framework = framework
-        self.piper_voice = piper_voice
 
     def run_profile(self, profile):
         framework_id = 'agf' if self.framework == 'agf-direct' else self.framework
-        config = build_config(profile=profile, framework=self.framework)
-        config.label = f'pytest-{profile}'
-        config.json_out = str(REPORTS_DIR / ('%s-%s-%s.json'
-                              % (profile, framework_id, time.strftime('%Y%m%d-%H%M%S'))))
-        session = LongTermStressSession(config, piper_voice=self.piper_voice)
-        report = session.run()
+        report_path = (REPORTS_DIR / ('%s-%s-%s-%d.json'
+                       % (profile, framework_id, time.strftime('%Y%m%d-%H%M%S'),
+                          time.time_ns()))).resolve()
+        command = [
+            sys.executable, str(RUNNER.resolve()),
+            '--profile', profile,
+            '--framework', self.framework,
+            '--label', 'pytest-%s' % profile,
+            '--json-out', str(report_path),
+        ]
+        result = subprocess.run(command)
+        assert report_path.is_file(), \
+            'stress worker exited %d without writing %s' % (result.returncode, report_path)
+        report = json.loads(report_path.read_text())
+        assert result.returncode == 0, \
+            'stress worker exited %d (see %s)' % (result.returncode, report_path)
+        assert not report['truncated'], 'stress workload was truncated (see %s)' % report_path
         assert not report['failures'], report['failures'][:5]
         assert not report['failed_verdicts'], \
-            'failed drift verdicts: %s (see %s)' % (report['failed_verdicts'], config.json_out)
+            'failed verdicts: %s (see %s)' % (report['failed_verdicts'], report_path)
 
     def test_longterm_smoke(self):
         """Fast, small-population run validating the harness end to end."""
