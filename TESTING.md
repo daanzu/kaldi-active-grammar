@@ -9,13 +9,23 @@ just setup-tests
 just setup-tests-venv
 ```
 
-Run the normal suite with `just test`. The `test-separately` recipe runs each
-collected test in a fresh process when diagnosing native state or isolation
-problems:
+Run the normal suite with `just test`:
 
 ```sh
 just test
+```
+
+The separate-process runners, `just test-separately` and
+`just test-package-separately`, are deprecated. They are retained only for
+historical native-state or isolation diagnosis; the memory leaks that motivated
+them are believed to be fixed. Use `just test` or `just test-package` instead.
+
+If a legacy investigation still requires process isolation, the deprecated
+runners remain available:
+
+```sh
 just test-separately
+just test-package-separately
 ```
 
 Grammar integration cases are parameterized for the supported native-FST
