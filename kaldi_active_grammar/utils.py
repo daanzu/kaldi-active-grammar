@@ -266,8 +266,10 @@ class _FSTFileCache(object):
         because their filename is itself a hash of its content mixed with a
         hash of its dependencies. If ``invalidate``, discard the loaded state
         and mark the cache new for the owning Model to rebuild. The private
-        ``defer_initial_save`` mode writes a cold marker until that rebuild
-        completes successfully.
+        ``defer_initial_save`` mode applies to that reset alone: it writes a
+        cold marker on disk until the rebuild completes successfully. A cache
+        that loaded warm is never marked, so a later failure in the owning
+        Model cannot discard it.
         """
 
         self.cache_filename = cache_filename
@@ -340,7 +342,12 @@ class _FSTFileCache(object):
 
     @contextmanager
     def _transaction(self):
-        """Defer cache commits until the owning initialization succeeds."""
+        """Defer cache commits until the owning initialization succeeds.
+
+        This withholds saves only; it does not mark the on-disk cache cold.
+        Only a reset under ``defer_initial_save`` does that, so a failed
+        transaction over a cache that loaded warm leaves that warm file intact.
+        """
         if self._saves_deferred:
             raise RuntimeError("cache transactions cannot be nested")
         self._saves_deferred = True

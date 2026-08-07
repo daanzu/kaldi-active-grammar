@@ -256,8 +256,15 @@ class Model(object):
             defer_initial_save=True,
         )
 
-        # Keep a reset cache cold until every generated file and the word table
-        # load successfully; a failed constructor must retry on next startup.
+        # Only a reset cache (``cache_is_new``) is kept cold on disk until every
+        # generated file and the word table load successfully; a failed rebuild
+        # must retry on the next startup.  A warm cache is not proactively
+        # marked incomplete: most warm constructions preserve the generated
+        # files, and an unrelated read failure should not discard a valid cache.
+        # If warm construction does create a missing optional file, the
+        # unchanged on-disk dependency record will detect that file on reload.
+        # The transaction withholds every commit below until initialization
+        # completes.
         with self._fst_cache._transaction():
             self.phone_to_int_dict = { phone: i for phone, i in load_symbol_table(self.files_dict['phones.txt']) }
             self.lexicon = Lexicon(self.phone_to_int_dict.keys())

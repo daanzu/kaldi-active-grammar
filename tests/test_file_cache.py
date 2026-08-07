@@ -756,6 +756,107 @@ def test_model_invalidation_clears_fsts_and_next_start_is_warm(tmp_path, monkeyp
     assert len(generated) == 2
 
 
+def build_model_once(tmp_path, monkeypatch):
+    """Set up a model dir whose lexicon generation is stubbed out."""
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    monkeypatch.setattr(Model, 'generate_lexicon_files', lambda self: None)
+    return model_dir, tmp_path / 'fst-cache'
+
+
+def fail_load_words(self, words_file=None):
+    from kaldi_active_grammar import KaldiError
+    raise KaldiError('simulated failure after the cache was validated')
+
+
+def test_warm_construction_failure_leaves_cache_warm(tmp_path, monkeypatch):
+    """The cold marker covers rebuilds only, not every failed construction."""
+    from kaldi_active_grammar import KaldiError
+    from kaldi_active_grammar.model import Model
+    import kaldi_active_grammar.defaults as defaults
+
+    model_dir, tmp_dir = build_model_once(tmp_path, monkeypatch)
+    Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    cache_filename = model_dir / defaults.FILE_CACHE_FILENAME
+
+    original_load_words = Model.load_words
+    monkeypatch.setattr(Model, 'load_words', fail_load_words)
+    with pytest.raises(KaldiError):
+        Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+
+    # No generated dependency changed during this warm construction, so the
+    # cache it loaded still describes reality and must survive the failure.
+    state = json.loads(cache_filename.read_text(encoding='utf-8'))
+    assert 'incomplete' not in state
+
+    monkeypatch.setattr(Model, 'load_words', original_load_words)
+    recovered = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    assert not recovered._fst_cache.cache_is_new
+
+
+def test_failed_warm_laf_generation_is_revalidated(tmp_path, monkeypatch):
+    """A newly generated optional file makes a failed warm load stale."""
+    from kaldi_active_grammar import KaldiError
+    from kaldi_active_grammar.model import Model
+    import kaldi_active_grammar.defaults as defaults
+
+    model_dir, tmp_dir = build_model_once(tmp_path, monkeypatch)
+    words_relabeled_path = model_dir / 'words.relabeled.txt'
+    words_relabeled_path.unlink()
+    original_relabeled = Model.generate_words_relabeled_file
+
+    # Seed a warm cache whose optional output is explicitly recorded absent.
+    monkeypatch.setattr(Model, 'generate_words_relabeled_file', staticmethod(lambda *args: None))
+    initial = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    assert not words_relabeled_path.exists()
+    assert initial._fst_cache._state['records']['words.relabeled.txt'] == {'absent': True}
+    assert initial._fst_cache.cache_is_new
+    warm_seed = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    assert not warm_seed._fst_cache.cache_is_new
+    cache_filename = model_dir / defaults.FILE_CACHE_FILENAME
+    state_before_failure = json.loads(cache_filename.read_text(encoding='utf-8'))
+
+    monkeypatch.setattr(Model, 'generate_words_relabeled_file', staticmethod(original_relabeled))
+    original_load_words = Model.load_words
+    monkeypatch.setattr(Model, 'load_words', fail_load_words)
+    with pytest.raises(KaldiError, match='simulated failure after the cache was validated'):
+        Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+
+    assert words_relabeled_path.exists()
+    state_after_failure = json.loads(cache_filename.read_text(encoding='utf-8'))
+    assert state_after_failure == state_before_failure
+    assert 'incomplete' not in state_after_failure
+    assert state_after_failure['records']['words.relabeled.txt'] == {'absent': True}
+    monkeypatch.setattr(Model, 'load_words', original_load_words)
+    retry = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    assert retry._fst_cache.cache_is_new
+    assert not Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)._fst_cache.cache_is_new
+
+
+def test_failed_rebuild_leaves_cold_marker_and_retries(tmp_path, monkeypatch):
+    """The complementary scope: a rebuild that fails must retry next startup."""
+    from kaldi_active_grammar import KaldiError
+    from kaldi_active_grammar.model import Model
+    import kaldi_active_grammar.defaults as defaults
+
+    model_dir, tmp_dir = build_model_once(tmp_path, monkeypatch)
+    cache_filename = model_dir / defaults.FILE_CACHE_FILENAME
+
+    original_load_words = Model.load_words
+    monkeypatch.setattr(Model, 'load_words', fail_load_words)
+    with pytest.raises(KaldiError):
+        Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+
+    state = json.loads(cache_filename.read_text(encoding='utf-8'))
+    assert state['incomplete'] is True
+
+    monkeypatch.setattr(Model, 'load_words', original_load_words)
+    retried = Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)
+    assert retried._fst_cache.cache_is_new
+    assert not Model(str(model_dir), str(tmp_dir), tmp_dir_needed=True)._fst_cache.cache_is_new
+
+
 def test_compiler_invalidation_rebuilds_once_and_clears_fsts(monkeypatch, tmp_path):
     import importlib
 
