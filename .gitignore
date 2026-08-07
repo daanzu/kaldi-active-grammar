@@ -36,3 +36,6 @@ pip-wheel-metadata/
 /.codex/
 /.pi/
 .mcp.json
+
+# Long-term stress harness reports
+/tests/.stress_reports/

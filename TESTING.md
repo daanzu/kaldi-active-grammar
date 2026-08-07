@@ -73,3 +73,48 @@ The test pre-generates only 24 audio samples, so most of its runtime is spent in
 the decoder workload. Runtime varies with the platform, model, native build,
 and framework; the LAF case also reconstructs its active decode graph at each
 utterance boundary.
+
+## Long-term stress harness
+
+`tests/stress/longterm.py` models extended power-user sessions far beyond the
+prolonged test above: one compiler and decoder stay alive while many grammars
+(groups of rules, including dictation-bearing rules) are decoded against with
+per-utterance activity changes, and are periodically closed and recreated
+(exercising rule-ID recycling, FileCache-hit recompilation, and the lazy
+compile/load queues), and reloaded in place via `KaldiRule.reload()`. Resource
+metrics are sampled at checkpoints after `gc.collect()` and `malloc_trim`:
+RSS/HWM, open fds, thread count, Python object count, live rule and decoder
+grammar counts, and tmp-dir/cache disk usage. Per-utterance latency is
+recorded throughout.
+
+A run fails on any recognition mismatch, or (unless `--observe`) on
+within-run drift after a discarded warmup window: RSS growth slope, fd growth,
+Python object growth slope, p95 latency drift (last vs first post-warmup
+quarter), or rules failing to release at teardown. These self-relative gates
+are machine-independent; every run can also write a JSON metrics report for
+trend tracking across commits.
+
+Run it directly for full knob control (population size, utterance count or
+wall-clock cap, activity pattern, churn/reload cadence, utterance mix, seed,
+thresholds — see `--help`):
+
+```sh
+just stress --profile smoke --framework both
+just stress --profile standard --framework agf --json-out report.json
+just stress --profile overnight --framework laf --max-minutes 480 --observe
+```
+
+Or as scripted regression tests through pytest (marked `stress`, excluded by
+default; JSON reports land in `tests/.stress_reports/`):
+
+```sh
+just test -m stress                # smoke + standard, both frameworks
+just test -m stress -k 'smoke'     # quick harness validation only
+```
+
+The `standard` profile (12 grammars × 8 rules, 5,000 utterances with churn
+every 250, roughly ten minutes per healthy framework) is the intended
+regression gate; `smoke` is a minutes-scale end-to-end check; `overnight`
+(24 × 10, 200,000 utterances) is for soak testing. Every profile carries a
+`--max-minutes` wall-clock cap; a truncated run still reports and gates on
+whatever it collected.

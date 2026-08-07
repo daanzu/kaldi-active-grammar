@@ -88,6 +88,14 @@ setup-tests-venv:
 	uv venv --no-project
 	uv pip install --python .venv/bin/python -r requirements-test.txt -r requirements-editable.txt
 
+# Run the long-term stress harness directly with full knob control (see --help). Args e.g.: --profile smoke|standard|overnight, --framework agf|laf|both, --utterances N, --observe, --json-out FILE
+stress *args='':
+	if [ -x .venv/bin/python ]; then .venv/bin/python tests/stress/longterm.py "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/stress/longterm.py "$@"; fi
+
+# Quick smoke run of the stress harness for both frameworks.
+stress-smoke *args='':
+	just stress --profile smoke --framework both "$@"
+
 # Run the test suite with pytest. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test *args='':
 	if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"; fi
