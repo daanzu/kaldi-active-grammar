@@ -104,6 +104,7 @@ class StressConfig:
     observe_only: bool = False          # collect and report, but never fail on drift verdicts
     max_rss_slope_kib_per_1k: float = 512.0
     rss_noise_floor_kib: float = 4096.0  # ignore slope when net post-warmup growth is under allocator jitter
+    max_rss_drain_return_kib: float = 32768.0  # RSS retained after closing all rules, vs post-build baseline
     max_fd_growth: int = 5
     max_latency_drift_pct: float = 75.0
     max_gc_objects_slope_per_1k: float = 2000.0
@@ -661,9 +662,10 @@ class LongTermStressSession:
             slope_per_1k = slope * 1000.0
             net_growth = ys[-1] - ys[0]
             # A slope fitted through allocator jitter is meaningless when the
-            # net movement is inside the noise floor; short runs cannot
+            # net movement is inside the noise floor (or negative: a run that
+            # ends below where it started is not leaking); short runs cannot
             # resolve sub-noise leaks, long runs (overnight) can.
-            within_noise = abs(net_growth) <= config.rss_noise_floor_kib
+            within_noise = net_growth <= config.rss_noise_floor_kib
             verdict('rss-slope', round(slope_per_1k, 1), config.max_rss_slope_kib_per_1k,
                     within_noise or slope_per_1k <= config.max_rss_slope_kib_per_1k,
                     'KiB RSS growth per 1000 utterances, post-warmup (net %+d KiB, noise floor %d)'
@@ -700,6 +702,17 @@ class LongTermStressSession:
                         config.max_latency_drift_pct,
                         latency_drift_pct <= config.max_latency_drift_pct,
                         'p95 change, last vs first post-warmup quarter (%)')
+
+        # The strongest leak discriminator: after every rule is closed, RSS
+        # must return to near the post-build baseline no matter how large the
+        # decode-graph working set was in between.
+        rss_by_phase = {checkpoint['phase']: checkpoint.get('rss_kib')
+                        for checkpoint in self.checkpoints}
+        if rss_by_phase.get('built') and rss_by_phase.get('drained'):
+            drain_return = rss_by_phase['drained'] - rss_by_phase['built']
+            verdict('rss-drain-return', drain_return, config.max_rss_drain_return_kib,
+                    drain_return <= config.max_rss_drain_return_kib,
+                    'KiB RSS retained after closing all rules, vs post-build baseline')
 
         verdict('rule-registry-empty', teardown_stats['allocator_rules'], 0,
                 teardown_stats['allocator_rules'] == 0,
@@ -832,6 +845,8 @@ class LongTermStressSession:
             truncated=self.truncated,
             counters=counters,
             latency=self._summarize_latency(),
+            latency_series_ms=[[index, round(seconds * 1000, 1)]
+                               for index, seconds in self.latencies],
             teardown=teardown_stats,
             checkpoints=self.checkpoints,
             failures=self.failures,
@@ -905,9 +920,33 @@ def main(argv=None):
             knobs.add_argument(option, type=type(field.default), default=None)
     args = parser.parse_args(argv)
 
+    if args.framework == 'both':
+        # One process per framework: RSS and fd measurements are meaningless
+        # when a second decoder session runs on top of the first one's freed
+        # allocator arenas.
+        import subprocess
+        base_argv = []
+        arguments = iter(list(argv) if argv is not None else sys.argv[1:])
+        for argument in arguments:
+            if argument in ('--framework', '--json-out'):
+                next(arguments, None)
+                continue
+            if argument.startswith(('--framework=', '--json-out=')):
+                continue
+            base_argv.append(argument)
+        exit_code = 0
+        for framework in ('agf-direct', 'laf'):
+            child_argv = base_argv + ['--framework', framework]
+            if args.json_out:
+                path = Path(args.json_out)
+                child_argv += ['--json-out', str(path.with_name(
+                    '%s-%s%s' % (path.stem, framework, path.suffix or '.json')))]
+            result = subprocess.run([sys.executable, __file__] + child_argv)
+            exit_code = exit_code or result.returncode
+        return exit_code
+
     os.chdir(TESTS_DIR)
-    frameworks = ['agf-direct', 'laf'] if args.framework == 'both' else \
-        ['agf-direct' if args.framework == 'agf' else args.framework]
+    frameworks = ['agf-direct' if args.framework == 'agf' else args.framework]
 
     overrides = {field.name: getattr(args, field.name)
                  for field in dataclasses.fields(StressConfig)
@@ -927,10 +966,7 @@ def main(argv=None):
         if args.label:
             config.label = args.label
         if args.json_out:
-            path = Path(args.json_out)
-            if len(frameworks) > 1:
-                path = path.with_name('%s-%s%s' % (path.stem, framework, path.suffix or '.json'))
-            config.json_out = str(path)
+            config.json_out = args.json_out
         if config.decode_mode == 'audio' and piper_voice is None:
             piper_voice = load_piper_voice()
         session = LongTermStressSession(config, piper_voice=piper_voice)

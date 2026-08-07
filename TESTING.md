@@ -88,11 +88,15 @@ grammar counts, and tmp-dir/cache disk usage. Per-utterance latency is
 recorded throughout.
 
 A run fails on any recognition mismatch, or (unless `--observe`) on
-within-run drift after a discarded warmup window: RSS growth slope, fd growth,
-Python object growth slope, p95 latency drift (last vs first post-warmup
-quarter), or rules failing to release at teardown. These self-relative gates
-are machine-independent; every run can also write a JSON metrics report for
-trend tracking across commits.
+within-run drift after a discarded warmup window: RSS growth slope (with a
+noise floor, since decode-graph working sets wobble), fd growth, Python
+object growth slope, p95 latency drift (last vs first post-warmup quarter),
+RSS failing to return to the post-build baseline after all rules are closed
+(the most direct leak discriminator, immune to working-set wobble), or rules
+failing to release at teardown. These self-relative gates are
+machine-independent; every run can also write a JSON metrics report for
+trend tracking across commits. `--framework both` runs each framework in its
+own subprocess so memory measurements stay uncontaminated.
 
 Run it directly for full knob control (population size, utterance count or
 wall-clock cap, activity pattern, churn/reload cadence, utterance mix, seed,
