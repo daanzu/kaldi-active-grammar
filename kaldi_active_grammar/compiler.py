@@ -545,15 +545,11 @@ class Compiler(object):
 
     def compile_universal_grammar(self, words=None):
         """recognizes any sequence of words"""
-        kaldi_rule = KaldiRule(self, 'universal', nonterm=False)
+        kaldi_rule = KaldiRule(self, 'universal', nonterm=False, exported=False)
         if words is None: words = self.lexicon_words
         fst = kaldi_rule.fst
         backoff_state = fst.add_state(initial=True, final=True)
-        for word in words:
-            # state = fst.add_state()
-            # fst.add_arc(backoff_state, state, word)
-            # fst.add_arc(state, backoff_state, None)
-            fst.add_arc(backoff_state, backoff_state, word)
+        fst.add_arcs((backoff_state, backoff_state, word) for word in words)
         kaldi_rule.compile()
         return kaldi_rule
 

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* `NativeWFST.add_arc()` now buffers arc construction in bounded native batches, flushing before graph inspection, hashing, output, compilation, or decoder loading. `NativeWFST.add_arcs()` is available for callers that can supply arcs as an iterable, and universal grammar construction uses that bulk path.
 * **Changed: dependency cache validation now uses canonical identities and a schema-versioned content hash.** Existing caches are rebuilt once when the schema changes, and the new `dependencies_hash` representation causes one full AGF recompilation on its first use; subsequent warm starts retain stable FST filenames. `Compiler(..., strict_content_validation=True)` is available when every dependency must be content-hashed so same-size, same-mtime replacements are detected.
 * **Breaking: cache invalidation is now a construction-time compiler option.** Use `Compiler(..., invalidate=True)` to rebuild model lexicon state and, when FST caching is enabled, discard cached grammar FSTs; the former public cache invalidation access is no longer supported. The standalone `WFST.compute_hash()` method now accepts a dependency-hash seed directly instead of requiring a cache object.
 * **Breaking: grammar activity is now a sparse set of active rule IDs instead of a positional Boolean mask.** `decoder.decode(...)`, `decoder.mimic(...)`, and `Compiler.mimic(...)` now expect `grammars_activity` to be an iterable of `KaldiRule.id` values (e.g. `[rule.id]`) rather than one Boolean per loaded rule (e.g. `[True, False, ...]`). `None` still means "keep the current native activity" (use it for utterance continuation chunks); an empty iterable explicitly disables all rules. Booleans are now rejected to prevent the legacy mask from being silently misread as rule ID 1.
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Fixed `Compiler.compile_universal_grammar()` constructing a nonterminal-free rule with an incompatible exported-rule flag.
 * **Fixed: failed model initialization no longer leaves a warm dependency cache.** Cache commits are now deferred until lexicon generation, optional LAF file generation, and word-table loading all complete, so a later startup retries after an initialization failure.
 
 ## [3.2.0](https://github.com/daanzu/kaldi-active-grammar/releases/tag/v3.2.0) - 2025-11-02 - Changes: [KaldiAG](https://github.com/daanzu/kaldi-active-grammar/compare/v3.1.0...v3.2.0) [KaldiFork](https://github.com/daanzu/kaldi-fork-active-grammar/compare/kag-v3.1.0...kag-v3.2.0)

@@ -144,7 +144,7 @@ flowchart TB
 
 A `KaldiRule` has an integer `id`, a `NativeWFST`, compile/load state, and a link to its `Compiler`. Every compiler-managed rule uses `NativeWFST`; the standalone Python `WFST` is not consumed by `Compiler`. IDs are dense and ordered. This is not merely bookkeeping: rule ID `i`, decoder grammar index `i`, active-rule ID set membership, and nonterminal `#nonterm:rulei` must all identify the same rule.
 
-`NativeWFST` sends state and arc mutations directly to native OpenFST-backed storage. AGF compilation can keep the compiled graph in memory or write it to the content-addressed cache; cache hits restore the compiled graph with `NativeWFST.load_file`. Decoder and dictation graphs supplied by model files remain file-backed where that is part of their native decoder interface.
+`NativeWFST` sends state mutations directly to native OpenFST-backed storage and buffers arc mutations in bounded batches to reduce FFI crossings. Pending arcs are flushed before hashing, graph inspection, file output, compilation, or decoder loading. AGF compilation can keep the compiled graph in memory or write it to the content-addressed cache; cache hits restore the compiled graph with `NativeWFST.load_file`. Decoder and dictation graphs supplied by model files remain file-backed where that is part of their native decoder interface.
 
 ### 4.2 Native graph compiler
 

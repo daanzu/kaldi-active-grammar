@@ -174,6 +174,7 @@ class NativeWFST(FFIObject):
         DRAGONFLY_API bool fst__destruct(void* fst_vp);
         DRAGONFLY_API int32_t fst__add_state(void* fst_vp, float weight, bool initial);
         DRAGONFLY_API bool fst__add_arc(void* fst_vp, int32_t src_state_id, int32_t dst_state_id, int32_t ilabel, int32_t olabel, float weight);
+        DRAGONFLY_API bool fst__add_arcs(void* fst_vp, int32_t num_arcs, const int32_t src_state_ids_cp[], const int32_t dst_state_ids_cp[], const int32_t ilabels_cp[], const int32_t olabels_cp[], const float weights_cp[]);
         DRAGONFLY_API bool fst__compute_md5(void* fst_vp, char* md5_cp, char* dependencies_seed_md5_cp);
         DRAGONFLY_API bool fst__has_path(void* fst_vp);
         DRAGONFLY_API bool fst__has_eps_path(void* fst_vp, int32_t path_src_state, int32_t path_dst_state);
@@ -191,6 +192,7 @@ class NativeWFST(FFIObject):
     eps_disambig = u'#0'
     silent_words = frozenset((eps, eps_disambig, u'!SIL'))
     native = property(lambda self: True)
+    arc_batch_size = 4096
 
     @classmethod
     def init_class(cls, isymbol_table, wildcard_nonterms, osymbol_table=None):
@@ -227,6 +229,14 @@ class NativeWFST(FFIObject):
         self.num_arcs = 0
         self.filename = None
         self._compiled_native_obj = None
+        self._reset_pending_arcs()
+
+    def _reset_pending_arcs(self):
+        self._pending_arc_src_state_ids = []
+        self._pending_arc_dst_state_ids = []
+        self._pending_arc_ilabels = []
+        self._pending_arc_olabels = []
+        self._pending_arc_weights = []
 
     def close(self):
         cleanup_error = None
@@ -239,6 +249,7 @@ class NativeWFST(FFIObject):
         except Exception as error:
             if cleanup_error is None:
                 cleanup_error = error
+        self._reset_pending_arcs()
         if cleanup_error is not None:
             raise cleanup_error
 
@@ -262,6 +273,10 @@ class NativeWFST(FFIObject):
         self._construct()
 
     def _get_native_obj(self):
+        self._flush_pending_arcs()
+        return self._get_raw_native_obj()
+
+    def _get_raw_native_obj(self):
         return self._require_native(getattr(self, 'native_obj', None), 'native WFST')
 
     def _get_compiled_native_obj(self):
@@ -275,7 +290,11 @@ class NativeWFST(FFIObject):
         else:
             assert final
         weight = -math.log(weight) if weight != 0 else self.zero
-        id = self._lib.fst__add_state(self._get_native_obj(), float(weight), bool(initial))
+        # An initial state adds an epsilon arc from state 0 natively. Flush
+        # first so its insertion order remains consistent with scalar builds.
+        if initial:
+            self._flush_pending_arcs()
+        id = self._lib.fst__add_state(self._get_raw_native_obj(), float(weight), bool(initial))
         if id < 0:
             raise KaldiError("Failed fst__add_state")
         self.num_states += 1
@@ -286,16 +305,63 @@ class NativeWFST(FFIObject):
     def add_arc(self, src_state, dst_state, label, olabel=None, weight=None):
         """ Default weight is 1. None label is replaced by eps. Default olabel of None is replaced by label. """
         self.filename = None
+        self._get_raw_native_obj()
         if label is None: label = self.eps
         if olabel is None: olabel = label
         if weight is None: weight = 1
         weight = -math.log(weight) if weight != 0 else self.zero
         label_id = self.word_to_ilabel_map[label]
         olabel_id = self.word_to_olabel_map[olabel]
-        result = self._lib.fst__add_arc(self._get_native_obj(), int(src_state), int(dst_state), int(label_id), int(olabel_id), float(weight))
-        if not result:
-            raise KaldiError("Failed fst__add_arc")
+        self._queue_arc(int(src_state), int(dst_state), int(label_id), int(olabel_id), float(weight))
+
+    def add_arcs(self, arcs):
+        """Add an iterable of ``(src, dst, label[, olabel[, weight]])`` arcs."""
+        self.filename = None
+        self._get_raw_native_obj()
+        word_to_ilabel = self.word_to_ilabel_map
+        word_to_olabel = self.word_to_olabel_map
+
+        for arc in arcs:
+            if not 3 <= len(arc) <= 5:
+                raise ValueError("Each arc must contain 3 to 5 values")
+            src_state, dst_state, label = arc[:3]
+            olabel = arc[3] if len(arc) >= 4 else None
+            weight = arc[4] if len(arc) >= 5 else None
+            if label is None: label = self.eps
+            if olabel is None: olabel = label
+            if weight is None: weight = 1
+
+            self._queue_arc(
+                int(src_state), int(dst_state),
+                int(word_to_ilabel[label]), int(word_to_olabel[olabel]),
+                float(-math.log(weight) if weight != 0 else self.zero))
+
+    def _queue_arc(self, src_state, dst_state, ilabel, olabel, weight):
+        self._pending_arc_src_state_ids.append(src_state)
+        self._pending_arc_dst_state_ids.append(dst_state)
+        self._pending_arc_ilabels.append(ilabel)
+        self._pending_arc_olabels.append(olabel)
+        self._pending_arc_weights.append(weight)
         self.num_arcs += 1
+        if len(self._pending_arc_src_state_ids) >= self.arc_batch_size:
+            self._flush_pending_arcs()
+
+    def _flush_pending_arcs(self):
+        src_state_ids = getattr(self, '_pending_arc_src_state_ids', ())
+        num_arcs = len(src_state_ids)
+        if num_arcs == 0:
+            return
+        result = self._lib.fst__add_arcs(
+            self._get_raw_native_obj(), num_arcs,
+            _ffi.new('int32_t[]', src_state_ids),
+            _ffi.new('int32_t[]', self._pending_arc_dst_state_ids),
+            _ffi.new('int32_t[]', self._pending_arc_ilabels),
+            _ffi.new('int32_t[]', self._pending_arc_olabels),
+            _ffi.new('float[]', self._pending_arc_weights),
+        )
+        if not result:
+            raise KaldiError("Failed fst__add_arcs")
+        self._reset_pending_arcs()
 
     def compute_hash(self, dependencies_seed_hash_str='0'*32):
         hash_p = _ffi.new('char[]', 33)  # Length of MD5 hex string + null terminator
