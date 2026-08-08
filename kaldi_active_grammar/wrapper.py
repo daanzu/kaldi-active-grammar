@@ -16,7 +16,7 @@ import numpy as np
 
 from . import _log, KaldiError
 from .ffi import FFIObject, _ffi, decode as de, encode as en
-from .utils import clock, find_file, show_donation_message, symbol_table_lookup
+from .utils import clock, find_file, show_donation_message, symbol_table_lookup_many
 from .wfst import NativeWFST
 import kaldi_active_grammar.defaults as defaults
 
@@ -367,13 +367,15 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
         super(KaldiAgfNNet3Decoder, self).__init__(**kwargs)
 
         phones_file = find_file(self.model_dir, 'phones.txt')
-        nonterm_phones_offset = symbol_table_lookup(phones_file, '#nonterm_bos')
+        phone_offsets = symbol_table_lookup_many(phones_file, (
+            '#nonterm_bos', '#nonterm:rule0', '#nonterm:dictation'))
+        nonterm_phones_offset = phone_offsets['#nonterm_bos']
         if nonterm_phones_offset is None:
             raise KaldiError("cannot find #nonterm_bos symbol in phones.txt")
-        rules_phones_offset = symbol_table_lookup(phones_file, '#nonterm:rule0')
+        rules_phones_offset = phone_offsets['#nonterm:rule0']
         if rules_phones_offset is None:
             raise KaldiError("cannot find #nonterm:rule0 symbol in phones.txt")
-        dictation_phones_offset = symbol_table_lookup(phones_file, '#nonterm:dictation')
+        dictation_phones_offset = phone_offsets['#nonterm:dictation']
         if dictation_phones_offset is None:
             raise KaldiError("cannot find #nonterm:dictation symbol in phones.txt")
 

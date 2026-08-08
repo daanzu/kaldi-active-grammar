@@ -195,6 +195,12 @@ def clear_file(filename):
 
 symbol_table_lookup_cache = dict()
 
+def _symbol_table_value(value):
+    try:
+        return int(value)
+    except ValueError:
+        return value
+
 def symbol_table_lookup(filename, input):
     """
     Returns the RHS corresponding to LHS == ``input`` in symbol table in ``filename``.
@@ -204,15 +210,43 @@ def symbol_table_lookup(filename, input):
         return cached
     with open(filename, 'r', encoding='utf-8') as f:
         for line in f:
-            tokens = line.strip().split()
-            if len(tokens) >= 2 and input == tokens[0]:
-                try:
-                    symbol_table_lookup_cache[(filename, input)] = int(tokens[1])
-                    return int(tokens[1])
-                except Exception as e:
-                    symbol_table_lookup_cache[(filename, input)] = tokens[1]
-                    return tokens[1]
+            if not line.startswith(input):
+                continue
+            remainder = line[len(input):]
+            if not remainder or not remainder[0].isspace():
+                continue
+            tokens = remainder.split()
+            if tokens:
+                value = _symbol_table_value(tokens[0])
+                symbol_table_lookup_cache[(filename, input)] = value
+                return value
         return None
+
+def symbol_table_lookup_many(filename, inputs):
+    """Return symbol-table values for multiple names after at most one file scan."""
+    inputs = tuple(inputs)
+    results = {}
+    remaining = set(inputs)
+    for input in inputs:
+        cached = symbol_table_lookup_cache.get((filename, input))
+        if cached is not None:
+            results[input] = cached
+            remaining.discard(input)
+
+    if remaining:
+        with open(filename, 'r', encoding='utf-8') as f:
+            for line in f:
+                tokens = line.split()
+                if len(tokens) >= 2 and tokens[0] in remaining:
+                    input = tokens[0]
+                    value = _symbol_table_value(tokens[1])
+                    symbol_table_lookup_cache[(filename, input)] = value
+                    results[input] = value
+                    remaining.remove(input)
+                    if not remaining:
+                        break
+
+    return {input: results.get(input) for input in inputs}
 
 def load_symbol_table(filename):
     with open(filename, 'r', encoding='utf-8') as f:

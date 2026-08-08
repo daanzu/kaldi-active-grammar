@@ -277,10 +277,13 @@ class Compiler(object):
         self._agf_compiler = self._init_agf_compiler() if self.decoding_framework == 'agf' else None
         self.decoder = None
 
-        words_set = frozenset(self.model.words_table.words)
         self._oov_word = '<unk>' if ('<unk>' in self.model.words_table) else None  # FIXME: make this configurable, for different models
-        self._silence_words = frozenset(['!SIL']) & words_set  # FIXME: make this configurable, for different models
-        self._noise_words = frozenset(['<unk>', '!SIL']) & words_set  # FIXME: make this configurable, for different models
+        self._silence_words = frozenset(
+            word for word in ('!SIL',) if word in self.model.words_table
+        )  # FIXME: make this configurable, for different models
+        self._noise_words = frozenset(
+            word for word in ('<unk>', '!SIL') if word in self.model.words_table
+        )  # FIXME: make this configurable, for different models
 
         self.kaldi_rule_by_id_dict = collections.OrderedDict()  # maps KaldiRule.id -> KaldiRule
         self.compile_queue = set()  # KaldiRule

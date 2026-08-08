@@ -527,6 +527,60 @@ def test_warm_model_hashes_each_dependency_once_in_strict_mode(tmp_path, monkeyp
     assert len(set(hash_paths)) == 18
 
 
+def test_warm_model_does_not_open_base_word_table(tmp_path, monkeypatch):
+    import kaldi_active_grammar.model as model_module
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    generated = []
+    monkeypatch.setattr(
+        Model, 'generate_lexicon_files',
+        lambda self: generated.append(self.model_dir))
+
+    Model(str(model_dir), tmp_dir_needed=False)
+    assert len(generated) == 1
+
+    base_words_path = os.path.abspath(str(model_dir / 'words.base.txt'))
+    real_open = model_module.open
+
+    def reject_base_word_open(filename, *args, **kwargs):
+        if os.path.abspath(filename) == base_words_path:
+            raise AssertionError('warm startup opened words.base.txt')
+        return real_open(filename, *args, **kwargs)
+
+    monkeypatch.setattr(model_module, 'open', reject_base_word_open)
+    warm = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert not warm._fst_cache.cache_is_new
+    assert len(generated) == 1
+
+
+def test_cold_model_uses_base_word_info_during_lexicon_generation(
+        tmp_path, monkeypatch):
+    import kaldi_active_grammar.model as model_module
+    from kaldi_active_grammar.model import Model
+
+    model_dir = copy_test_model(tmp_path)
+    base_words = b'<eps> 0\nhello 7\n#0 8\n#nonterm_begin 100\n'
+    (model_dir / 'words.base.txt').write_bytes(base_words)
+    (model_dir / 'words.txt').write_bytes(base_words)
+    with (model_dir / 'phones.txt').open('ab') as phones:
+        phones.write(b'SIL_S 4\n')
+    (model_dir / 'user_lexicon.txt').write_bytes(b'newword SIL\n')
+    monkeypatch.setattr(
+        model_module.KaldiModelBuildUtils, 'make_lexicon_fst',
+        staticmethod(lambda **kwargs: ''))
+    monkeypatch.setattr(
+        model_module.KaldiModelBuildUtils, 'build_L_disambig',
+        staticmethod(lambda *args, **kwargs: None))
+
+    model = Model(str(model_dir), tmp_dir_needed=False)
+
+    assert model.nonterm_words_offset == 100
+    assert model.words_table.word_to_id_map['newword'] == 9
+    assert model.words_table.max_term_word_id == 9
+
+
 def test_deleted_dependency_resets_once_then_warms(tmp_path):
     path = tmp_path / 'dependency.txt'
     path.write_bytes(b'present')

@@ -379,17 +379,53 @@ class SymbolTable(object):
         self.word_to_id_map = dict()
         self.id_to_word_map = dict()
         self.max_term_word_id = -1
+        self.longest_word = None
         if filename is not None:
             self.load_text_file(filename)
 
     def load_text_file(self, filename):
+        word_to_id_map = {}
+        longest_word = None
         with open(filename, 'r', encoding='utf-8') as file:
-            word_id_pairs = [line.strip().split() for line in file]
+            for line_number, line in enumerate(file, 1):
+                tokens = line.split()
+                if len(tokens) != 2:
+                    raise ValueError(
+                        "invalid symbol table entry in %r at line %d: expected 2 fields, got %d"
+                        % (filename, line_number, len(tokens)))
+                word, id_text = tokens
+                try:
+                    word_id = int(id_text)
+                except ValueError:
+                    raise ValueError(
+                        "invalid symbol ID in %r at line %d: %r"
+                        % (filename, line_number, id_text))
+                word_to_id_map[word] = word_id
+                if longest_word is None or len(word) > len(longest_word):
+                    longest_word = word
+
+        if not word_to_id_map:
+            raise ValueError("empty symbol table: %r" % filename)
+
+        # Construct this from the completed forward map rather than directly
+        # from file entries. This preserves the existing last-wins behavior
+        # when a table contains duplicate words or IDs.
+        id_to_word_map = { id: word for (word, id) in word_to_id_map.items() }
+        max_term_word_id = max((
+            id for (word, id) in word_to_id_map.items()
+            if not word.startswith('#nonterm')
+        ), default=None)
+        if max_term_word_id is None:
+            raise ValueError("symbol table has no terminal words: %r" % filename)
+
+        # These dictionaries are captured by NativeWFST.init_class(). Preserve
+        # their identity when reloading after a lexicon update.
         self.word_to_id_map.clear()
         self.id_to_word_map.clear()
-        self.word_to_id_map.update({ word: int(id) for (word, id) in word_id_pairs })
-        self.id_to_word_map.update({ id: word for (word, id) in self.word_to_id_map.items() })
-        self.max_term_word_id = max(id for (word, id) in self.word_to_id_map.items() if not word.startswith('#nonterm'))
+        self.word_to_id_map.update(word_to_id_map)
+        self.id_to_word_map.update(id_to_word_map)
+        self.max_term_word_id = max_term_word_id
+        self.longest_word = longest_word
 
     def add_word(self, word, id=None):
         if id is None:

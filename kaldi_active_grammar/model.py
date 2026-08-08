@@ -12,7 +12,7 @@ from six import PY2, text_type
 from . import _log, KaldiError, REQUIRED_MODEL_VERSION
 from .wfst import SymbolTable
 from .wrapper import KaldiModelBuildUtils
-from .utils import ExternalProcess, find_file, load_symbol_table, show_donation_message, symbol_table_lookup
+from .utils import ExternalProcess, find_file, load_symbol_table, show_donation_message
 import kaldi_active_grammar.defaults as defaults
 import kaldi_active_grammar.utils as utils
 
@@ -270,8 +270,6 @@ class Model(object):
             self.lexicon = Lexicon(self.phone_to_int_dict.keys())
             self.nonterm_phones_offset = self.phone_to_int_dict.get('#nonterm_bos')
             if self.nonterm_phones_offset is None: raise KaldiError("missing nonterms in 'phones.txt'")
-            self.nonterm_words_offset = symbol_table_lookup(self.files_dict['words.base.txt'], '#nonterm_begin')
-            if self.nonterm_words_offset is None: raise KaldiError("missing nonterms in 'words.base.txt'")
 
             # Update files if needed, before loading words
             if self._fst_cache.cache_is_new:
@@ -305,9 +303,17 @@ class Model(object):
     def load_words(self, words_file=None):
         if words_file is None: words_file = self.files_dict['words.txt']
         _log.debug("loading words from %r", words_file)
-        invalid_words = "<eps> !SIL <UNK> #0 <s> </s>".lower().split()
         self.words_table.load_text_file(words_file)
-        self.longest_word = max(self.words_table.word_to_id_map.keys(), key=len)
+        nonterm_words_offset = self.words_table.word_to_id_map.get('#nonterm_begin')
+        if nonterm_words_offset is None:
+            raise KaldiError("missing nonterms in %r" % words_file)
+        previous_offset = getattr(self, 'nonterm_words_offset', nonterm_words_offset)
+        if previous_offset != nonterm_words_offset:
+            raise KaldiError(
+                "nonterminal offset mismatch: base table has %d but %r has %d"
+                % (previous_offset, words_file, nonterm_words_offset))
+        self.nonterm_words_offset = nonterm_words_offset
+        self.longest_word = self.words_table.longest_word
         return self.words_table
 
     def read_user_lexicon(self, filename=None):
@@ -389,13 +395,49 @@ class Model(object):
                 entries = model_user_lexicon_entries + new_user_lexicon_entries
                 self.write_user_lexicon(entries, filename=model_user_lexicon_filename)
 
+    @staticmethod
+    def _read_base_word_info(base_words_file):
+        """Return ``(max terminal ID, nonterminal offset)`` in one pass."""
+        max_word_id = -1
+        nonterm_words_offset = None
+        with open(base_words_file, 'r', encoding='utf-8') as base_words:
+            for line_number, line in enumerate(base_words, 1):
+                tokens = line.split()
+                if len(tokens) != 2:
+                    raise KaldiError(
+                        "invalid symbol table entry in %r at line %d"
+                        % (base_words_file, line_number))
+                word, word_id_text = tokens
+                try:
+                    word_id = int(word_id_text)
+                except ValueError:
+                    raise KaldiError(
+                        "invalid symbol ID in %r at line %d: %r"
+                        % (base_words_file, line_number, word_id_text))
+                if word == '#nonterm_begin':
+                    nonterm_words_offset = word_id
+                if not word.startswith('#nonterm'):
+                    max_word_id = max(max_word_id, word_id)
+
+        if nonterm_words_offset is None:
+            raise KaldiError("missing nonterms in %r" % base_words_file)
+        if max_word_id < 0:
+            raise KaldiError("no terminal words in %r" % base_words_file)
+        return max_word_id, nonterm_words_offset
+
     def generate_lexicon_files(self):
         """ Generates: words.txt, align_lexicon.int, lexiconp_disambig.txt, L_disambig.fst """
         _log.info("generating lexicon files")
         self._clear_cached_fsts()
 
-        # FIXME: refactor this to use words_table/SymbolTable
-        max_word_id = max(word_id for word, word_id in load_symbol_table(base_filepath(self.files_dict['words.txt'])) if word_id < self.nonterm_words_offset)
+        base_words_file = base_filepath(self.files_dict['words.txt'])
+        max_word_id, nonterm_words_offset = self._read_base_word_info(base_words_file)
+        previous_offset = getattr(self, 'nonterm_words_offset', nonterm_words_offset)
+        if previous_offset != nonterm_words_offset:
+            raise KaldiError(
+                "nonterminal offset mismatch: model has %d but base table has %d"
+                % (previous_offset, nonterm_words_offset))
+        self.nonterm_words_offset = nonterm_words_offset
 
         user_lexicon_entries = []
         with open(self.files_dict['user_lexicon.txt'], 'r', encoding='utf-8') as user_lexicon:
