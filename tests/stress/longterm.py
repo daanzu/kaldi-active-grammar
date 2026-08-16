@@ -17,6 +17,12 @@ or through pytest (see ``tests/test_stress_longterm.py``)::
 
     just test -m stress
 
+It can also run against a released wheel, for cross-version baselines (AGF
+only; see ``just stress-release`` and ``tests/stress/compat.py``)::
+
+    just stress-release 3.2.0 --profile standard --json-out v3.2.0.json --observe
+    just stress --profile standard --framework agf --lazy-fraction 1 --baseline-json v3.2.0.json
+
 The harness assumes the test Kaldi model in ``tests/kaldi_model`` and the
 Piper voice used by the rest of the test suite (``just setup-tests``).
 """
@@ -43,6 +49,11 @@ try:
     import psutil
 except ImportError:  # Reported as an explicit failed verdict in gated runs.
     psutil = None
+
+try:  # Imported as ``tests.stress.longterm``...
+    from .compat import build_adapter, check_workload_supported, UnsupportedByPackage
+except ImportError:  # ...or run as a script, with tests/stress on sys.path.
+    from compat import build_adapter, check_workload_supported, UnsupportedByPackage
 
 PROCESS_METRIC_ERRORS = (OSError, RuntimeError)
 if psutil is not None:
@@ -210,6 +221,7 @@ class StressConfig:
     baseline_json: str = ''             # compare performance with a compatible prior report
     max_baseline_regression_pct: float = 25.0
 
+    model_dir: str = ''                 # Kaldi model directory; empty uses tests/kaldi_model
     json_out: str = ''
     label: str = ''
 
@@ -403,9 +415,13 @@ class StressGrammar:
 class LongTermStressSession:
     """One framework's stress run; assumes cwd contains ``kaldi_model``."""
 
-    def __init__(self, config, piper_voice=None, log=None):
+    def __init__(self, config, piper_voice=None, log=None, api=None):
         config.validate()
         self.config = config
+        # Every call into kaldi_active_grammar whose shape differs between the
+        # current API and released wheels goes through this adapter; see
+        # tests/stress/compat.py.
+        self.api = api if api is not None else build_adapter()
         self.log = log if log is not None else (lambda message: print(message, flush=True))
         self.rng = random.Random(config.seed)
         self.universe = build_phrase_universe()
@@ -581,11 +597,11 @@ class LongTermStressSession:
             entries.append((phrase_index, is_dictation, rule, text, words, mask))
         self.compiler.prepare_for_recognition()
 
-        active_rule_ids = [entry[2].id for entry in entries]
+        activity = self.api.activity(self.compiler, [entry[2].id for entry in entries])
         losers = []
         try:
             for phrase_index, is_dictation, rule, text, words, mask in entries:
-                self.decoder.decode(self.audio_pool.get(text), True, active_rule_ids)
+                self.decoder.decode(self.audio_pool.get(text), True, activity)
                 output, _ = self.decoder.get_output()
                 recognized, got_words, got_mask = self.compiler.parse_output(output)
                 if recognized is not rule or got_words != words or got_mask != mask:
@@ -594,7 +610,7 @@ class LongTermStressSession:
                                        got=' '.join(got_words) if got_words else '(nothing)'))
         finally:
             for entry in entries:
-                entry[2].close()
+                self.api.close_rule(entry[2])
         return losers
 
     def _replace_screen_losers(self, losers, spares):
@@ -678,7 +694,7 @@ class LongTermStressSession:
 
     def _close_grammar(self, grammar):
         for stress_rule in grammar.rules:
-            stress_rule.rule.close()
+            self.api.close_rule(stress_rule.rule)
             self.counters['rules_closed'] += 1
 
     def _churn(self, utterance_index):
@@ -778,12 +794,15 @@ class LongTermStressSession:
 
     def _decode_and_validate(self, utterance_index, text_or_audio, active_rule_ids,
                              expected_rule, expected_words, expected_mask, kind):
+        # Built before the timer: converting activity is shim work on released
+        # wheels, and must not be charged to the package's decode latency.
+        activity = self.api.activity(self.compiler, active_rule_ids)
         started = time.monotonic()
         if self.config.decode_mode == 'mimic':
-            output = self.decoder.mimic(text_or_audio, active_rule_ids)
+            output = self.decoder.mimic(text_or_audio, activity)
             output = output if output is not False else ''
         else:
-            self.decoder.decode(text_or_audio, True, active_rule_ids)
+            self.decoder.decode(text_or_audio, True, activity)
             output, info = self.decoder.get_output()
             self.audio_seconds_decoded += len(text_or_audio) / (2.0 * 16000.0)
         recognized_rule, words, mask = self.compiler.parse_output(output)
@@ -890,8 +909,8 @@ class LongTermStressSession:
             gc_objects=len(gc.get_objects()),
             active_rules=getattr(self, '_last_active_count', 0),
         )
-        if self.compiler is not None and not self.compiler._closed:
-            checkpoint['live_rules'] = len(self.compiler.kaldi_rule_by_id_dict)
+        if self.compiler is not None and self.api.compiler_is_open(self.compiler):
+            checkpoint['live_rules'] = self.api.live_rule_count(self.compiler)
             checkpoint['decoder_grammars'] = self.decoder.num_grammars if self.decoder else None
             tmp_dir = self.compiler.tmp_dir
             if tmp_dir:
@@ -1091,8 +1110,19 @@ class LongTermStressSession:
             if current != previous:
                 mismatches.append('%s=%r (baseline %r)' % (key, current, previous))
         compatible = not mismatches
-        verdict('baseline-compatible', compatible, True, compatible,
-                'matching workload configuration' if compatible else '; '.join(mismatches[:5]))
+        detail = 'matching workload configuration' if compatible else '; '.join(mismatches[:5])
+        # Reports written before the package identity was recorded simply skip
+        # the note; there is nothing to compare against.
+        baseline_environment = baseline.get('environment') or {}
+        baseline_identity = ('%s [%s]' % (baseline_environment['package_version'],
+                                          baseline_environment.get('package_api', 'unknown'))
+                             if baseline_environment.get('package_version') else None)
+        if compatible and baseline_identity and baseline_identity != self.api.identity:
+            # Deliberate for release-vs-development comparisons, but the native
+            # library differs too, so small deltas are build noise, not signal.
+            detail += ' (cross-version: baseline %s, current %s)' % (baseline_identity,
+                                                                     self.api.identity)
+        verdict('baseline-compatible', compatible, True, compatible, detail)
         if not compatible:
             return
 
@@ -1151,13 +1181,17 @@ class LongTermStressSession:
         try:
             from kaldi_active_grammar import Compiler, disable_donation_message
             disable_donation_message()
+            check_workload_supported(self.api, config.framework, config.decode_mode,
+                                     config.lazy_fraction)
+            self.log('[%s] using %s' % (config.framework, self.api.describe()))
             if config.decode_mode == 'audio':
                 if self.piper_voice is None:
                     self.piper_voice = load_piper_voice()
                 self.audio_pool = AudioPool(self.piper_voice)
                 self._garbage_bytes = self._garbage_audio()
 
-            self.compiler = Compiler(framework=config.framework)
+            self.compiler = Compiler(model_dir=config.model_dir or None,
+                                     framework=config.framework)
             self.decoder = self.compiler.init_decoder()
             self._sample('startup', -1)
 
@@ -1263,7 +1297,7 @@ class LongTermStressSession:
             while grammar.rules:
                 stress_rule = grammar.rules.pop()
                 try:
-                    stress_rule.rule.close()
+                    self.api.close_rule(stress_rule.rule)
                     self.counters['rules_closed'] += 1
                 except BaseException as error:
                     note_error('rule-teardown-error', error)
@@ -1272,13 +1306,13 @@ class LongTermStressSession:
 
         allocator_rules = 0
         if self.compiler is not None:
-            allocator_rules = self.compiler._kaldi_rule_id_allocator.num_rules
+            allocator_rules = self.api.allocated_rule_count(self.compiler)
             try:
                 self._sample('drained', self.counters['utterances'])
             except BaseException as error:
                 note_error('drained-sample-error', error)
             try:
-                self.compiler.close()
+                self.api.close_compiler(self.compiler)
             except BaseException as error:
                 note_error('compiler-teardown-error', error)
         self.compiler = None
@@ -1318,6 +1352,9 @@ class LongTermStressSession:
             environment=dict(
                 platform=platform.platform(),
                 python=platform.python_version(),
+                package_version=self.api.version,
+                package_api=self.api.name,
+                package_path=self.api.path,
             ),
             truncated=self.truncated,
             phrase_screen=self.phrase_screen,
@@ -1335,7 +1372,8 @@ class LongTermStressSession:
         )
 
     def _print_summary(self, report, latency_drift_pct):
-        lines = ['', '=== long-term stress summary [%s] ===' % self.config.framework]
+        lines = ['', '=== long-term stress summary [%s, kaldi_active_grammar %s] ==='
+                 % (self.config.framework, self.api.identity)]
         counters = report['counters']
         lines.append('utterances: %d (%d valid, %d dictation, %d garbage, %d empty-activity)%s'
                      % (counters['utterances'], counters['valid_utterances'],
@@ -1421,6 +1459,8 @@ def main(argv=None):
         args.json_out = str((invocation_dir / args.json_out).resolve())
     if args.baseline_json:
         args.baseline_json = str((invocation_dir / args.baseline_json).resolve())
+    if args.model_dir:
+        args.model_dir = str((invocation_dir / args.model_dir).resolve())
 
     if args.framework == 'both':
         # One process per framework: RSS and fd measurements are meaningless
@@ -1456,10 +1496,14 @@ def main(argv=None):
                  if hasattr(args, field.name) and field.name not in
                  ('framework', 'observe_only', 'json_out', 'label')}
 
+    api = build_adapter()
     all_passed = True
     for framework in frameworks:
         if framework == 'laf':
-            missing = missing_laf_model_files()
+            if not api.supports_framework('laf'):
+                print('skipping laf: not supported by %s' % api.describe())
+                continue
+            missing = missing_laf_model_files(args.model_dir or None)
             if missing:
                 print('skipping laf: missing model files: %s' % ', '.join(missing))
                 continue
@@ -1469,7 +1513,11 @@ def main(argv=None):
             config.label = args.label
         if args.json_out:
             config.json_out = args.json_out
-        session = LongTermStressSession(config)
+        try:
+            check_workload_supported(api, framework, config.decode_mode, config.lazy_fraction)
+        except UnsupportedByPackage as error:
+            parser.error(str(error))
+        session = LongTermStressSession(config, api=api)
         report = session.run()
         all_passed = all_passed and report['passed']
     return 0 if all_passed else 1

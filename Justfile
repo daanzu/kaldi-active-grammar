@@ -96,6 +96,10 @@ stress *args='':
 stress-smoke *args='':
 	just stress --profile smoke --framework both "$@"
 
+# Run the stress harness against a released wheel in an isolated environment, for cross-version baselines (AGF only; released rule ids force a uniform --lazy-fraction, so the compared run needs the same value; see TESTING.md). Args: version, then harness args.
+stress-release version *args='':
+	shift; uv run --no-project --isolated --with-requirements requirements-test.txt --with 'kaldi-active-grammar=={{version}}' tests/stress/longterm.py --framework agf-direct --lazy-fraction 1 "$@"
+
 # Run the test suite with pytest. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test *args='':
 	if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt -m pytest "$@"; fi

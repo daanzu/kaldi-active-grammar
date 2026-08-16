@@ -168,3 +168,54 @@ regression gate; `smoke` is a minutes-scale end-to-end check; `overnight`
 (24 × 10, 200,000 utterances) is for soak testing. Every profile carries a
 `--max-minutes` measured-workload cap. A truncated run still reports and runs
 all available gates, but it fails completion unless explicitly allowed.
+
+### Running against a released wheel
+
+The same workload can run against a published release, to compare current work
+with what users actually have. `just stress-release` provisions an isolated,
+project-free environment holding only that wheel (which bundles its own native
+library, so no fork build is involved) and runs the harness against it:
+
+```sh
+just stress-release 3.2.0 --profile standard --json-out v3.2.0.json --observe
+just stress --profile standard --framework agf --lazy-fraction 1 --baseline-json v3.2.0.json --observe
+```
+
+`tests/stress/compat.py` bridges the API differences (rule closing, compiler
+teardown, rule-ID accounting, and the released positional activity mask); it is
+the only part of the harness that knows about older releases and is meant to be
+deleted once the oldest supported release carries the current API. The report's
+`environment.package_version` records which package produced it, and a
+cross-version `--baseline-json` comparison says so in its verdict detail.
+
+Constraints and caveats:
+
+- **AGF only, v3.0.0 and later.** Released LAF predates the ActiveReplaceFst
+  rework and is refused rather than measured; `--decode-mode mimic` needs a
+  decoder API newer than v3.2.0. Both are reported as explicit skips or errors.
+- **Released runs need a uniform `--lazy-fraction` (1 or 0).** Before rule ids
+  became stable they doubled as the decoder's grammar-fst index, so rules had to
+  reach the decoder in creation order; interleaving lazy and eager rules trips an
+  assertion while the population is built. The harness refuses the mix up front,
+  and `just stress-release` passes `--lazy-fraction 1` by default. Because
+  `lazy_fraction` is part of the baseline compatibility check, the run being
+  compared must pass the same value — otherwise the `baseline-compatible`
+  verdict fails and names the mismatch.
+- **Prefer `--observe` for release runs.** The drift and correctness gates
+  describe current expectations; an old wheel failing them is a finding to read,
+  not a broken run.
+- **Cross-version performance deltas include build noise.** The released native
+  library came from CI with different flags than a local fork build, so treat
+  `--max-baseline-regression-pct` results as a coarse signal.
+- **The phrase screen is shared, not repeated per version.** Its cache key
+  excludes the package version precisely so both sides of a comparison draw on
+  the same screened pool; whichever run happens first computes it. A phrase
+  that only the older decoder confuses therefore reaches the run, where the
+  budgeted `recognition-accuracy` verdict absorbs it. Pass `--model-dir` to
+  screen each version separately if that matters for a particular comparison.
+- **Switching versions invalidates the model's `file_cache.json`** (it is keyed
+  on the package version), so the first run after a switch pays a full lexicon
+  and AGF rebuild during setup. This happens before the measured workload and
+  before the `built` baseline sample, so it does not distort results, but it does
+  make startup slow. Pass `--model-dir` with a separate copy of the model to
+  keep each version's cache warm — at the cost of a full model copy per version.

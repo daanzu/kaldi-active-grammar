@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.stress import longterm
+from tests.stress import compat, longterm
 from tests import test_stress_longterm as pytest_wrapper
 
 
@@ -364,8 +364,9 @@ def test_unexpected_workload_error_tears_down_writes_report_and_reraises(
     class FakeCompiler:
         instance = None
 
-        def __init__(self, framework):
+        def __init__(self, framework, model_dir=None):
             self.framework = framework
+            self.model_dir_arg = model_dir
             self._closed = False
             self.closed = False
             self.decoder = None
@@ -411,3 +412,160 @@ def test_unexpected_workload_error_tears_down_writes_report_and_reraises(
     assert 'harness-invariants' in report['failed_verdicts']
     assert any(failure['kind'] == 'harness-error' for failure in report['failures'])
     assert all(failure['category'] == longterm.INVARIANT for failure in report['failures'])
+
+
+########################################################################################################################
+# Released-wheel compatibility shim (tests/stress/compat.py)
+
+def released_api():
+    return compat.ReleasedApi('3.2.0', '/wheel/kaldi_active_grammar/__init__.py')
+
+
+def test_build_adapter_probes_the_installed_package():
+    api = compat.build_adapter()
+
+    assert isinstance(api, compat.CurrentApi) and not isinstance(api, compat.ReleasedApi)
+    assert 'kaldi_active_grammar' in api.path
+
+
+def test_build_adapter_falls_back_to_the_released_family_without_rule_close(monkeypatch):
+    import kaldi_active_grammar
+
+    monkeypatch.delattr(kaldi_active_grammar.KaldiRule, 'close')
+
+    assert isinstance(compat.build_adapter(), compat.ReleasedApi)
+
+
+def test_released_adapter_converts_rule_ids_to_a_positional_mask():
+    api = released_api()
+    compiler = SimpleNamespace(num_kaldi_rules=4)
+
+    assert api.activity(compiler, [0, 3]) == [True, False, False, True]
+    # An empty activity must still cover every rule, not send a zero-length array.
+    assert api.activity(compiler, []) == [False] * 4
+    assert api.activity(compiler, None) is None
+
+
+def test_released_adapter_rejects_rule_ids_the_mask_cannot_represent():
+    api = released_api()
+
+    with pytest.raises(compat.UnsupportedByPackage, match='outside the 2 allocated rules'):
+        api.activity(SimpleNamespace(num_kaldi_rules=2), [5])
+
+
+def test_current_adapter_passes_rule_ids_through_untouched():
+    api = compat.CurrentApi('dev', '/tree/kaldi_active_grammar/__init__.py')
+    active_rule_ids = [1, 4]
+
+    assert api.activity(SimpleNamespace(), active_rule_ids) is active_rule_ids
+
+
+def test_released_adapter_closes_rules_and_native_objects_by_hand():
+    api = released_api()
+    rule = SimpleNamespace(destroyed=False)
+    rule.destroy = lambda: setattr(rule, 'destroyed', True)
+    decoder = SimpleNamespace(destroyed=False)
+    decoder.destroy = lambda: setattr(decoder, 'destroyed', True)
+    agf_compiler = SimpleNamespace(destroyed=False)
+    agf_compiler.destroy = lambda: setattr(agf_compiler, 'destroyed', True)
+    compiler = SimpleNamespace(decoder=decoder, _agf_compiler=agf_compiler,
+                               num_kaldi_rules=0, kaldi_rule_by_id_dict={})
+
+    api.close_rule(rule)
+    assert api.compiler_is_open(compiler)
+    api.close_compiler(compiler)
+    api.close_compiler(compiler)  # idempotent, like Compiler.close()
+
+    assert rule.destroyed and decoder.destroyed and agf_compiler.destroyed
+    assert compiler.decoder is None and compiler._agf_compiler is None
+    assert not api.compiler_is_open(compiler)
+    assert api.allocated_rule_count(compiler) == 0
+
+
+def test_released_wheels_reject_laf_and_mimic_but_accept_agf_audio():
+    api = released_api()
+
+    compat.check_workload_supported(api, 'agf-direct', 'audio', 1.0)
+    with pytest.raises(compat.UnsupportedByPackage, match='ActiveReplaceFst'):
+        compat.check_workload_supported(api, 'laf', 'audio', 1.0)
+    with pytest.raises(compat.UnsupportedByPackage, match='mimic'):
+        compat.check_workload_supported(api, 'agf-direct', 'mimic', 1.0)
+
+
+def test_released_wheels_reject_mixed_lazy_loading_before_building_rules():
+    api = released_api()
+
+    # Uniform in either direction keeps rule ids and grammar-fst indexes aligned.
+    compat.check_workload_supported(api, 'agf-direct', 'audio', 1.0)
+    compat.check_workload_supported(api, 'agf-direct', 'audio', 0.0)
+    with pytest.raises(compat.UnsupportedByPackage, match='--lazy-fraction 1 or 0'):
+        compat.check_workload_supported(api, 'agf-direct', 'audio', 0.5)
+
+
+def test_current_api_supports_every_framework_decode_mode_and_lazy_mix():
+    api = compat.CurrentApi('dev', '/tree/kaldi_active_grammar/__init__.py')
+
+    compat.check_workload_supported(api, 'laf', 'mimic', 0.5)
+
+
+def test_session_decodes_through_the_adapter_and_records_the_package(monkeypatch):
+    seen = []
+    config = longterm.StressConfig(utterances=1, decode_mode='mimic',
+                                   allow_missing_process_metrics=True)
+    session = longterm.LongTermStressSession(config, log=lambda message: None,
+                                             api=released_api())
+    session.compiler = SimpleNamespace(num_kaldi_rules=3)
+    session.decoder = SimpleNamespace(
+        mimic=lambda text, activity: seen.append(activity) or '')
+    session.compiler.parse_output = lambda output: (None, [], [])
+
+    session._decode_and_validate(0, 'go left', [2], None, None, None, 'command')
+
+    assert seen == [[False, False, True]]
+    assert session._build_report([], {})['environment']['package_version'] == '3.2.0'
+
+
+def test_cross_version_baseline_comparison_is_flagged_but_still_gated(tmp_path):
+    config = longterm.StressConfig(
+        utterances=100, decode_mode='audio', allow_missing_process_metrics=True)
+    baseline_path = tmp_path / 'baseline.json'
+    baseline_path.write_text(json.dumps(dict(
+        schema=2,
+        config=dataclasses.asdict(config),
+        environment={'package_version': '3.2.0', 'package_api': 'released-3.0-3.2'},
+        latency={'p95_ms': 100.0, 'real_time_factor': 0.1},
+        counters={'prepare_seconds': 10.0},
+    )))
+    config.baseline_json = str(baseline_path)
+    session = make_analyzable_session(config)
+    session.latencies = [(index, 0.1) for index in range(100)]
+    session.prepare_seconds = 10.0
+
+    verdicts, _ = session._analyze({'allocator_rules': 0, 'alive_rule_objects': 0})
+    by_name = verdict_by_name(verdicts)
+
+    assert by_name['baseline-compatible']['passed']
+    assert 'cross-version' in by_name['baseline-compatible']['detail']
+    assert by_name['baseline-p95-ms']['passed']
+
+
+def test_baseline_without_a_recorded_package_is_compared_without_a_note(tmp_path):
+    config = longterm.StressConfig(
+        utterances=100, decode_mode='mimic', allow_missing_process_metrics=True)
+    baseline_path = tmp_path / 'baseline.json'
+    baseline_path.write_text(json.dumps(dict(
+        schema=2,
+        config=dataclasses.asdict(config),
+        environment={'platform': 'Linux', 'python': '3.13.5'},
+        latency={'p95_ms': 100.0},
+        counters={'prepare_seconds': 10.0},
+    )))
+    config.baseline_json = str(baseline_path)
+    session = make_analyzable_session(config)
+    session.latencies = [(index, 0.1) for index in range(100)]
+
+    verdicts, _ = session._analyze({'allocator_rules': 0, 'alive_rule_objects': 0})
+    compatible = verdict_by_name(verdicts)['baseline-compatible']
+
+    assert compatible['passed']
+    assert 'cross-version' not in compatible['detail']
