@@ -64,6 +64,14 @@ NUMBERS = ('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine
 # not reliable enough for a correctness-gated bulk run.
 DICTATION_PAYLOADS = ('hello world', 'hello')
 
+# Failure categories.  INVARIANT covers what the package must hold however
+# poor the acoustic model is: rejecting garbage and inactive rules, parsing an
+# alignment that matches the rule that won, and tearing down cleanly.
+# MISRECOGNITION is one active rule losing to another, which is a property of
+# the model and the phrase set rather than of the code under test.
+INVARIANT = 'invariant'
+MISRECOGNITION = 'misrecognition'
+
 BASELINE_CONFIG_KEYS = (
     'framework', 'utterances', 'num_grammars', 'rules_per_grammar',
     'dictation_rules_per_grammar', 'decode_mode', 'activity_pattern',
@@ -117,7 +125,10 @@ class StressConfig:
     checkpoint_every: int = 100
     report_every: int = 200
     warmup_fraction: float = 0.25       # leading fraction of run excluded from drift analysis
-    max_failures: int = 25              # abort the run after this many recognition failures
+    max_failures: int = 25              # abort the run after this many invariant failures
+    # Recognizing the wrong active rule is acoustic-model quality, not a
+    # package invariant, so it gets a whole-run budget rather than a hard zero.
+    max_misrecognition_rate: float = 0.001
 
     observe_only: bool = False          # collect and report, but never fail on drift verdicts
     allow_truncated: bool = False       # allow a partial workload to pass its completion gate
@@ -152,7 +163,8 @@ class StressConfig:
             raise ValueError('mimic mode requires at least one non-dictation rule per grammar')
         for name in ('active_grammar_fraction', 'context_switch_prob', 'context_drift_prob',
                      'empty_activity_fraction', 'garbage_audio_fraction', 'churn_fraction',
-                     'novel_fraction', 'lazy_fraction', 'warmup_fraction'):
+                     'novel_fraction', 'lazy_fraction', 'warmup_fraction',
+                     'max_misrecognition_rate'):
             if not 0.0 <= getattr(self, name) <= 1.0:
                 raise ValueError('%s must be between 0 and 1' % name)
         if self.empty_activity_fraction + self.garbage_audio_fraction > 1.0:
@@ -352,7 +364,7 @@ class LongTermStressSession:
             empty_activity_utterances=0, dictation_utterances=0,
             churn_cycles=0, rules_created=0, rules_closed=0,
             identical_recreations=0, novel_recreations=0, reloads=0,
-            prepare_calls=0,
+            prepare_calls=0, invariant_failures=0, misrecognitions=0,
         )
         self.prepare_seconds = 0.0
         self.truncated = False
@@ -362,6 +374,17 @@ class LongTermStressSession:
             self.process = psutil.Process() if psutil is not None else None
         except PROCESS_METRIC_ERRORS:
             self.process = None
+
+    @property
+    def misrecognition_budget(self):
+        """Wrong-rule allowance for the whole planned run.
+
+        A rate rather than a count, so the same knob means the same thing to a
+        200-utterance smoke run and a 200,000-utterance soak.  Exceeding it at
+        any point means the gate has already failed, which is what makes it
+        safe to use as the abort threshold too.
+        """
+        return int(self.config.max_misrecognition_rate * self.config.utterances)
 
     # ----- population management -------------------------------------------------
 
@@ -542,11 +565,18 @@ class LongTermStressSession:
         garbage_rng = random.Random(42)
         return bytes(garbage_rng.randint(0, 255) for _ in range(32768))
 
-    def _record_failure(self, utterance_index, kind, expected, got):
-        self.failures.append(dict(utterance=utterance_index, kind=kind,
+    def _record_failure(self, utterance_index, kind, expected, got, category, log=True):
+        """Record one failure, keeping the per-category counters current.
+
+        ``log`` is off for callers that report the failure themselves.
+        """
+        self.failures.append(dict(utterance=utterance_index, kind=kind, category=category,
                                   expected=str(expected), got=str(got)))
-        self.log('FAILURE at utterance %d (%s): expected %s, got %s'
-                 % (utterance_index, kind, expected, got))
+        self.counters['misrecognitions' if category == MISRECOGNITION
+                      else 'invariant_failures'] += 1
+        if log:
+            self.log('FAILURE at utterance %d (%s, %s): expected %s, got %s'
+                     % (utterance_index, kind, category, expected, got))
 
     def _decode_and_validate(self, utterance_index, text_or_audio, active_rule_ids,
                              expected_rule, expected_words, expected_mask, kind):
@@ -565,13 +595,14 @@ class LongTermStressSession:
         if expected_rule is None:
             if recognized_rule is not None:
                 self._record_failure(utterance_index, kind, 'no recognition',
-                                     '%r -> %r' % (recognized_rule, words))
+                                     '%r -> %r' % (recognized_rule, words), INVARIANT)
         else:
             if recognized_rule is not expected_rule:
-                self._record_failure(utterance_index, kind, expected_rule, recognized_rule)
+                self._record_failure(utterance_index, kind, expected_rule, recognized_rule,
+                                     MISRECOGNITION)
             elif words != expected_words or mask != expected_mask:
                 self._record_failure(utterance_index, kind,
-                                     (expected_words, expected_mask), (words, mask))
+                                     (expected_words, expected_mask), (words, mask), INVARIANT)
 
     def _run_one_utterance(self, utterance_index):
         config = self.config
@@ -713,8 +744,14 @@ class LongTermStressSession:
             verdicts.append(dict(name=name, value=value, threshold=threshold,
                                  passed=bool(passed), detail=detail))
 
-        verdict('correctness', len(self.failures), 0, len(self.failures) == 0,
-                'recognition, harness, or teardown failures')
+        invariant_failures = self.counters['invariant_failures']
+        misrecognitions = self.counters['misrecognitions']
+        verdict('harness-invariants', invariant_failures, 0, invariant_failures == 0,
+                'rejection, alignment, harness, or teardown failures')
+        budget = self.misrecognition_budget
+        verdict('recognition-accuracy', misrecognitions, budget, misrecognitions <= budget,
+                'utterances won by the wrong active rule (budget %g%% of %d planned)'
+                % (config.max_misrecognition_rate * 100, config.utterances))
 
         completed_target = completed == config.utterances
         verdict('completion', completed, config.utterances,
@@ -937,16 +974,25 @@ class LongTermStressSession:
             # bounded audio pre-synthesis performed before the baseline.
             deadline = ((time.monotonic() + config.max_minutes * 60.0)
                         if config.max_minutes else None)
+            # Never abort before max_failures examples have been logged, even
+            # when the budget is smaller: one sample is a poor bug report.
+            misrecognition_abort = max(config.max_failures, self.misrecognition_budget)
             for utterance_index in range(config.utterances):
                 if deadline is not None and time.monotonic() > deadline:
                     self.truncated = True
                     self.log('[%s] wall-clock cap reached; stopping at utterance %d'
                              % (config.framework, utterance_index))
                     break
-                if len(self.failures) > config.max_failures:
+                if self.counters['invariant_failures'] > config.max_failures:
                     self.truncated = True
-                    self.log('[%s] aborting: more than %d failures'
+                    self.log('[%s] aborting: more than %d invariant failures'
                              % (config.framework, config.max_failures))
+                    break
+                if self.counters['misrecognitions'] > misrecognition_abort:
+                    self.truncated = True
+                    self.log('[%s] aborting: more than %d misrecognitions (budget %d)'
+                             % (config.framework, misrecognition_abort,
+                                self.misrecognition_budget))
                     break
                 if config.churn_every and utterance_index and utterance_index % config.churn_every == 0:
                     self._churn(utterance_index)
@@ -963,10 +1009,10 @@ class LongTermStressSession:
             self.truncated = True
             caught_error = sys.exc_info()
             kind = 'interrupted' if isinstance(error, KeyboardInterrupt) else 'harness-error'
-            self.failures.append(dict(
-                utterance=self.counters['utterances'], kind=kind,
-                expected='successful workload execution',
-                got='%s: %s' % (type(error).__name__, error)))
+            self._record_failure(self.counters['utterances'], kind,
+                                 'successful workload execution',
+                                 '%s: %s' % (type(error).__name__, error),
+                                 INVARIANT, log=False)
             self.log('[%s] %s; producing report after teardown: %s: %s'
                      % (config.framework, kind, type(error).__name__, error))
 
@@ -993,10 +1039,10 @@ class LongTermStressSession:
             nonlocal first_error
             if first_error is None:
                 first_error = (type(error), error, error.__traceback__)
-            self.failures.append(dict(
-                utterance=self.counters['utterances'], kind=kind,
-                expected='successful teardown',
-                got='%s: %s' % (type(error).__name__, error)))
+            self._record_failure(self.counters['utterances'], kind,
+                                 'successful teardown',
+                                 '%s: %s' % (type(error).__name__, error),
+                                 INVARIANT, log=False)
             self.log('[%s] %s: %s: %s'
                      % (self.config.framework, kind, type(error).__name__, error))
 
@@ -1053,7 +1099,9 @@ class LongTermStressSession:
             counters['synth_seconds'] = round(self.audio_pool.synth_seconds, 1)
         counters['prepare_seconds'] = round(self.prepare_seconds, 2)
         return dict(
-            schema=2,
+            # 3: failures carry a category, and the single correctness verdict
+            # became the harness-invariants / recognition-accuracy pair.
+            schema=3,
             label=config.label,
             timestamp=time.strftime('%Y-%m-%dT%H:%M:%S'),
             config=dataclasses.asdict(config),
@@ -1088,6 +1136,9 @@ class LongTermStressSession:
                      % (counters['churn_cycles'], counters['identical_recreations'],
                         counters['novel_recreations'], counters['reloads'],
                         counters['rules_created'], counters['rules_closed']))
+        lines.append('failures: %d invariant, %d misrecognitions (budget %d)'
+                     % (counters['invariant_failures'], counters['misrecognitions'],
+                        self.misrecognition_budget))
         latency = report['latency']
         if latency:
             rtf = latency.get('real_time_factor')

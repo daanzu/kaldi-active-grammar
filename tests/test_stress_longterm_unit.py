@@ -64,6 +64,74 @@ def test_explicit_allow_truncated_allows_partial_completion():
     assert verdict_by_name(verdicts)['completion']['passed']
 
 
+def test_failure_categories_are_gated_separately():
+    config = longterm.StressConfig(
+        utterances=10_000, decode_mode='mimic', allow_missing_process_metrics=True,
+        max_misrecognition_rate=0.001)
+    session = make_analyzable_session(config)
+    assert session.misrecognition_budget == 10
+    for index in range(9):
+        session._record_failure(index, 'command', 'rule-a', 'rule-b',
+                                longterm.MISRECOGNITION, log=False)
+
+    by_name = verdict_by_name(session._analyze(
+        {'allocator_rules': 0, 'alive_rule_objects': 0})[0])
+    assert by_name['recognition-accuracy']['value'] == 9
+    assert by_name['recognition-accuracy']['threshold'] == 10
+    assert by_name['recognition-accuracy']['passed']
+    assert by_name['harness-invariants']['passed']
+
+    session._record_failure(9, 'garbage-audio', 'no recognition', 'rule-a',
+                            longterm.INVARIANT, log=False)
+
+    by_name = verdict_by_name(session._analyze(
+        {'allocator_rules': 0, 'alive_rule_objects': 0})[0])
+    assert not by_name['harness-invariants']['passed']
+    assert by_name['recognition-accuracy']['passed']
+
+
+def test_misrecognitions_beyond_the_budget_fail_the_run():
+    config = longterm.StressConfig(
+        utterances=1_000, decode_mode='mimic', allow_missing_process_metrics=True,
+        max_misrecognition_rate=0.001)
+    session = make_analyzable_session(config)
+    assert session.misrecognition_budget == 1
+    for index in range(2):
+        session._record_failure(index, 'command', 'rule-a', 'rule-b',
+                                longterm.MISRECOGNITION, log=False)
+
+    by_name = verdict_by_name(session._analyze(
+        {'allocator_rules': 0, 'alive_rule_objects': 0})[0])
+    assert not by_name['recognition-accuracy']['passed']
+    assert by_name['harness-invariants']['passed']
+
+
+def test_only_a_losing_rule_counts_as_a_misrecognition():
+    config = longterm.StressConfig(utterances=10, decode_mode='mimic',
+                                   allow_missing_process_metrics=True)
+    session = longterm.LongTermStressSession(config, log=lambda message: None)
+    expected_rule, other_rule = object(), object()
+    parsed = [other_rule, ['go', 'left'], [False, False]]
+    session.decoder = SimpleNamespace(mimic=lambda text, activity: text)
+    session.compiler = SimpleNamespace(parse_output=lambda output: tuple(parsed))
+
+    # The wrong active rule won: recognition quality.
+    session._decode_and_validate(0, 'go left', [], expected_rule,
+                                 ['go', 'left'], [False, False], 'command')
+    assert (session.counters['misrecognitions'], session.counters['invariant_failures']) == (1, 0)
+
+    # The right rule won but its alignment disagrees: a package invariant.
+    parsed[0], parsed[1] = expected_rule, ['go', 'right']
+    session._decode_and_validate(1, 'go left', [], expected_rule,
+                                 ['go', 'left'], [False, False], 'command')
+    assert (session.counters['misrecognitions'], session.counters['invariant_failures']) == (1, 1)
+
+    # Something matched when nothing should have: also an invariant.
+    parsed[0] = other_rule
+    session._decode_and_validate(2, 'garbage', [], None, None, None, 'garbage-audio')
+    assert (session.counters['misrecognitions'], session.counters['invariant_failures']) == (1, 2)
+
+
 def test_missing_process_metrics_are_an_explicit_failure():
     config = longterm.StressConfig(utterances=1, decode_mode='mimic')
     session = longterm.LongTermStressSession(config, log=lambda message: None)
@@ -253,5 +321,6 @@ def test_unexpected_workload_error_tears_down_writes_report_and_reraises(
     assert report_path.is_file()
     report = json.loads(report_path.read_text())
     assert not report['passed']
-    assert 'correctness' in report['failed_verdicts']
+    assert 'harness-invariants' in report['failed_verdicts']
     assert any(failure['kind'] == 'harness-error' for failure in report['failures'])
+    assert all(failure['category'] == longterm.INVARIANT for failure in report['failures'])

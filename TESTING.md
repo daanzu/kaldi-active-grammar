@@ -90,7 +90,21 @@ throughout. A gated run fails explicitly if required process metrics are not
 available; `--allow-missing-process-metrics` is available for diagnostic-only
 environments.
 
-A run fails on any recognition mismatch, incomplete workload, or (unless
+Recognition results are gated in two parts, because they fail for two
+different reasons. The `harness-invariants` verdict covers what must hold
+however good or bad the acoustic model is — garbage audio and inactive rules
+must be rejected, and the parsed word/dictation alignment must match the rule
+that won — along with harness and teardown errors; its threshold is zero.
+The `recognition-accuracy` verdict covers one active rule losing to another,
+which is a property of the model and the phrase set rather than of the package;
+it gets a whole-run budget set by `--max-misrecognition-rate` (0.1% of the
+planned utterances by default, so 0 for `smoke`, 5 for `standard`, and 200 for
+`overnight`). Both appear in the summary table and in `failed_verdicts`, and
+every entry in the report's `failures` list carries a matching `category`.
+Exceeding either aborts the run, though never before `--max-failures` examples
+have been logged.
+
+A run fails on incomplete workload, or (unless
 `--observe`) within-run drift after a discarded warmup window: RSS growth slope
 (with a noise floor, since decode-graph working sets wobble), descriptor/handle
 growth, Python object growth slope, p95 latency drift (last vs first
@@ -107,7 +121,7 @@ subprocess so allocator state cannot contaminate another measurement.
 For performance regression gating, `--max-p95-ms`,
 `--max-real-time-factor`, and `--max-prepare-seconds` provide absolute limits.
 `--baseline-json` compares p95 latency, real-time factor, and preparation time
-with a compatible prior schema-2 report; `--max-baseline-regression-pct`
+with a compatible prior report; `--max-baseline-regression-pct`
 controls the allowed increase (25% by default). With `--framework both`, pass
 the common baseline stem and the runner selects the corresponding
 `-agf-direct.json` and `-laf.json` reports.

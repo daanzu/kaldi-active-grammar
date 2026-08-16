@@ -58,7 +58,11 @@ class TestLongTermStress:
         assert result.returncode == 0, \
             'stress worker exited %d (see %s)' % (result.returncode, report_path)
         assert not report['truncated'], 'stress workload was truncated (see %s)' % report_path
-        assert not report['failures'], report['failures'][:5]
+        # Misrecognitions are gated by the recognition-accuracy verdict against
+        # its budget; anything else must not happen at all.
+        invariant_failures = [failure for failure in report['failures']
+                              if failure.get('category') != 'misrecognition']
+        assert not invariant_failures, invariant_failures[:5]
         assert not report['failed_verdicts'], \
             'failed verdicts: %s (see %s)' % (report['failed_verdicts'], report_path)
 
