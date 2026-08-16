@@ -90,7 +90,23 @@ throughout. A gated run fails explicitly if required process metrics are not
 available; `--allow-missing-process-metrics` is available for diagnostic-only
 environments.
 
-Recognition results are gated in two parts, because they fail for two
+Because the workload asserts that every utterance is won by its own rule, the
+phrases in play have to be acoustically separable under the test model and
+voice. Before the population is built, the harness screens them: each phrase
+in the pool is decoded with every other pool phrase simultaneously active —
+strictly harder than anything the run itself presents, since extra competitors
+can only take probability away from the right answer — and any phrase that
+loses is swapped for an unused one from the universe, repeating until a round
+comes back clean. The result is cached in `phrase_screen.json` beside the
+model, keyed on the model, voice, phrase universe, and population size but
+deliberately *not* on the package version, so a `--baseline-json` comparison
+runs the identical workload on both sides. Use `--rescreen-phrases` to
+recompute, `--skip-phrase-screen` to bypass it, and `--max-screen-rounds` to
+change how long it keeps trying; the `phrase-screen` verdict fails if phrases
+remain unseparated. At the `overnight` population the screen takes about two
+minutes on first run and replaces two phrases.
+
+Recognition results are then gated in two parts, because they fail for two
 different reasons. The `harness-invariants` verdict covers what must hold
 however good or bad the acoustic model is — garbage audio and inactive rules
 must be rejected, and the parsed word/dictation alignment must match the rule

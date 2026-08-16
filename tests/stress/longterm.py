@@ -27,6 +27,7 @@ import argparse
 import ctypes
 import dataclasses
 import gc
+import hashlib
 import json
 import math
 import os
@@ -78,8 +79,68 @@ BASELINE_CONFIG_KEYS = (
     'active_grammar_fraction', 'context_switch_prob', 'context_drift_prob',
     'empty_activity_fraction', 'garbage_audio_fraction', 'churn_every',
     'churn_fraction', 'novel_fraction', 'phrase_pool_factor', 'reload_every',
-    'lazy_fraction', 'seed',
+    'lazy_fraction', 'seed', 'skip_phrase_screen',
 )
+
+PHRASE_SCREEN_FILENAME = 'phrase_screen.json'
+# Model files that decide which phrases are separable and that the package
+# never regenerates; the derived lexicon and graph artifacts are excluded
+# because switching versions rewrites them without changing the acoustics.
+PHRASE_SCREEN_MODEL_FILES = ('final.mdl', 'lexicon.txt', 'KAG_VERSION')
+
+
+def phrase_screen_signature(config, universe, model_dir, voice_path):
+    """Identify everything that can change which phrases survive screening.
+
+    The package version is deliberately absent: a screened pool is meant to be
+    shared across versions, so that a ``--baseline-json`` comparison runs the
+    very same workload on both.  A decoder change large enough to move the
+    separability boundary surfaces as budgeted misrecognitions instead.
+    """
+    def file_size(path):
+        return path.stat().st_size if path.is_file() else None
+
+    return dict(
+        universe=hashlib.sha1('\n'.join(universe).encode()).hexdigest()[:16],
+        command_pool_size=config.command_pool_size,
+        dictation_slots=config.reserved_dictation_phrases,
+        payloads=list(DICTATION_PAYLOADS),
+        framework=config.framework,
+        model={name: file_size(Path(model_dir) / name)
+               for name in PHRASE_SCREEN_MODEL_FILES},
+        voice=[Path(voice_path).name, file_size(Path(voice_path))],
+    )
+
+
+def phrase_screen_key(signature):
+    return hashlib.sha1(json.dumps(signature, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def read_phrase_screen_cache(path):
+    try:
+        cached = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    return cached if isinstance(cached.get('results'), dict) else {}
+
+
+def load_phrase_screen(path, signature):
+    """Return the cached screen result for this signature, or None."""
+    return read_phrase_screen_cache(path).get('results', {}).get(phrase_screen_key(signature))
+
+
+def save_phrase_screen(path, signature, payload):
+    """Add one result, keeping the entries for other profiles and frameworks.
+
+    Every profile and framework screens a different candidate set, so a
+    single-entry file would thrash between them.
+    """
+    cached = read_phrase_screen_cache(path) or {'results': {}}
+    cached['results'][phrase_screen_key(signature)] = dict(payload, signature=signature)
+    try:
+        Path(path).write_text(json.dumps(cached, indent=2))
+    except OSError:  # A read-only model dir only costs a rescreen next run.
+        pass
 
 
 def build_phrase_universe():
@@ -125,6 +186,10 @@ class StressConfig:
     checkpoint_every: int = 100
     report_every: int = 200
     warmup_fraction: float = 0.25       # leading fraction of run excluded from drift analysis
+    skip_phrase_screen: bool = False    # skip the pre-run acoustic separability screen
+    rescreen_phrases: bool = False      # ignore any cached screen result
+    max_screen_rounds: int = 4          # phrase-replacement rounds before giving up
+
     max_failures: int = 25              # abort the run after this many invariant failures
     # Recognizing the wrong active rule is acoustic-model quality, not a
     # package invariant, so it gets a whole-run budget rather than a hard zero.
@@ -173,6 +238,8 @@ class StressConfig:
             raise ValueError('checkpoint_every and report_every must be positive')
         if self.churn_every < 0 or self.reload_every < 0 or self.max_minutes < 0:
             raise ValueError('cadences and max_minutes cannot be negative')
+        if self.max_screen_rounds < 1:
+            raise ValueError('max_screen_rounds must be at least 1')
         if self.max_baseline_regression_pct < 0:
             raise ValueError('max_baseline_regression_pct cannot be negative')
         if self.phrase_pool_factor < 1.5:
@@ -280,10 +347,13 @@ def directory_stats(path):
     return total_files, total_bytes // 1024
 
 
+def piper_voice_path():
+    return TESTS_DIR / os.environ.get('PIPER_MODEL', 'en_US-ryan-low.onnx')
+
+
 def load_piper_voice():
     import piper
-    model_name = os.environ.get('PIPER_MODEL', 'en_US-ryan-low.onnx')
-    model_path = TESTS_DIR / model_name
+    model_path = piper_voice_path()
     if not model_path.is_file():
         raise FileNotFoundError(f"Piper model file '{model_path}' not found; run 'just setup-tests'.")
     return piper.PiperVoice.load(model_path)
@@ -350,8 +420,13 @@ class LongTermStressSession:
         # samples then measure the package, not TTS or first-compile costs.
         # Dictation rules use dedicated phrases from the end of the universe,
         # fixed per grammar slot, so their texts are pre-synthesizable too.
-        self.free_phrase_indices = list(range(config.command_pool_size))
-        self.dictation_phrase_base = len(self.universe) - config.reserved_dictation_phrases
+        # Both lists are rewritten in place by the phrase screen, which swaps
+        # out any phrase the recognizer cannot separate from the rest.
+        self.command_phrase_indices = list(range(config.command_pool_size))
+        self.dictation_phrase_indices = list(
+            range(len(self.universe) - config.reserved_dictation_phrases, len(self.universe)))
+        self.free_phrase_indices = list(self.command_phrase_indices)
+        self.phrase_screen = None
         self.rule_refs = []             # weakrefs to every KaldiRule ever created
         self.active_grammar_indices = set()
 
@@ -417,29 +492,36 @@ class LongTermStressSession:
     def _dictation_slot(self, grammar_index, rule_index):
         """Fixed lead phrase and payload for a grammar's dictation-rule slot."""
         slot = grammar_index * self.config.dictation_rules_per_grammar + rule_index
-        phrase_index = self.dictation_phrase_base + slot
-        payload = DICTATION_PAYLOADS[slot % len(DICTATION_PAYLOADS)]
-        return phrase_index, payload
+        return self.dictation_phrase_indices[slot], DICTATION_PAYLOADS[slot % len(DICTATION_PAYLOADS)]
 
-    def _create_rule(self, grammar_index, rule_index, generation, phrase_index,
-                     is_dictation, payload, lazy):
+    def _build_rule(self, name, phrase_index, is_dictation, payload, lazy=False):
+        """Create, populate, compile, and load one rule.
+
+        Returns the rule, the text to speak for it, and the parse the harness
+        must get back.  Shared by the measured population and the phrase
+        screen, so both put identical graphs in front of the decoder.
+        """
         from kaldi_active_grammar import KaldiRule
         lead_words = self.universe[phrase_index].split()
-        name = f'Stress_g{grammar_index}_r{rule_index}_gen{generation}'
         rule = KaldiRule(self.compiler, name, has_dictation=is_dictation or None)
         if is_dictation:
             self._build_dictation_fst(rule.fst, lead_words)
             payload_words = payload.split()
-            text = ' '.join(lead_words + ['dictate'] + payload_words)
-            expected_words = lead_words + ['dictate'] + payload_words
-            expected_mask = [False] * (len(lead_words) + 1) + [True] * len(payload_words)
+            words = lead_words + ['dictate'] + payload_words
+            mask = [False] * (len(lead_words) + 1) + [True] * len(payload_words)
         else:
             self._build_command_fst(rule.fst, lead_words)
-            text = ' '.join(lead_words)
-            expected_words = list(lead_words)
-            expected_mask = [False] * len(lead_words)
+            words = list(lead_words)
+            mask = [False] * len(lead_words)
         rule.compile(lazy=lazy)
         rule.load(lazy=lazy)
+        return rule, ' '.join(words), words, mask
+
+    def _create_rule(self, grammar_index, rule_index, generation, phrase_index,
+                     is_dictation, payload, lazy):
+        name = f'Stress_g{grammar_index}_r{rule_index}_gen{generation}'
+        rule, text, expected_words, expected_mask = self._build_rule(
+            name, phrase_index, is_dictation, payload, lazy)
         self.rule_refs.append(weakref.ref(rule))
         self.counters['rules_created'] += 1
         return StressRule(rule=rule, phrase_index=phrase_index, text=text,
@@ -464,13 +546,129 @@ class LongTermStressSession:
 
     def _presynthesize_audio(self):
         """Synthesize every text this run can ever speak, before measurement starts."""
-        for phrase_index in range(self.config.command_pool_size):
+        for phrase_index in self.command_phrase_indices:
             self.audio_pool.get(self.universe[phrase_index])
         for grammar_index in range(self.config.num_grammars):
             for rule_index in range(self.config.dictation_rules_per_grammar):
                 phrase_index, payload = self._dictation_slot(grammar_index, rule_index)
                 lead_words = self.universe[phrase_index].split()
                 self.audio_pool.get(' '.join(lead_words + ['dictate'] + payload.split()))
+
+    # ----- phrase screening ------------------------------------------------------
+
+    def _spare_phrase_indices(self):
+        """Universe phrases held by neither the command pool nor a dictation slot."""
+        used = set(self.command_phrase_indices) | set(self.dictation_phrase_indices)
+        return [index for index in range(len(self.universe)) if index not in used]
+
+    def _screen_round(self, round_index):
+        """Decode every candidate phrase with all of them active at once.
+
+        Returns the candidates not won by their own rule.  Screening with the
+        whole pool live is strictly harder than anything the run presents:
+        extra competitors can only take probability away from the right
+        answer, so a phrase that survives here survives any active subset.
+        """
+        candidates = [(index, False, None) for index in self.command_phrase_indices]
+        candidates += [(self.dictation_phrase_indices[slot], True,
+                        DICTATION_PAYLOADS[slot % len(DICTATION_PAYLOADS)])
+                       for slot in range(self.config.reserved_dictation_phrases)]
+
+        entries = []
+        for position, (phrase_index, is_dictation, payload) in enumerate(candidates):
+            rule, text, words, mask = self._build_rule(
+                'Screen_r%d_p%d' % (round_index, position), phrase_index, is_dictation, payload)
+            entries.append((phrase_index, is_dictation, rule, text, words, mask))
+        self.compiler.prepare_for_recognition()
+
+        active_rule_ids = [entry[2].id for entry in entries]
+        losers = []
+        try:
+            for phrase_index, is_dictation, rule, text, words, mask in entries:
+                self.decoder.decode(self.audio_pool.get(text), True, active_rule_ids)
+                output, _ = self.decoder.get_output()
+                recognized, got_words, got_mask = self.compiler.parse_output(output)
+                if recognized is not rule or got_words != words or got_mask != mask:
+                    losers.append(dict(phrase_index=phrase_index, text=text,
+                                       is_dictation=is_dictation,
+                                       got=' '.join(got_words) if got_words else '(nothing)'))
+        finally:
+            for entry in entries:
+                entry[2].close()
+        return losers
+
+    def _replace_screen_losers(self, losers, spares):
+        """Swap each losing phrase for an unused one; False if the universe runs dry."""
+        for loser in losers:
+            if not spares:
+                return False
+            replacement = spares.pop(0)
+            if loser['is_dictation']:
+                slot = self.dictation_phrase_indices.index(loser['phrase_index'])
+                self.dictation_phrase_indices[slot] = replacement
+            else:
+                position = self.command_phrase_indices.index(loser['phrase_index'])
+                self.command_phrase_indices[position] = replacement
+        return True
+
+    def _screen_phrase_pool(self):
+        """Replace phrases the recognizer cannot tell apart, before measuring.
+
+        The workload asserts that every utterance is won by its own rule, which
+        only holds if the phrases in play are acoustically separable under this
+        model and voice.  Losers are swapped for unused phrases from the
+        universe and the round is repeated until one comes back clean; what
+        survives is cached next to the model, since the outcome depends on the
+        model, the voice, and the phrase universe rather than on the run.
+        """
+        config = self.config
+        cache_path = Path(self.compiler.model_dir) / PHRASE_SCREEN_FILENAME
+        signature = phrase_screen_signature(config, self.universe,
+                                            self.compiler.model_dir, piper_voice_path())
+        cached = None if config.rescreen_phrases else load_phrase_screen(cache_path, signature)
+        if cached is not None:
+            self.command_phrase_indices = list(cached['command_phrase_indices'])
+            self.dictation_phrase_indices = list(cached['dictation_phrase_indices'])
+            self.phrase_screen = dict(cached, source='cache', seconds=0.0)
+            self.phrase_screen.pop('signature', None)
+            self.free_phrase_indices = list(self.command_phrase_indices)
+            self.log('[%s] phrase screen: %d replaced, from %s'
+                     % (config.framework, len(cached['replaced']), cache_path))
+            return
+
+        started = time.monotonic()
+        spares = self._spare_phrase_indices()
+        replaced, unresolved, rounds, losers = [], 0, 0, []
+        for round_index in range(config.max_screen_rounds):
+            rounds = round_index + 1
+            losers = self._screen_round(round_index)
+            if not losers:
+                break
+            replaced.extend(losers)
+            if not self._replace_screen_losers(losers, spares):
+                unresolved = len(losers)
+                self.log('[%s] phrase screen: out of spare phrases, leaving %d confusable'
+                         % (config.framework, unresolved))
+                break
+        else:
+            # The last round's replacements went in unverified, so the pool is
+            # not proven clean even though every known loser was swapped out.
+            unresolved = len(losers)
+            self.log('[%s] phrase screen: no clean round within %d; %d replacements unverified'
+                     % (config.framework, config.max_screen_rounds, unresolved))
+
+        self.phrase_screen = dict(
+            source='computed', seconds=round(time.monotonic() - started, 1),
+            rounds=rounds, unresolved=unresolved,
+            replaced=[dict(text=loser['text'], got=loser['got']) for loser in replaced],
+            command_phrase_indices=list(self.command_phrase_indices),
+            dictation_phrase_indices=list(self.dictation_phrase_indices))
+        self.free_phrase_indices = list(self.command_phrase_indices)
+        save_phrase_screen(cache_path, signature, self.phrase_screen)
+        self.log('[%s] phrase screen: %d replaced in %d rounds, %.1fs%s'
+                 % (config.framework, len(replaced), rounds, self.phrase_screen['seconds'],
+                    ''.join('\n    %r lost to %r' % (loser['text'], loser['got'])
+                            for loser in replaced)))
 
     def _prepare_for_recognition(self):
         started = time.monotonic()
@@ -753,6 +951,12 @@ class LongTermStressSession:
                 'utterances won by the wrong active rule (budget %g%% of %d planned)'
                 % (config.max_misrecognition_rate * 100, config.utterances))
 
+        if self.phrase_screen is not None:
+            unresolved = self.phrase_screen['unresolved']
+            verdict('phrase-screen', unresolved, 0, unresolved == 0,
+                    'phrases left unseparated by screening (%d replaced, from %s)'
+                    % (len(self.phrase_screen['replaced']), self.phrase_screen['source']))
+
         completed_target = completed == config.utterances
         verdict('completion', completed, config.utterances,
                 completed_target or config.allow_truncated,
@@ -957,6 +1161,12 @@ class LongTermStressSession:
             self.decoder = self.compiler.init_decoder()
             self._sample('startup', -1)
 
+            # Before the population exists, so the screen's own rules are the
+            # only ones in the graph, and before the 'built' baseline, so its
+            # allocations cannot masquerade as workload growth.
+            if self.audio_pool is not None and not config.skip_phrase_screen:
+                self._screen_phrase_pool()
+
             for grammar_index in range(config.num_grammars):
                 self.grammars.append(self._create_grammar(grammar_index, generation=0))
             self._prepare_for_recognition()
@@ -1110,6 +1320,7 @@ class LongTermStressSession:
                 python=platform.python_version(),
             ),
             truncated=self.truncated,
+            phrase_screen=self.phrase_screen,
             counters=counters,
             latency=self._summarize_latency(),
             latency_series_ms=[[index, round(seconds * 1000, 1)]

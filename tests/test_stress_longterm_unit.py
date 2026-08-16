@@ -132,6 +132,93 @@ def test_only_a_losing_rule_counts_as_a_misrecognition():
     assert (session.counters['misrecognitions'], session.counters['invariant_failures']) == (1, 2)
 
 
+def test_phrase_screen_signature_tracks_workload_and_assets(tmp_path):
+    config = longterm.StressConfig(num_grammars=2, rules_per_grammar=2)
+    universe = longterm.build_phrase_universe()
+    voice = tmp_path / 'voice.onnx'
+    voice.write_bytes(b'x' * 10)
+
+    signature = longterm.phrase_screen_signature(config, universe, tmp_path, voice)
+    assert signature['voice'] == ['voice.onnx', 10]
+    assert signature['command_pool_size'] == config.command_pool_size
+    assert signature['model'] == {name: None for name in longterm.PHRASE_SCREEN_MODEL_FILES}
+
+    voice.write_bytes(b'x' * 11)
+    assert longterm.phrase_screen_signature(config, universe, tmp_path, voice) != signature
+    voice.write_bytes(b'x' * 10)
+
+    wider = dataclasses.replace(config, num_grammars=3)
+    assert longterm.phrase_screen_signature(wider, universe, tmp_path, voice) != signature
+    assert longterm.phrase_screen_signature(config, universe[:-1], tmp_path, voice) != signature
+
+
+def test_phrase_screen_cache_keeps_one_entry_per_workload(tmp_path):
+    path = tmp_path / 'phrase_screen.json'
+    longterm.save_phrase_screen(path, {'a': 1}, dict(replaced=['first']))
+    longterm.save_phrase_screen(path, {'a': 2}, dict(replaced=['second']))
+
+    # A second profile or framework must not evict the first one's result.
+    assert longterm.load_phrase_screen(path, {'a': 1})['replaced'] == ['first']
+    assert longterm.load_phrase_screen(path, {'a': 2})['replaced'] == ['second']
+    assert longterm.load_phrase_screen(path, {'a': 3}) is None
+    assert longterm.load_phrase_screen(tmp_path / 'missing.json', {'a': 1}) is None
+
+
+def test_phrase_screen_cache_survives_a_corrupt_file(tmp_path):
+    path = tmp_path / 'phrase_screen.json'
+    path.write_text('{not json')
+
+    assert longterm.load_phrase_screen(path, {'a': 1}) is None
+    longterm.save_phrase_screen(path, {'a': 1}, dict(replaced=[]))
+    assert longterm.load_phrase_screen(path, {'a': 1})['replaced'] == []
+
+
+def make_screenable_session():
+    config = longterm.StressConfig(
+        utterances=10, num_grammars=2, rules_per_grammar=2,
+        dictation_rules_per_grammar=1, decode_mode='mimic')
+    return longterm.LongTermStressSession(config, log=lambda message: None)
+
+
+def test_screen_losers_are_swapped_for_unused_phrases():
+    session = make_screenable_session()
+    command_before = list(session.command_phrase_indices)
+    dictation_before = list(session.dictation_phrase_indices)
+    spares = session._spare_phrase_indices()
+    assert not set(spares) & set(command_before + dictation_before)
+
+    swapped = session._replace_screen_losers([
+        dict(phrase_index=command_before[1], is_dictation=False, text='', got=''),
+        dict(phrase_index=dictation_before[0], is_dictation=True, text='', got=''),
+    ], spares)
+
+    assert swapped
+    assert session.command_phrase_indices[0] == command_before[0]
+    assert session.command_phrase_indices[1] not in command_before
+    assert session.dictation_phrase_indices[0] not in dictation_before
+    # The dictation slot lookup follows the rewritten list.
+    assert session._dictation_slot(0, 0)[0] == session.dictation_phrase_indices[0]
+
+
+def test_replacement_reports_an_exhausted_universe():
+    session = make_screenable_session()
+    loser = dict(phrase_index=session.command_phrase_indices[0], is_dictation=False,
+                 text='', got='')
+
+    assert not session._replace_screen_losers([loser], [])
+
+
+def test_unseparated_phrases_fail_their_verdict():
+    session = make_analyzable_session()
+    session.phrase_screen = dict(source='computed', unresolved=2, replaced=[{}])
+
+    by_name = verdict_by_name(session._analyze(
+        {'allocator_rules': 0, 'alive_rule_objects': 0})[0])
+
+    assert by_name['phrase-screen']['value'] == 2
+    assert not by_name['phrase-screen']['passed']
+
+
 def test_missing_process_metrics_are_an_explicit_failure():
     config = longterm.StressConfig(utterances=1, decode_mode='mimic')
     session = longterm.LongTermStressSession(config, log=lambda message: None)
