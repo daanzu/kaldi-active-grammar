@@ -24,7 +24,7 @@ build-linux python='python3':
 
 # Build and repair a manylinux wheel with the checked-in Dockcross helper.
 build-dockcross *args='':
-	building/dockcross-manylinux2010-x64 bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{args}}
+	building/dockcross-manylinux2010-x64 --args "-e KALDIAG_BUILD_VERSION" bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{args}}
 
 # Download and make executable the Dockcross helper for manylinux builds.
 setup-dockcross:

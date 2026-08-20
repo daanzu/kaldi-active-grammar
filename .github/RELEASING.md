@@ -2,7 +2,7 @@
 
 ## Quick Summary
 
-1. **Prepare**: Update version in `__init__.py`, update `CHANGELOG.md`, run tests
+1. **Prepare**: Update the version in `_version.py`, update `CHANGELOG.md`, run tests
 2. **Tag Fork First**: Push all changes and tag `kag-vX.Y.Z` in kaldi-fork repo (MUST be done first!)
 3. **Tag Main**: Create and push git tag `vX.Y.Z` in this repo to trigger builds
 4. **Build**: Automated GitHub Actions builds wheels for all platforms
@@ -22,14 +22,22 @@ This is a **duorepo** (2 separate repos used together):
 
 **⚠️ IMPORTANT: The fork repo MUST always be pushed first before this repo for any changes!** The build process in this repo checks out code from the fork repo, so the fork must contain all necessary changes before triggering builds here.
 
+**Distribution policy:** Release and development artifacts are wheels only.
+Do not build or upload a source distribution (`sdist`); sdists are explicitly
+unsupported because the package requires a matching platform-native Kaldi
+library bundled into the wheel.
+
 ### 1. Pre-Release Preparation
 
 #### Update Version Number
 
-Edit `kaldi_active_grammar/__init__.py`:
+Edit the release target in `kaldi_active_grammar/_version.py`:
 ```python
-__version__ = 'X.Y.Z'  # Change from previous version
+__version_base__ = 'X.Y.Z'
 ```
+
+Do not put a development suffix in `__version_base__`. Untagged wheel builds
+derive a unique PEP 440 development version from this target automatically.
 
 Optionally update `REQUIRED_MODEL_VERSION` if model changes.
 
@@ -63,7 +71,7 @@ just test
 #### Commit Changes
 
 ```bash
-git add kaldi_active_grammar/__init__.py CHANGELOG.md
+git add kaldi_active_grammar/_version.py CHANGELOG.md
 git commit -m "Release vX.Y.Z"
 ```
 
@@ -99,9 +107,11 @@ Pushing this tag will trigger the GitHub Actions build workflow, which will pull
 
 When you push a tag, the CI automatically:
 
-#### Detects the Tag
+#### Resolves Build Metadata
 
-Sets `KALDI_BRANCH=kag-vX.Y.Z` for tagged commits, or uses current branch name for non-tagged commits.
+Resolves one package version for all platforms, then sets
+`KALDI_BRANCH=kag-vX.Y.Z` for tagged commits or uses the current branch name
+for untagged builds.
 
 #### Builds Native Binaries
 
@@ -223,15 +233,19 @@ twine upload wheels/*
 
 #### Bump Version for Development
 
-Update `__version__` in `kaldi_active_grammar/__init__.py` to next dev version:
+Update `__version_base__` in `kaldi_active_grammar/_version.py` to the next
+release target:
 ```python
-__version__ = 'X.Y.Z.dev0'  # or 'X.Y+1.0.dev0'
+__version_base__ = 'X.Y.Z'
 ```
+
+Imports directly from the checkout report `X.Y.Z.dev0`; built development
+wheels receive a unique timestamp and Git revision automatically.
 
 Commit the change:
 ```bash
-git add kaldi_active_grammar/__init__.py
-git commit -m "Bump version to X.Y.Z.dev0"
+git add kaldi_active_grammar/_version.py
+git commit -m "Target version X.Y.Z"
 git push
 ```
 
@@ -250,8 +264,9 @@ git push
 
 | File | Purpose |
 |------|---------|
-| `kaldi_active_grammar/__init__.py:8` | Version source |
-| `kaldi_active_grammar/__init__.py:10` | Required model version |
+| `kaldi_active_grammar/_version.py` | Next release target and source-import fallback |
+| `building/versioning.py` | Build version generation and tag validation |
+| `kaldi_active_grammar/__init__.py` | Required model version |
 | `CHANGELOG.md` | Release notes and history |
 | `.github/workflows/build.yml` | CI build configuration |
 | `.github/workflows/tests.yml` | CI test configuration |
@@ -267,6 +282,8 @@ git push
 | Variable | Purpose |
 |----------|---------|
 | `KALDIAG_BUILD_SKIP_NATIVE=1` | Skip native compilation, just package |
+| `KALDIAG_BUILD_VERSION` | Use an explicit PEP 440 build version; CI sets this once for every platform |
+| `KALDIAG_BUILD_TIMESTAMP` | Optional 14-digit UTC timestamp for a coordinated development build |
 | `KALDI_BRANCH` | Which Kaldi fork branch/tag to build from (auto-detected from git tag) |
 | `MKL_URL` | Optional Intel MKL download URL (mostly disabled now) |
 
@@ -274,10 +291,15 @@ git push
 
 ## Development vs Release Versions
 
-- **Dev versions**: `setup.py` auto-appends timestamp to `X.Y.Z.dev0` versions
-  - Example: `3.1.0.dev20251031123456`
-- **Release versions**: Clean `X.Y.Z` semantic version
-  - Example: `3.1.0`
+- **Source imports**: The stable fallback is `X.Y.Z.dev0`.
+- **Development wheels**: Untagged builds use a UTC timestamp and Git revision.
+  - Example: `3.3.0.dev20260816153042+g5d9537d`
+  - Dirty local builds add `.dirty` to the local version.
+- **Coordinated CI builds**: The workflow resolves the version once and passes
+  the same `KALDIAG_BUILD_VERSION` to every platform job.
+- **Release and release-candidate wheels**: A clean `vX.Y.Z` or `vX.Y.ZrcN`
+  tag produces the tag version exactly. The tag must target
+  `__version_base__`, or the build fails.
 - Build process differentiates based on git tags
 
 ---
@@ -311,6 +333,6 @@ git push
 
 ### Version mismatch
 
-- Ensure git tag matches `__version__` in `__init__.py`
+- Ensure the git tag targets `__version_base__` in `_version.py`
 - Check that both repos are tagged (main repo: `vX.Y.Z`, fork: `kag-vX.Y.Z`)
 - Verify `CHANGELOG.md` has correct version

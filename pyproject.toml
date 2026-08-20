@@ -1,4 +1,6 @@
 [build-system]
+# Distribution policy is wheel-only; Python source distributions (sdists) are
+# intentionally unsupported because the package requires bundled native code.
 requires = ["setuptools", "wheel", "scikit-build", "cmake", "ninja"]
 
 [tool.pytest.ini_options]

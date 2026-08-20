@@ -10,10 +10,27 @@ on:
 
 jobs:
 
+  build-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Resolve package version once for every platform
+        id: version
+        run: |
+          VERSION=$(python3 building/versioning.py)
+          echo "Package version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   build-linux:
     runs-on: ubuntu-latest
+    needs: build-version
     if: true
     env:
+      KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
       MKL_URL: ""
       # MKL_URL: "https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz"
     steps:
@@ -118,8 +135,10 @@ jobs:
 
   build-windows:
     runs-on: windows-2025
+    needs: build-version
     if: true
     env:
+      KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
       VS_VERSION: vs2022
       PLATFORM_TOOLSET: v143
       WINDOWS_TARGET_PLATFORM_VERSION: 10.0
@@ -289,8 +308,10 @@ jobs:
 
   build-macos-arm:
     runs-on: macos-15
+    needs: build-version
     if: true
     env:
+      KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
       MACOSX_DEPLOYMENT_TARGET: "11.0"
       MKL_URL: ""
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
@@ -429,8 +450,10 @@ jobs:
 
   build-macos-intel:
     runs-on: macos-15-intel
+    needs: build-version
     if: true
     env:
+      KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
       MACOSX_DEPLOYMENT_TARGET: "10.9"
       MKL_URL: ""
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg

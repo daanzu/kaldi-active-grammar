@@ -35,6 +35,7 @@ See the [Changelog](CHANGELOG.md) for the latest updates.
 
 * **Binaries:** The Python package **includes all necessary binaries** for decoding on **Windows/Linux/MacOS**. Available on [PyPI](https://pypi.org/project/kaldi-active-grammar/#files).
     * Binaries are generated from my [fork of Kaldi](https://github.com/daanzu/kaldi-fork-active-grammar), which is only intended to be used by kaldi-active-grammar directly, and not as a stand-alone library.
+* **Distribution format:** Only platform-specific wheels are produced and supported. Source distributions (`sdist`) are intentionally unsupported because a usable package must contain the matching native Kaldi library.
 * **Pre-trained model:** A compatible **general English Kaldi nnet3 chain model** is trained on **~3000** hours of open audio. Available under [project releases](https://github.com/daanzu/kaldi-active-grammar/releases).
     * [**Model info and comparison**](docs/models.md)
     * Improved models are under development.

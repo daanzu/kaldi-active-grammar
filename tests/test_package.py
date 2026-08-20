@@ -105,8 +105,24 @@ def test_activity_ids_are_normalized_for_native_abi():
 
 def test_import_and_version():
     import kaldi_active_grammar as kag
+    from kaldi_active_grammar._version import __version_generated__
+
     assert isinstance(kag.__version__, str)
     assert kag.__version__.strip() != ""
 
-    version_pattern = r'^\d+\.\d+\.\d+(?:[-+].+)?$'
-    assert re.match(version_pattern, kag.__version__), f"Version '{kag.__version__}' does not match semantic versioning format"
+    version_pattern = (
+        r'^\d+\.\d+\.\d+'
+        r'(?:(?:a|b|rc)\d+|\.dev\d+)?'
+        r'(?:\+[a-z0-9]+(?:\.[a-z0-9]+)*)?$')
+    assert re.match(version_pattern, kag.__version__), (
+        f"Version '{kag.__version__}' does not match the supported PEP 440 format")
+
+    if __version_generated__:
+        try:
+            from importlib.metadata import version as distribution_version
+            installed_version = distribution_version('kaldi-active-grammar')
+        except ImportError:  # Python 3.6 and 3.7
+            import pkg_resources
+            installed_version = pkg_resources.get_distribution(
+                'kaldi-active-grammar').version
+        assert installed_version == kag.__version__

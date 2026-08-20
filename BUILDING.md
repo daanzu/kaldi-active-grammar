@@ -6,6 +6,12 @@ the Python interface and higher-level logic, while the
 contains the lower-level C++ code. The Python wheel embeds the native library
 built from the matching fork revision.
 
+This project only produces and supports platform-specific wheels. References
+to a "source build" in this guide mean building a wheel from a repository
+checkout; they do not mean creating or installing a Python source distribution
+(`sdist`). Sdists are intentionally unsupported because they do not provide the
+project's required, platform-specific native Kaldi library.
+
 ## Recommended for standard use/installation
 
 Use the binary wheels distributed for all major platforms. This avoids the

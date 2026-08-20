@@ -1,24 +1,38 @@
 """A setuptools based setup module.
 
+Basic usage::
+
+    python setup.py bdist_wheel
+
+Set ``KALDIAG_BUILD_SKIP_NATIVE=1`` to skip the native build when the required
+libraries have already been placed in the package.
+
 See:
 https://packaging.python.org/guides/distributing-packages-using-setuptools/
 https://github.com/pypa/sampleproject
+
+Distribution policy: build platform-specific wheels only. Source distributions
+(sdists) are intentionally unsupported because this package must bundle its
+matching native Kaldi library.
 """
 
 # Always prefer setuptools over distutils
 from setuptools import find_packages
-import datetime
+from setuptools.command.build_py import build_py as setuptools_build_py
 import os
 import platform
 import re
+import sys
 
 # Optionally skip native code build (expecting libraries to be manually/externally placed correctly prior) by using standard setuptools; otherwise build native code with scikit-build
 if os.environ.get('KALDIAG_BUILD_SKIP_NATIVE') or os.environ.get('KALDIAG_SETUP_RAW'):
     from setuptools import setup
+    build_py_base = setuptools_build_py
 else:
     from skbuild import setup
+    from skbuild.command.build_py import build_py as build_py_base
 
-import site, sys
+import site
 site.ENABLE_USER_SITE = bool("--user" in sys.argv[1:])  # Fix pip bug breaking editable install to user directory: https://github.com/pypa/pip/issues/7953
 
 
@@ -54,21 +68,33 @@ if True:
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-# https://packaging.python.org/guides/single-sourcing-package-version/
-def read(*parts):
-    with open(os.path.join(here, *parts), 'r') as fp:
-        return fp.read()
+# Keep version calculation importable without importing the package, which loads
+# the native library as part of normal package initialization.
+sys.path.insert(0, os.path.join(here, 'building'))
+from versioning import read_base_version, resolve_build_version  # noqa: E402
 
-def find_version(*file_paths):
-    version_file = read(*file_paths)
-    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", version_file, re.M)
-    if version_match:
-        return version_match.group(1)
-    raise RuntimeError("Unable to find version string.")
+version_base = read_base_version(here)
+version = resolve_build_version(here)
 
-version = find_version('kaldi_active_grammar', '__init__.py')
-if version.endswith('dev0'):
-    version = version[:-1] + datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+
+def write_version_module(version_path):
+    with open(version_path, 'w') as version_file:
+        version_file.write(
+            '"""Generated package version; do not edit."""\n\n'
+            "__version_base__ = %r\n"
+            "__version__ = %r\n"
+            "__version_generated__ = True\n" % (version_base, version))
+
+
+class build_py_with_version(build_py_base):
+    """Write the resolved version into the build tree, never the checkout."""
+
+    def run(self):
+        super().run()
+        version_path = os.path.join(
+            self.build_lib, 'kaldi_active_grammar', '_version.py')
+        write_version_module(version_path)
+
 
 # Set branch for Kaldi source repository (maybe we should use commits instead?)
 if not os.environ.get('KALDI_BRANCH'):
@@ -86,6 +112,7 @@ setup(
     cmdclass={
         'bdist_wheel': bdist_wheel_impure,
         'install': install_platlib,
+        'build_py': build_py_with_version,
     },
 
     # This is the name of your project. The first time you publish this
@@ -244,8 +271,8 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     #
-    # If using Python 2.6 or earlier, then these have to be included in
-    # MANIFEST.in as well.
+    # These entries are assembled into platform-specific wheels. Source
+    # distributions are intentionally unsupported.
     package_data={  # Optional
         'kaldi_active_grammar': ['exec/*/*', 'exec/*/*/*'],
         '': ['LICENSE.txt'],
