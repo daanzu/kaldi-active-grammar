@@ -4,7 +4,9 @@ Kaldi Active Grammar (KAG) is built from a duorepo: this repository contains
 the Python interface and higher-level logic, while the
 [Kaldi Active Grammar fork](https://github.com/daanzu/kaldi-fork-active-grammar)
 contains the lower-level C++ code. The Python wheel embeds the native library
-built from the matching fork revision.
+built from the exact fork commit recorded in
+[`kaldi-native-revision.txt`](kaldi-native-revision.txt). That lock file is the
+authoritative Python/native pairing for builds and releases.
 
 This project only produces and supports platform-specific wheels. References
 to a "source build" in this guide mean building a wheel from a repository
@@ -29,12 +31,12 @@ the selected Kaldi fork revision as part of the wheel build:
 
 ```sh
 python -m pip install -r requirements-build.txt
-KALDI_BRANCH=kag-v3.2.0 python setup.py bdist_wheel
+python setup.py bdist_wheel
 ```
 
-Replace `kag-v3.2.0` with the matching Kaldi branch. For a development build,
-use the current development branch or `origin/master` as appropriate. The
-resulting wheel is written to `dist/`.
+The build reads the matching native commit from `kaldi-native-revision.txt`.
+For a diagnostic build only, `KALDI_REVISION` may override it with another full
+commit hash. The resulting wheel is written to `dist/`.
 
 ### Linux: active development with separate checkouts
 
@@ -51,8 +53,19 @@ workspace/
 └── kaldi-fork-active-grammar/   # native engine
 ```
 
-From the Python checkout, the following commands configure the fork once,
-build it, stage its shared library, and install the Python package editable:
+From the Python checkout, first inspect the sibling checkout. `native-status`
+allows active development to differ from the lock; `native-sync` instead checks
+out the recorded commit and refuses to discard local changes:
+
+```sh
+just native-status
+# To reproduce the recorded pair exactly:
+just native-sync
+just native-verify
+```
+
+Then configure the fork once, build it, stage its shared library, and install
+the Python package editable:
 
 ```sh
 just configure-linux-develop
@@ -74,13 +87,14 @@ just build-linux-develop
 
 After editing only Python code, no rebuild is needed: the editable install uses
 the source checkout. The normal `build-linux`/wheel path is intentionally not
-used for this loop because its CMake configuration shallow-clones a separate
-fork into `_skbuild`.
+used for this loop because its CMake configuration checks out and builds a
+separate fork copy in `_skbuild`.
 
 The two checkouts remain separate Git repositories; the staging links are
-ignored and must not be packaged in a release wheel. Keep their branches or
-commits intentionally paired. The C ABI has no runtime version negotiation, so
-test both sides together whenever an ABI-facing change is made.
+ignored and must not be packaged in a release wheel. During paired development,
+commit the native change first and run `just native-lock` to record its commit
+in the Python checkout. The C ABI has no runtime version negotiation, so test
+both sides together whenever an ABI-facing change is made.
 
 ### Linux CI-equivalent build
 
@@ -90,11 +104,11 @@ the checked-in Dockcross helper, and run:
 
 ```sh
 just setup-dockcross
-just build-dockcross manylinux2010_x86_64 kag-v3.2.0 ""
+just build-dockcross
 ```
 
-The second argument selects the Kaldi fork branch. The optional third argument
-is an Intel MKL download URL; leave it empty to use the default non-MKL path.
+An optional first argument supplies an Intel MKL download URL; omit it to use
+the default non-MKL path. The native commit comes from the lock file.
 The helper invokes `building/build-wheel-dockcross.sh`, which builds the wheel
 and runs `auditwheel repair`. Repaired wheels are written to `wheelhouse/`.
 The CI job may pass `--skip-native` when compatible native binaries have been
@@ -183,7 +197,8 @@ OpenFST and Kaldi repositories alongside it:
 
 ```sh
 git clone https://github.com/daanzu/openfst.git openfst
-git clone --branch kag-v3.2.0 https://github.com/daanzu/kaldi-fork-active-grammar.git kaldi
+git clone https://github.com/daanzu/kaldi-fork-active-grammar.git kaldi
+git -C kaldi checkout --detach "$(cat kaldi-active-grammar/kaldi-native-revision.txt)"
 ```
 
 In `kaldi/windows`, prepare the Visual Studio solution and point it at those
@@ -232,33 +247,34 @@ differs from these assumptions.
 
 ## Build and release coupling
 
-For a non-development KAG version `X`, `setup.py` defaults `KALDI_BRANCH` to
-`kag-vX`; development builds default to the fork's `origin/master`. CI repeats
-this policy: a tagged Python build selects `kag-<Python tag>`, while an
-untagged build selects the corresponding branch name.
+`kaldi-native-revision.txt` contains one full Git commit hash and is the native
+ABI lock for every Python commit. CI reads it once, uses it in native cache
+keys, and checks out or builds that exact Kaldi revision on every platform.
+`KALDI_REVISION` is available as an explicit full-hash override for diagnostic
+builds; normal development and release builds should not set it.
 
-On Linux and macOS, KAG's CMake build shallow-clones the selected fork revision,
+On Linux and macOS, KAG's CMake build checks out the locked fork revision,
 configures Kaldi with shared libraries and no CUDA, builds the `dragonfly`
 target, and copies `libkaldi-dragonfly` into the Python package. Wheel-repair
 tooling collects dependent shared libraries where required. Windows CI checks
-out both the fork and the Windows OpenFST port, generates the Kaldi Visual
-Studio solution, builds `kaldi-dragonfly.dll`, copies it into the package, and
-then builds the wheel without rebuilding native code.
+out both the locked fork commit and the Windows OpenFST port, generates the
+Kaldi Visual Studio solution, builds `kaldi-dragonfly.dll`, copies it into the
+package, and then builds the wheel without rebuilding native code.
 
 ```mermaid
 flowchart LR
-    Tag[KAG version or branch]
-    Select[Select matching KALDI_BRANCH]
-    Clone[Checkout Kaldi fork]
+    Lock[kaldi-native-revision.txt]
+    Checkout[Checkout exact Kaldi commit]
     Build[Build dragonfly target]
     Lib[Platform shared library]
     Wheel[KAG platform wheel]
     Install[pip installation]
 
-    Tag --> Select --> Clone --> Build --> Lib --> Wheel --> Install
+    Lock --> Checkout --> Build --> Lib --> Wheel --> Install
 ```
 
-This tag/branch convention is the effective native ABI lock. There is no
-independent runtime negotiation of ABI version, so mixing an arbitrary Python
-checkout with an arbitrary shared library is unsupported even if loading
+Release tags such as `kag-vX.Y.Z` remain useful names in the native repository,
+but they must point at the commit already recorded by the Python release. There
+is no independent runtime negotiation of ABI version, so mixing an arbitrary
+Python checkout with an arbitrary shared library is unsupported even if loading
 succeeds.

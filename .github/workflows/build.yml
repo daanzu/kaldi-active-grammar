@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      kaldi_revision: ${{ steps.native_revision.outputs.revision }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -25,46 +26,34 @@ jobs:
           echo "Package version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Read and verify locked native revision
+        id: native_revision
+        run: |
+          REVISION=$(python3 building/native_revision.py)
+          echo "Kaldi revision: $REVISION"
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+          CHECKOUT=$(mktemp -d)
+          trap 'rm -rf "$CHECKOUT"' EXIT
+          building/checkout-kaldi.sh "$CHECKOUT" https://github.com/daanzu/kaldi-fork-active-grammar.git "$REVISION"
+
   build-linux:
     runs-on: ubuntu-latest
     needs: build-version
     if: true
     env:
       KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
+      KALDI_REVISION: ${{ needs.build-version.outputs.kaldi_revision }}
       MKL_URL: ""
       # MKL_URL: "https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/16917/l_mkl_2020.4.304.tgz"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
-        run: |
-          # Fetch tags on the one fetched commit (shallow clone)
-          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
-          export TAG=$(git tag --points-at HEAD)
-          echo "TAG: $TAG"
-          if [[ $TAG ]]; then
-            echo "KALDI_BRANCH: kag-$TAG"
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
-          else
-            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get Kaldi commit hash
-        id: get-kaldi-commit
-        run: |
-          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
-          echo "KALDI_COMMIT: $KALDI_COMMIT"
-          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
-
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v4
         with:
-          key: native-${{ runner.os }}-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.MKL_URL }}-v1
+          key: native-${{ runner.os }}-${{ env.KALDI_REVISION }}-${{ env.MKL_URL }}-v1
           path: |
             kaldi_active_grammar/exec/linux
             kaldi_active_grammar.libs
@@ -75,9 +64,9 @@ jobs:
       - name: Build with dockcross (native binaries & python wheel)
         run: |
           shopt -s nullglob
-          echo "KALDI_BRANCH: $KALDI_BRANCH"
+          echo "KALDI_REVISION: $KALDI_REVISION"
           echo "MKL_URL: $MKL_URL"
-          just build-dockcross ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && '--skip-native' || '' }} $KALDI_BRANCH $MKL_URL
+          just build-dockcross ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && '--skip-native' || '' }} "$MKL_URL"
           ls -l wheelhouse/
           for whl in wheelhouse/*.whl; do
             unzip -l $whl
@@ -139,6 +128,7 @@ jobs:
     if: true
     env:
       KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
+      KALDI_REVISION: ${{ needs.build-version.outputs.kaldi_revision }}
       VS_VERSION: vs2022
       PLATFORM_TOOLSET: v143
       WINDOWS_TARGET_PLATFORM_VERSION: 10.0
@@ -153,36 +143,11 @@ jobs:
         with:
           path: main
 
-      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
-        id: get-kaldi-branch
-        working-directory: main
-        run: |
-          # Fetch tags on the one fetched commit (shallow clone)
-          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
-          export TAG=$(git tag --points-at HEAD)
-          echo "TAG: $TAG"
-          if [[ $TAG ]]; then
-            echo "KALDI_BRANCH: kag-$TAG"
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
-          else
-            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get Kaldi commit hash
-        id: get-kaldi-commit
-        run: |
-          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
-          echo "KALDI_COMMIT: $KALDI_COMMIT"
-          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
-
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v4
         with:
-          key: native-${{ runner.os }}-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.VS_VERSION }}-${{ env.PLATFORM_TOOLSET }}-${{ env.WINDOWS_TARGET_PLATFORM_VERSION }}-${{ env.MKL_VERSION }}-v1
+          key: native-${{ runner.os }}-${{ env.KALDI_REVISION }}-${{ env.VS_VERSION }}-${{ env.PLATFORM_TOOLSET }}-${{ env.WINDOWS_TARGET_PLATFORM_VERSION }}-${{ env.MKL_VERSION }}-v1
           path: main/kaldi_active_grammar/exec/windows
 
       - name: Checkout OpenFST repository
@@ -198,7 +163,7 @@ jobs:
         with:
           repository: daanzu/kaldi-fork-active-grammar
           path: kaldi
-          ref: ${{ steps.get-kaldi-branch.outputs.KALDI_BRANCH }}
+          ref: ${{ env.KALDI_REVISION }}
 
       - name: Gather system information
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
@@ -312,6 +277,7 @@ jobs:
     if: true
     env:
       KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
+      KALDI_REVISION: ${{ needs.build-version.outputs.kaldi_revision }}
       MACOSX_DEPLOYMENT_TARGET: "11.0"
       MKL_URL: ""
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
@@ -319,35 +285,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
-        id: get-kaldi-branch
-        run: |
-          # Fetch tags on the one fetched commit (shallow clone)
-          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
-          export TAG=$(git tag --points-at HEAD)
-          echo "TAG: $TAG"
-          if [[ $TAG ]]; then
-            echo "KALDI_BRANCH: kag-$TAG"
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
-          else
-            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get Kaldi commit hash
-        id: get-kaldi-commit
-        run: |
-          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
-          echo "KALDI_COMMIT: $KALDI_COMMIT"
-          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
-
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v4
         with:
-          key: native-${{ runner.os }}-arm-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
+          key: native-${{ runner.os }}-arm-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
           path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
@@ -377,7 +319,7 @@ jobs:
       - name: Build Python wheel
         run: |
           shopt -s nullglob
-          echo "KALDI_BRANCH: $KALDI_BRANCH"
+          echo "KALDI_REVISION: $KALDI_REVISION"
           echo "MKL_URL: $MKL_URL"
           ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
           ls -l dist/
@@ -454,6 +396,7 @@ jobs:
     if: true
     env:
       KALDIAG_BUILD_VERSION: ${{ needs.build-version.outputs.version }}
+      KALDI_REVISION: ${{ needs.build-version.outputs.kaldi_revision }}
       MACOSX_DEPLOYMENT_TARGET: "10.9"
       MKL_URL: ""
       # MKL_URL: https://registrationcenter-download.intel.com/akdlm/irc_nas/tec/17172/m_mkl_2020.4.301.dmg
@@ -461,35 +404,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Get KALDI_BRANCH (kag-$TAG tag if commit is tagged; current branch name if not)
-        id: get-kaldi-branch
-        run: |
-          # Fetch tags on the one fetched commit (shallow clone)
-          git fetch --depth=1 origin "+refs/tags/*:refs/tags/*"
-          export TAG=$(git tag --points-at HEAD)
-          echo "TAG: $TAG"
-          if [[ $TAG ]]; then
-            echo "KALDI_BRANCH: kag-$TAG"
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=kag-$TAG" >> $GITHUB_OUTPUT
-          else
-            echo "KALDI_BRANCH: ${GITHUB_REF/refs\/heads\//}"
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_ENV
-            echo "KALDI_BRANCH=${GITHUB_REF/refs\/heads\//}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get Kaldi commit hash
-        id: get-kaldi-commit
-        run: |
-          KALDI_COMMIT=$(git ls-remote https://github.com/daanzu/kaldi-fork-active-grammar.git $KALDI_BRANCH | cut -f1)
-          echo "KALDI_COMMIT: $KALDI_COMMIT"
-          echo "KALDI_COMMIT=$KALDI_COMMIT" >> $GITHUB_OUTPUT
-
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v4
         with:
-          key: native-${{ runner.os }}-intel-${{ steps.get-kaldi-commit.outputs.KALDI_COMMIT }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
+          key: native-${{ runner.os }}-intel-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
           path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
@@ -519,7 +438,7 @@ jobs:
       - name: Build Python wheel
         run: |
           shopt -s nullglob
-          echo "KALDI_BRANCH: $KALDI_BRANCH"
+          echo "KALDI_REVISION: $KALDI_REVISION"
           echo "MKL_URL: $MKL_URL"
           ${{ steps.cache-native-binaries-restore.outputs.cache-hit == 'true' && 'KALDIAG_BUILD_SKIP_NATIVE=1' || '' }} python3 setup.py bdist_wheel
           ls -l dist/

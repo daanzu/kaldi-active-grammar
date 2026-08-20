@@ -71,6 +71,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 # Keep version calculation importable without importing the package, which loads
 # the native library as part of normal package initialization.
 sys.path.insert(0, os.path.join(here, 'building'))
+from native_revision import resolve_native_revision  # noqa: E402
 from versioning import read_base_version, resolve_build_version  # noqa: E402
 
 version_base = read_base_version(here)
@@ -96,9 +97,9 @@ class build_py_with_version(build_py_base):
         write_version_module(version_path)
 
 
-# Set branch for Kaldi source repository (maybe we should use commits instead?)
-if not os.environ.get('KALDI_BRANCH'):
-    os.environ['KALDI_BRANCH'] = ('kag-v' + version) if ('dev' not in version) else 'origin/master'
+# Every build defaults to the exact native commit paired with this checkout.
+# A full commit may be supplied explicitly for diagnostic builds.
+os.environ['KALDI_REVISION'] = resolve_native_revision(here)
 
 # Get the long description from the README file
 with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:

@@ -2,8 +2,8 @@
 
 ## Quick Summary
 
-1. **Prepare**: Update the version in `_version.py`, update `CHANGELOG.md`, run tests
-2. **Tag Fork First**: Push all changes and tag `kag-vX.Y.Z` in kaldi-fork repo (MUST be done first!)
+1. **Prepare**: Update the version, changelog, and native revision lock; run tests
+2. **Tag Fork First**: Push the locked native commit and tag it `kag-vX.Y.Z` (MUST be done first!)
 3. **Tag Main**: Create and push git tag `vX.Y.Z` in this repo to trigger builds
 4. **Build**: Automated GitHub Actions builds wheels for all platforms
 5. **Release**: Create GitHub release with changelog, upload wheel artifacts and models
@@ -20,7 +20,7 @@ This is a **duorepo** (2 separate repos used together):
 - Main repo: `daanzu/kaldi-active-grammar` (Python package)
 - Native binaries repo: `daanzu/kaldi-fork-active-grammar` (Kaldi C++ fork)
 
-**⚠️ IMPORTANT: The fork repo MUST always be pushed first before this repo for any changes!** The build process in this repo checks out code from the fork repo, so the fork must contain all necessary changes before triggering builds here.
+**⚠️ IMPORTANT: The fork repo MUST always be pushed first before this repo for any changes!** The build process checks out the exact commit recorded in `kaldi-native-revision.txt`, so that commit must be available from the canonical fork before triggering builds here.
 
 **Distribution policy:** Release and development artifacts are wheels only.
 Do not build or upload a source distribution (`sdist`); sdists are explicitly
@@ -62,16 +62,24 @@ Add new version section following Keep a Changelog format:
 
 Include comparison links for both repos (KaldiAG and KaldiFork).
 
-#### Run Tests
+#### Lock and Test the Native Revision
+
+With a clean matching fork checkout in the default sibling location:
 
 ```bash
+just native-lock
+just native-verify
 just test
 ```
+
+`native-lock` records the fork's full current commit hash in
+`kaldi-native-revision.txt`. Push that native commit before pushing this
+repository.
 
 #### Commit Changes
 
 ```bash
-git add kaldi_active_grammar/_version.py CHANGELOG.md
+git add kaldi_active_grammar/_version.py kaldi-native-revision.txt CHANGELOG.md
 git commit -m "Release vX.Y.Z"
 ```
 
@@ -90,7 +98,15 @@ In the `daanzu/kaldi-fork-active-grammar` repo:
    git push origin kag-vX.Y.Z
    ```
 
-This is crucial because the build process in this repo will check out code from the fork using this tag.
+Verify that the tag names the commit recorded in the Python repository:
+
+```bash
+test "$(git rev-parse kag-vX.Y.Z^{commit})" = \
+  "$(cat ../kaldi-active-grammar/kaldi-native-revision.txt)"
+```
+
+The commit hash in the lock file is authoritative; the release tag is a
+human-readable name for that same commit.
 
 #### Tag This Repo (DO THIS SECOND!)
 
@@ -101,7 +117,8 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-Pushing this tag will trigger the GitHub Actions build workflow, which will pull the native code from the fork repo using the `kag-vX.Y.Z` tag.
+Pushing this tag will trigger the GitHub Actions build workflow, which pulls
+the native code from the exact commit in `kaldi-native-revision.txt`.
 
 ### 3. Automated Build Process (GitHub Actions)
 
@@ -109,9 +126,9 @@ When you push a tag, the CI automatically:
 
 #### Resolves Build Metadata
 
-Resolves one package version for all platforms, then sets
-`KALDI_BRANCH=kag-vX.Y.Z` for tagged commits or uses the current branch name
-for untagged builds.
+Resolves one package version for all platforms and reads the full native commit
+from `kaldi-native-revision.txt`. Branch names do not participate in native
+revision selection.
 
 #### Builds Native Binaries
 
@@ -266,6 +283,8 @@ git push
 |------|---------|
 | `kaldi_active_grammar/_version.py` | Next release target and source-import fallback |
 | `building/versioning.py` | Build version generation and tag validation |
+| `building/native_revision.py` | Native lock validation and checkout verification |
+| `kaldi-native-revision.txt` | Exact matching Kaldi fork commit |
 | `kaldi_active_grammar/__init__.py` | Required model version |
 | `CHANGELOG.md` | Release notes and history |
 | `.github/workflows/build.yml` | CI build configuration |
@@ -284,7 +303,7 @@ git push
 | `KALDIAG_BUILD_SKIP_NATIVE=1` | Skip native compilation, just package |
 | `KALDIAG_BUILD_VERSION` | Use an explicit PEP 440 build version; CI sets this once for every platform |
 | `KALDIAG_BUILD_TIMESTAMP` | Optional 14-digit UTC timestamp for a coordinated development build |
-| `KALDI_BRANCH` | Which Kaldi fork branch/tag to build from (auto-detected from git tag) |
+| `KALDI_REVISION` | Optional full-commit override for diagnostic native builds; defaults to the lock file |
 | `MKL_URL` | Optional Intel MKL download URL (mostly disabled now) |
 
 ---
@@ -310,7 +329,8 @@ git push
 
 - Check the GitHub Actions logs for that specific job
 - Native binaries are cached, so may need to invalidate cache if Kaldi fork changed
-- Ensure the `kag-vX.Y.Z` tag exists in kaldi-fork-active-grammar repo
+- Ensure the locked native commit is pushed to kaldi-fork-active-grammar
+- Ensure the `kag-vX.Y.Z` tag points at that exact commit
 
 ### Tests fail
 
@@ -335,4 +355,5 @@ git push
 
 - Ensure the git tag targets `__version_base__` in `_version.py`
 - Check that both repos are tagged (main repo: `vX.Y.Z`, fork: `kag-vX.Y.Z`)
+- Check that `kag-vX.Y.Z` points at the commit in `kaldi-native-revision.txt`
 - Verify `CHANGELOG.md` has correct version

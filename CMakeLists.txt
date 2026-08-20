@@ -56,11 +56,15 @@ else()
     && cd ..)
 endif()
 
-if(DEFINED ENV{KALDI_BRANCH})
-  set(KALDI_BRANCH $ENV{KALDI_BRANCH})
+if(DEFINED ENV{KALDI_REVISION})
+  set(KALDI_REVISION $ENV{KALDI_REVISION})
 else()
-  message(FATAL_ERROR "KALDI_BRANCH not set! Use 'origin/master'?")
-  # set(KALDI_BRANCH "origin/master")
+  file(READ "${PROJECT_SOURCE_DIR}/kaldi-native-revision.txt" KALDI_REVISION)
+  string(STRIP "${KALDI_REVISION}" KALDI_REVISION)
+endif()
+string(LENGTH "${KALDI_REVISION}" KALDI_REVISION_LENGTH)
+if(NOT KALDI_REVISION MATCHES "^[0-9a-f]+$" OR NOT KALDI_REVISION_LENGTH EQUAL 40)
+  message(FATAL_ERROR "KALDI_REVISION must be a full, lowercase 40-character Git commit hash")
 endif()
 
 message("MAKE_EXE                  = ${MAKE_EXE}")
@@ -69,7 +73,7 @@ message("PYTHON_INCLUDE_DIR        = ${PYTHON_INCLUDE_DIR}")
 message("PYTHON_LIBRARY            = ${PYTHON_LIBRARY}")
 message("PYTHON_VERSION_STRING     = ${PYTHON_VERSION_STRING}")
 message("SKBUILD                   = ${SKBUILD}")
-message("KALDI_BRANCH              = ${KALDI_BRANCH}")
+message("KALDI_REVISION            = ${KALDI_REVISION}")
 message("CMAKE_CURRENT_SOURCE_DIR  = ${CMAKE_CURRENT_SOURCE_DIR}")
 message("CMAKE_CURRENT_BINARY_DIR  = ${CMAKE_CURRENT_BINARY_DIR}")
 
@@ -85,10 +89,9 @@ if(NOT "${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Windows")
   # set(STRIP_LIBS_COMMAND true)
   set(STRIP_DST_COMMAND true)
   ExternalProject_Add(kaldi
-    GIT_CONFIG        advice.detachedHead=false
-    GIT_REPOSITORY    https://github.com/daanzu/kaldi-fork-active-grammar.git
-    GIT_TAG           ${KALDI_BRANCH}
-    GIT_SHALLOW       TRUE
+    DOWNLOAD_COMMAND  ${PROJECT_SOURCE_DIR}/building/checkout-kaldi.sh <SOURCE_DIR> https://github.com/daanzu/kaldi-fork-active-grammar.git ${KALDI_REVISION}
+    UPDATE_COMMAND    ""
+    STEP_TARGETS      download
     CONFIGURE_COMMAND sed -i.bak -e "s/status=0/exit 0/g" tools/extras/check_dependencies.sh && sed -i.bak -e "s/openfst_add_CXXFLAGS = -g -O2/openfst_add_CXXFLAGS = -g0 -O3/g" tools/Makefile && cp ${PROJECT_SOURCE_DIR}/building/kaldi-configure-wrapper.sh src/
     BUILD_IN_SOURCE   TRUE
     BUILD_COMMAND     ${MATHLIB_BUILD_COMMAND} && cd tools && ${MAKE_EXE} && cd openfst && autoreconf && cd ../../src && bash ./kaldi-configure-wrapper.sh ./configure ${KALDI_CONFIG_FLAGS} && ${MAKE_EXE} ${MAKE_FLAGS} depend && ${MAKE_EXE} ${MAKE_FLAGS} dragonfly

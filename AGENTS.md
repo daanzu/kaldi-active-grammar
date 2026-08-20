@@ -185,6 +185,8 @@ Utility functions for:
 - Scikit-build integration for wheel generation
 - Multi-platform support (Windows/Linux/macOS)
 - GitHub Actions CI/CD pipeline
+- `kaldi-native-revision.txt` locks the exact matching native fork commit
+- For sibling checkouts, use `just native-status`, `just native-sync`, and `just native-verify`; after committing a native change, use `just native-lock`
 
 ## System Requirements
 

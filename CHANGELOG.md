@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* Python commits now lock their matching Kaldi fork to an exact commit in `kaldi-native-revision.txt`; local development helpers, native build selection, CI checkouts, and cache keys all use that recorded revision instead of inferred matching branch names.
 * Development wheels now receive unique, sortable PEP 440 versions containing a UTC build timestamp and Git revision. Multi-platform CI builds share one resolved version, tagged builds use the tag exactly, and the installed package reports the same version as its wheel metadata.
 * `NativeWFST.add_arc()` now buffers arc construction in bounded native batches, flushing before graph inspection, hashing, output, compilation, or decoder loading. `NativeWFST.add_arcs()` is available for callers that can supply arcs as an iterable, and universal grammar construction uses that bulk path.
 * **Changed: dependency cache validation now uses canonical identities and a schema-versioned content hash.** Existing caches are rebuilt once when the schema changes, and the new `dependencies_hash` representation causes one full AGF recompilation on its first use; subsequent warm starts retain stable FST filenames. `Compiler(..., strict_content_validation=True)` is available when every dependency must be content-hashed so same-size, same-mtime replacements are detected.

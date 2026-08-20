@@ -24,7 +24,7 @@ build-linux python='python3':
 
 # Build and repair a manylinux wheel with the checked-in Dockcross helper.
 build-dockcross *args='':
-	building/dockcross-manylinux2010-x64 --args "-e KALDIAG_BUILD_VERSION" bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{args}}
+	building/dockcross-manylinux2010-x64 --args "-e KALDIAG_BUILD_VERSION -e KALDI_REVISION" bash building/build-wheel-dockcross.sh manylinux2010_x86_64 {{args}}
 
 # Download and make executable the Dockcross helper for manylinux builds.
 setup-dockcross:
@@ -34,6 +34,26 @@ setup-dockcross:
 # Install the Python package in editable mode while skipping native builds. Useful for active development.
 pip-install-develop:
 	KALDIAG_BUILD_SKIP_NATIVE=1 pip3 install --user -e .
+
+# Show whether a separate Kaldi checkout matches the commit locked by this repository.
+native-status kaldi_root_dir='../kaldi-fork-active-grammar':
+	@expected="$(python3 building/native_revision.py)"; actual="$(git -C {{kaldi_root_dir}} rev-parse HEAD)"; echo "locked:   $expected"; echo "checkout: $actual"; if [ "$expected" = "$actual" ]; then echo "status:   matching"; else echo "status:   DIFFERENT"; fi; git -C {{kaldi_root_dir}} status --short --branch
+
+# Require a separate Kaldi checkout to be clean and at the locked commit.
+native-verify kaldi_root_dir='../kaldi-fork-active-grammar':
+	python3 building/native_revision.py --verify-checkout {{kaldi_root_dir}} --require-clean
+
+# Fetch and detach a clean separate Kaldi checkout at the locked commit. Refuses to discard local changes.
+native-sync kaldi_root_dir='../kaldi-fork-active-grammar':
+	@if ! git -C {{kaldi_root_dir}} rev-parse --git-dir >/dev/null 2>&1; then mkdir -p {{kaldi_root_dir}}; git -C {{kaldi_root_dir}} init; git -C {{kaldi_root_dir}} remote add origin https://github.com/daanzu/kaldi-fork-active-grammar.git; fi
+	@test -z "$(git -C {{kaldi_root_dir}} status --porcelain)" || { echo "Native checkout is dirty; refusing to change it." >&2; exit 1; }
+	revision="$(python3 building/native_revision.py)"; git -C {{kaldi_root_dir}} fetch --depth=1 origin "$revision"; git -C {{kaldi_root_dir}} checkout --detach "$revision"
+
+# Record the current commit of a separate, clean Kaldi checkout as the matching native revision.
+native-lock kaldi_root_dir='../kaldi-fork-active-grammar':
+	@test -z "$(git -C {{kaldi_root_dir}} status --porcelain)" || { echo "Native checkout is dirty; commit it before updating the lock." >&2; exit 1; }
+	git -C {{kaldi_root_dir}} rev-parse HEAD > kaldi-native-revision.txt
+	python3 building/native_revision.py
 
 # Configure a separate Kaldi fork checkout for local Linux development. This is a one-time setup (or rerun after changing configure options).
 configure-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':

@@ -5,11 +5,12 @@
 # MKL if MKL_URL is provided, then builds the wheel and repairs it for the
 # specified platform using auditwheel.
 #
-# Usage: ./build-wheel-dockcross.sh [--skip-native] <WHEEL_PLAT> <KALDI_BRANCH> [MKL_URL]
+# Usage: ./build-wheel-dockcross.sh [--skip-native] <WHEEL_PLAT> [MKL_URL]
 # - --skip-native: Skip the native build step
 # - WHEEL_PLAT: The platform tag for the wheel (e.g., manylinux2014_x86_64)
-# - KALDI_BRANCH: The Kaldi branch to use for building
 # - MKL_URL: Optional URL to download and install Intel MKL
+# The Kaldi commit comes from kaldi-native-revision.txt unless the environment
+# supplies a full KALDI_REVISION override.
 
 set -e -x
 
@@ -35,10 +36,9 @@ set -- "${ARGS[@]}"
 
 # Parse required arguments
 WHEEL_PLAT=$1
-KALDI_BRANCH=$2
-MKL_URL=$3
+MKL_URL=$2
 
-if [ -z "$PYTHON_EXE" ] || [ -z "$WHEEL_PLAT" ] || [ -z "$KALDI_BRANCH" ]; then
+if [ -z "$PYTHON_EXE" ] || [ -z "$WHEEL_PLAT" ]; then
     echo "ERROR: variable not set!"
     exit 1
 fi
@@ -70,7 +70,7 @@ else
     rm -rf kaldi_active_grammar/exec
 fi
 
-KALDI_BRANCH=$KALDI_BRANCH $PYTHON_EXE setup.py bdist_wheel
+$PYTHON_EXE setup.py bdist_wheel
 
 # ls -lR kaldi_active_grammar/exec/linux
 
