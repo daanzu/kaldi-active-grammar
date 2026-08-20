@@ -6,7 +6,9 @@ the Python interface and higher-level logic, while the
 contains the lower-level C++ code. The Python wheel embeds the native library
 built from the exact fork commit recorded in
 [`kaldi-native-revision.txt`](kaldi-native-revision.txt). That lock file is the
-authoritative Python/native pairing for builds and releases.
+authoritative Python/native pairing for builds and releases. Reconstructed
+pairings for older commits and releases are recorded in the
+[historical native revision record](docs/native-revision-history.md).
 
 This project only produces and supports platform-specific wheels. References
 to a "source build" in this guide mean building a wheel from a repository
