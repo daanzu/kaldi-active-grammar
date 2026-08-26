@@ -564,25 +564,18 @@ jobs:
             tests/*.onnx.json
             tests/kaldi_model
 
-  test-wheels:
+  test-wheels-linux:
     runs-on: ${{ matrix.os }}
     needs:
       - build-linux
-      - build-windows
-      - build-macos-arm
-      - build-macos-intel
       - setup-tests-cache
-    if: ${{ always() && true }}  # Run even if some build jobs failed
     defaults:
       run:
         shell: bash
     strategy:
       fail-fast: false
       matrix:
-        # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
-        # https://github.com/actions/runner-images
-        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-14, macos-15, macos-15-intel, macos-26]
-        # Status of Python versions (https://devguide.python.org/versions/)
+        os: [ubuntu-22.04, ubuntu-24.04]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]  # 3.14 doesn't have piper-tts wheels yet
     steps:
       - uses: actions/checkout@v5
@@ -595,36 +588,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set artifact name
-        id: artifact-name
-        run: |
-          case "${{ matrix.os }}" in
-            ubuntu-*) echo "name=wheels-linux" >> $GITHUB_OUTPUT ;;
-            windows-*) echo "name=wheels-windows" >> $GITHUB_OUTPUT ;;
-            macos-15-intel) echo "name=wheels-macos-intel" >> $GITHUB_OUTPUT ;;
-            macos-*) echo "name=wheels-macos-arm" >> $GITHUB_OUTPUT ;;
-            *) echo "Unexpected OS: ${{ matrix.os }}" 1>&2; exit 1 ;;
-          esac
-
-      - name: Download wheel artifacts
+      - name: Download Linux wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ steps.artifact-name.outputs.name }}
+          name: wheels-linux
           path: wheels/
-        continue-on-error: true  # Continue even if no artifact found
-
-      - name: Check wheels presence
-        id: wheels-presence
-        run: |
-          shopt -s nullglob
-          files=(wheels/*.whl)
-          if (( ${#files[@]} > 0 )); then
-            echo "found=true" >> $GITHUB_OUTPUT
-            ls -l wheels/
-          else
-            echo "found=false" >> $GITHUB_OUTPUT
-            echo "No wheel artifacts found for ${{ matrix.os }}" 1>&2
-          fi
 
       - name: Restore cached tests setup
         uses: actions/cache/restore@v4
@@ -636,8 +604,135 @@ jobs:
             tests/kaldi_model
           fail-on-cache-miss: true
 
-      - name: Run tests
-        if: steps.wheels-presence.outputs.found == 'true'
+      - name: Run Linux wheel tests
+        run: just test-package
+
+  test-wheels-windows:
+    runs-on: ${{ matrix.os }}
+    needs:
+      - build-windows
+      - setup-tests-cache
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]  # 3.14 doesn't have piper-tts wheels yet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download Windows wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-windows
+          path: wheels/
+
+      - name: Restore cached tests setup
+        uses: actions/cache/restore@v4
+        with:
+          key: tests-setup-${{ hashFiles('Justfile') }}-v1
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
+          fail-on-cache-miss: true
+
+      - name: Run Windows wheel tests
         # Must ignore warnings for piper-tts on Github Actions Windows runners
-        run: |
-          just test-package -v -W 'ignore:Unsupported Windows version (2022server). ONNX Runtime supports Windows 10 and above, only.:UserWarning' -W 'ignore:Unsupported Windows version (2025server). ONNX Runtime supports Windows 10 and above, only.:UserWarning'
+        run: just test-package -v -W 'ignore:Unsupported Windows version (2022server). ONNX Runtime supports Windows 10 and above, only.:UserWarning' -W 'ignore:Unsupported Windows version (2025server). ONNX Runtime supports Windows 10 and above, only.:UserWarning'
+
+  test-wheels-macos-arm:
+    runs-on: ${{ matrix.os }}
+    needs:
+      - build-macos-arm
+      - setup-tests-cache
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-26]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]  # 3.14 doesn't have piper-tts wheels yet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download macOS ARM wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-macos-arm
+          path: wheels/
+
+      - name: Restore cached tests setup
+        uses: actions/cache/restore@v4
+        with:
+          key: tests-setup-${{ hashFiles('Justfile') }}-v1
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
+          fail-on-cache-miss: true
+
+      - name: Run macOS ARM wheel tests
+        run: just test-package
+
+  test-wheels-macos-intel:
+    runs-on: ${{ matrix.os }}
+    needs:
+      - build-macos-intel
+      - setup-tests-cache
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]  # 3.14 doesn't have piper-tts wheels yet
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download macOS Intel wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-macos-intel
+          path: wheels/
+
+      - name: Restore cached tests setup
+        uses: actions/cache/restore@v4
+        with:
+          key: tests-setup-${{ hashFiles('Justfile') }}-v1
+          path: |
+            tests/*.onnx
+            tests/*.onnx.json
+            tests/kaldi_model
+          fail-on-cache-miss: true
+
+      - name: Run macOS Intel wheel tests
+        run: just test-package
