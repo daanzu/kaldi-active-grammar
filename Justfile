@@ -2,6 +2,12 @@
 set ignore-comments
 set positional-arguments
 
+# Use ccache automatically when it is installed. Explicit CC/CXX environment
+# variables still take precedence, e.g. CC=clang CXX=clang++ just build-linux.
+ccache_available := `command -v ccache >/dev/null 2>&1 && echo true || echo false`
+export CC := env_var_or_default("CC", if ccache_available == "true" { "ccache gcc" } else { "gcc" })
+export CXX := env_var_or_default("CXX", if ccache_available == "true" { "ccache g++" } else { "g++" })
+
 docker_repo := 'daanzu/kaldi-fork-active-grammar-manylinux'
 piper_voice := 'en_US-ryan-low'
 kaldi_model_url := 'https://github.com/daanzu/kaldi-active-grammar/releases/download/v3.0.0/kaldi_model_daanzu_20211030-smalllm.zip'
@@ -57,17 +63,17 @@ native-lock kaldi_root_dir='../kaldi-fork-active-grammar':
 
 # Configure a separate Kaldi fork checkout for local Linux development. This is a one-time setup (or rerun after changing configure options).
 configure-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
-	cd {{kaldi_root_dir}}/tools && ./extras/install_openblas.sh && CXXFLAGS='-Wno-missing-template-keyword' make -j"$(nproc)"
+	cd {{kaldi_root_dir}}/tools && ./extras/install_openblas.sh && CC='{{CC}}' CXX='{{CXX}}' CXXFLAGS='-Wno-missing-template-keyword' make -j"$(nproc)"
 	# cd {{kaldi_root_dir}}/tools && make -j"$(nproc)"
 	cd {{kaldi_root_dir}}/tools/openfst && autoreconf
-	cd {{kaldi_root_dir}}/src && CXXFLAGS='-O2 -Wno-template-id-cdtor' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS
+	cd {{kaldi_root_dir}}/src && CXX='{{CXX}}' CXXFLAGS='-O2 -Wno-template-id-cdtor' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS
 	# cd {{kaldi_root_dir}}/src && CXXFLAGS='-O0 -g3' ./configure --shared --static-math --use-cuda=no --mathlib=OPENBLAS --debug-level=2
 	# cd {{kaldi_root_dir}}/src && CXXFLAGS=-O2 ./configure --mkl-root=/home/daanzu/intel/mkl/ --shared --static-math
-	make -C {{kaldi_root_dir}}/src -j"$(nproc)" depend
+	CXX='{{CXX}}' make -C {{kaldi_root_dir}}/src -j"$(nproc)" depend
 
 # Rebuild the native library after C++ changes in a separately checked-out fork.
 build-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
-	make -C {{kaldi_root_dir}}/src -j"$(nproc)" dragonfly
+	CXX='{{CXX}}' make -C {{kaldi_root_dir}}/src -j"$(nproc)" dragonfly
 
 # Stage a separate Kaldi fork checkout for an editable Linux Python install. The links keep the repositories independent while Python loads the current native build directly.
 setup-linux-develop kaldi_root_dir='../kaldi-fork-active-grammar':
