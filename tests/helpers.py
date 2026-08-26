@@ -7,9 +7,11 @@ __all__ = [
     'expected_info_keys_and_types', 'assert_info_shape', 'play_audio_on_windows',
 ]
 
+# ``words.relabeled.txt`` is deliberately absent: ``Model`` derives it from
+# ``relabel_ilabels.int`` on first use, so a bundle shipping only the latter
+# still initializes LAF (and exercises that generation path).
 LAF_MODEL_FILES = (
-    'HCLr.fst', 'Gr.fst', 'disambig_tid.int',
-    'relabel_ilabels.int', 'words.relabeled.txt',
+    'HCLr.fst', 'Gr.fst', 'disambig_tid.int', 'relabel_ilabels.int',
 )
 
 
