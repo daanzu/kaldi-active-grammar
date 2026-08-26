@@ -51,7 +51,7 @@ jobs:
 
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: native-${{ runner.os }}-${{ env.KALDI_REVISION }}-${{ env.MKL_URL }}-v1
           path: |
@@ -93,7 +93,7 @@ jobs:
 
       - name: Save cached native binaries
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
           path: |
@@ -101,7 +101,7 @@ jobs:
             kaldi_active_grammar.libs
 
       - name: Upload native binaries to artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-linux
           path: |
@@ -109,7 +109,7 @@ jobs:
             kaldi_active_grammar.libs
 
       - name: Upload Linux wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-linux
           path: wheelhouse/*
@@ -145,7 +145,7 @@ jobs:
 
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: native-${{ runner.os }}-${{ env.KALDI_REVISION }}-${{ env.VS_VERSION }}-${{ env.PLATFORM_TOOLSET }}-${{ env.WINDOWS_TARGET_PLATFORM_VERSION }}-${{ env.MKL_VERSION }}-v1
           path: main/kaldi_active_grammar/exec/windows
@@ -204,7 +204,7 @@ jobs:
 
       - name: Add msbuild to PATH
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Install MKL
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
@@ -228,13 +228,13 @@ jobs:
 
       - name: Save cached native binaries
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
           path: main/kaldi_active_grammar/exec/windows
 
       - name: Upload native binaries to artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-windows
           path: main/kaldi_active_grammar/exec/windows
@@ -248,7 +248,7 @@ jobs:
           ls -l dist/
 
       - name: Upload Windows wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-windows
           path: main/dist/*
@@ -266,7 +266,7 @@ jobs:
       #     mkdir -p vc_redist
       #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'/vc_redist.x64.exe vc_redist/
       #     cp '/c/Program Files (x86)/Microsoft Visual Studio/2022/Enterprise/VC/Redist/MSVC/14.26.28720'/x64/Microsoft.*.CRT/* vc_redist/
-      # - uses: actions/upload-artifact@v4
+      # - uses: actions/upload-artifact@v7
       #   with:
       #     name: windows_vc_redist
       #     path: vc_redist/*
@@ -287,7 +287,7 @@ jobs:
 
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: native-${{ runner.os }}-arm-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v2
           path: kaldi_active_grammar/exec/macos
@@ -365,19 +365,19 @@ jobs:
 
       - name: Save cached native binaries
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
           path: kaldi_active_grammar/exec/macos
 
       - name: Upload native binaries to artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-macos-arm
           path: kaldi_active_grammar/exec/macos
 
       - name: Upload MacOS ARM wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-arm
           path: wheelhouse/*
@@ -406,7 +406,7 @@ jobs:
 
       - name: Restore cached native binaries
         id: cache-native-binaries-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: native-${{ runner.os }}-intel-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v2
           path: kaldi_active_grammar/exec/macos
@@ -484,19 +484,19 @@ jobs:
 
       - name: Save cached native binaries
         if: steps.cache-native-binaries-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           key: ${{ steps.cache-native-binaries-restore.outputs.cache-primary-key }}
           path: kaldi_active_grammar/exec/macos
 
       - name: Upload native binaries to artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-macos-intel
           path: kaldi_active_grammar/exec/macos
 
       - name: Upload MacOS Intel wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-intel
           path: wheelhouse/*
@@ -519,7 +519,7 @@ jobs:
     ]
     steps:
       - name: Merge all wheel artifacts
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: wheels
           pattern: wheels-*
@@ -537,11 +537,14 @@ jobs:
         uses: taiki-e/install-action@just
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.6"
+          prune-cache: true
 
       - name: Restore cached tests setup
         id: cache-tests-setup-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: tests-setup-${{ hashFiles('Justfile') }}-v1
           path: |
@@ -556,7 +559,7 @@ jobs:
 
       - name: Save cached tests setup
         if: steps.cache-tests-setup-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           key: ${{ steps.cache-tests-setup-restore.outputs.cache-primary-key }}
           path: |
@@ -584,19 +587,20 @@ jobs:
         uses: taiki-e/install-action@just
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          version: "0.12.6"
           python-version: ${{ matrix.python-version }}
           enable-cache: false
 
       - name: Download Linux wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheels-linux
           path: wheels/
 
       - name: Restore cached tests setup
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: tests-setup-${{ hashFiles('Justfile') }}-v1
           path: |
@@ -628,19 +632,20 @@ jobs:
         uses: taiki-e/install-action@just
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          version: "0.12.6"
           python-version: ${{ matrix.python-version }}
           enable-cache: false
 
       - name: Download Windows wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheels-windows
           path: wheels/
 
       - name: Restore cached tests setup
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: tests-setup-${{ hashFiles('Justfile') }}-v1
           path: |
@@ -673,19 +678,20 @@ jobs:
         uses: taiki-e/install-action@just
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          version: "0.12.6"
           python-version: ${{ matrix.python-version }}
           enable-cache: false
 
       - name: Download macOS ARM wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheels-macos-arm
           path: wheels/
 
       - name: Restore cached tests setup
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: tests-setup-${{ hashFiles('Justfile') }}-v1
           path: |
@@ -717,19 +723,20 @@ jobs:
         uses: taiki-e/install-action@just
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          version: "0.12.6"
           python-version: ${{ matrix.python-version }}
           enable-cache: false
 
       - name: Download macOS Intel wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheels-macos-intel
           path: wheels/
 
       - name: Restore cached tests setup
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           key: tests-setup-${{ hashFiles('Justfile') }}-v1
           path: |
