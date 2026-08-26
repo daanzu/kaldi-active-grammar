@@ -136,8 +136,8 @@ test-separately *args='':
 
 # Test the built wheel from tests/ so the source tree cannot be imported accidentally. Source-build tests are excluded because building/ is not packaged. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test-package *args='':
-	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links ../wheels/ --directory tests/ -m pytest -m 'not source_build and not prolonged and not stress' "$@"
+	cd tests && uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with ../wheels/*.whl -m pytest -m 'not source_build and not prolonged and not stress' "$@"
 
 # [DEPRECATED] Retained for historical native-state/isolation diagnosis; use `just test-package`. Args: --fail-fast (stop after the first failed test process)
 test-package-separately *args='':
-	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links ../wheels/ --directory tests/ run_each_test_separately.py -m 'not source_build and not prolonged and not stress' "$@"
+	cd tests && uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with ../wheels/*.whl run_each_test_separately.py -m 'not source_build and not prolonged and not stress' "$@"
