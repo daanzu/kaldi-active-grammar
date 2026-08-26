@@ -134,10 +134,10 @@ test *args='':
 test-separately *args='':
 	if [ -x .venv/bin/python ]; then .venv/bin/python tests/run_each_test_separately.py "$@"; else uv run --no-project --with-requirements requirements-test.txt --with-requirements requirements-editable.txt tests/run_each_test_separately.py "$@"; fi
 
-# Test the built wheel from tests/ so the source tree cannot be imported accidentally. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
+# Test the built wheel from tests/ so the source tree cannot be imported accidentally. Source-build tests are excluded because building/ is not packaged. Args: --lf (only run last failed), -k "keyword" (match tests), --maxfail=1 (fail fast)
 test-package *args='':
-	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest "$@"
+	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ -m pytest -m 'not source_build and not prolonged and not stress' "$@"
 
 # [DEPRECATED] Retained for historical native-state/isolation diagnosis; use `just test-package`. Args: --fail-fast (stop after the first failed test process)
 test-package-separately *args='':
-	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ run_each_test_separately.py "$@"
+	uv run -v --no-project --isolated --with-requirements ../requirements-test.txt --with kaldi-active-grammar --find-links wheels/ --directory tests/ run_each_test_separately.py -m 'not source_build and not prolonged and not stress' "$@"

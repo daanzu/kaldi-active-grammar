@@ -9,13 +9,14 @@ testpaths = ["tests"]
 addopts = [
     "--import-mode=importlib",
     "-ra",  # extra summary for skips/xfails
-    "-m", "not prolonged and not stress",  # exclude opt-in long-term tests by default
+    "-m", "not prolonged and not stress",  # exclude long-term tests by default
     "--strict-markers",  # fail on unknown markers
     "--strict-config",  # fail on bad config
     # "--cov=kaldi_active_grammar", "--no-cov-on-fail", "--cov-branch", "--cov-report=term-missing",
 ]
 markers = [
     "prolonged: opt-in long-term decoder tests (1,000 utterances per framework); enable with '-m prolonged'",
+    "source_build: opt-in tests for source-tree build tooling unavailable in an installed wheel; enable with '-m source_build'",
     "stress: opt-in long-term stress harness runs (see tests/stress/longterm.py); enable with '-m stress'",
 ]
 xfail_strict = true
