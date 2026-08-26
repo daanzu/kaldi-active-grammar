@@ -587,6 +587,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: false
 
       - name: Download Linux wheel artifact
         uses: actions/download-artifact@v4
@@ -630,6 +631,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: false
 
       - name: Download Windows wheel artifact
         uses: actions/download-artifact@v4
@@ -674,6 +676,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: false
 
       - name: Download macOS ARM wheel artifact
         uses: actions/download-artifact@v4
@@ -717,6 +720,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: false
 
       - name: Download macOS Intel wheel artifact
         uses: actions/download-artifact@v4
