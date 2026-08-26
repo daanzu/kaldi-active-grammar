@@ -289,7 +289,7 @@ jobs:
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v4
         with:
-          key: native-${{ runner.os }}-arm-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
+          key: native-${{ runner.os }}-arm-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v2
           path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
@@ -309,7 +309,7 @@ jobs:
         run: |
           python3 -m pip install --break-system-packages --user --upgrade scikit-build>=0.10.0 cmake ninja
           brew install automake sox libtool
-          brew reinstall gfortran  # For openblas
+          # brew reinstall gfortran  # For openblas
           # brew install autoconf
 
       - name: Install dependencies for python build
@@ -408,7 +408,7 @@ jobs:
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v4
         with:
-          key: native-${{ runner.os }}-intel-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v1
+          key: native-${{ runner.os }}-intel-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v2
           path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
@@ -428,7 +428,7 @@ jobs:
         run: |
           python3 -m pip install --break-system-packages --user --upgrade scikit-build>=0.10.0 cmake ninja
           brew install automake sox
-          brew reinstall gfortran  # For openblas
+          # brew reinstall gfortran  # For openblas
           # brew install autoconf libtool
 
       - name: Install dependencies for python build

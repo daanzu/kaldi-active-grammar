@@ -44,10 +44,16 @@ else()
   endif()
   message("Compiling with OpenBLAS git ref: ${OPENBLAS_REF}")
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
+  set(OPENBLAS_MAKE_OPTIONS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0)
+  if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
+    # Darwin's native Kaldi build uses Accelerate. Avoid the Homebrew
+    # Fortran runtime here so the Intel wheel can retain its 10.9 target.
+    list(APPEND OPENBLAS_MAKE_OPTIONS NOFORTRAN=1)
+  endif()
   set(MATHLIB_BUILD_COMMAND cd tools
     && git clone -b ${OPENBLAS_REF} --single-branch https://github.com/OpenMathLib/OpenBLAS
-    && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0 all
-    && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS PREFIX=install install
+    && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS ${OPENBLAS_MAKE_OPTIONS} all
+    && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS ${OPENBLAS_MAKE_OPTIONS} PREFIX=install install
     && cd ..)
 endif()
 
