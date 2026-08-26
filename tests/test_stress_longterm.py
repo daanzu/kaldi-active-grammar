@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.stress.longterm import missing_laf_model_files
+from tests.helpers import missing_laf_model_files
 
 REPORTS_DIR = Path(__file__).parent / '.stress_reports'
 RUNNER = Path(__file__).parent / 'stress' / 'longterm.py'

@@ -1,5 +1,4 @@
 
-from pathlib import Path
 from typing import Callable, Optional, Union
 
 import pytest
@@ -14,12 +13,7 @@ class TestGrammar:
     @pytest.fixture(autouse=True)
     def setup(self, change_to_test_dir, audio_generator, framework):
         if framework == 'laf':
-            laf_model_files = (
-                'HCLr.fst', 'Gr.fst', 'disambig_tid.int',
-                'relabel_ilabels.int', 'words.relabeled.txt',
-            )
-            missing_files = [filename for filename in laf_model_files
-                             if not (Path('kaldi_model') / filename).is_file()]
+            missing_files = missing_laf_model_files()
             if missing_files:
                 pytest.skip('lookahead test model is missing: %s' % ', '.join(missing_files))
         self.compiler = Compiler(framework=framework)

@@ -4,10 +4,15 @@ import pytest
 
 from kaldi_active_grammar import Compiler, KaldiError, NativeWFST
 from kaldi_active_grammar.ffi import _ffi
+from tests.helpers import missing_laf_model_files
 
 
 @pytest.fixture(params=['agf-direct', 'laf'], ids=['agf', 'laf'])
 def initialized_native_wfst(change_to_test_dir, request):
+    if request.param == 'laf':
+        missing = missing_laf_model_files()
+        if missing:
+            pytest.skip('lookahead test model is missing: %s' % ', '.join(missing))
     with Compiler(framework=request.param, cache_fsts=False) as compiler:
         yield compiler
 

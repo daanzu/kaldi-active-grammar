@@ -55,16 +55,17 @@ try:  # Imported as ``tests.stress.longterm``...
 except ImportError:  # ...or run as a script, with tests/stress on sys.path.
     from compat import build_adapter, check_workload_supported, UnsupportedByPackage
 
+TESTS_DIR = Path(__file__).resolve().parents[1]
+
+try:  # Imported by pytest from the repository root...
+    from tests.helpers import missing_laf_model_files
+except ModuleNotFoundError:  # ...or run directly as a script.
+    sys.path.insert(0, str(TESTS_DIR))
+    from helpers import missing_laf_model_files
+
 PROCESS_METRIC_ERRORS = (OSError, RuntimeError)
 if psutil is not None:
     PROCESS_METRIC_ERRORS += (psutil.Error,)
-
-TESTS_DIR = Path(__file__).resolve().parents[1]
-
-LAF_MODEL_FILES = (
-    'HCLr.fst', 'Gr.fst', 'disambig_tid.int',
-    'relabel_ilabels.int', 'words.relabeled.txt',
-)
 
 # All words below are known-good in the test model's lexicon (they are already
 # exercised by the regular grammar tests).  The universe must stay unambiguous:
@@ -162,11 +163,6 @@ def build_phrase_universe():
     universe += [f'{number} {verb} {direction}'
                  for number in NUMBERS for verb in VERBS for direction in DIRECTIONS]
     return universe
-
-
-def missing_laf_model_files(model_dir=None):
-    model_dir = Path(model_dir) if model_dir else (TESTS_DIR / 'kaldi_model')
-    return [name for name in LAF_MODEL_FILES if not (model_dir / name).is_file()]
 
 
 @dataclasses.dataclass
