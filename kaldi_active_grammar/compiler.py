@@ -629,19 +629,6 @@ class Compiler(object):
             return None
         return output
 
-    def parse_output_for_rule_token(self, kaldi_rule, output):
-        """Can be used even when self.parsing_framework == 'token', only for mimic (which contains no nonterms)."""
-        words = output.split()
-        labels = self.mimic_for_rule(words, kaldi_rule)
-        self._log.log(5, "parse_output_for_rule(%s, %r) got %r", kaldi_rule, output, labels)
-        if labels is False:
-            return None
-        # words = [label for label in labels if not label.startswith('#nonterm:')]
-        # parsed_output = ' '.join(words)
-        # if parsed_output.lower() != output:
-        #     self._log.error("parsed_output(%r).lower() != output(%r)" % (parsed_output, output))
-        return words
-
     wildcard_nonterms = ('#nonterm:dictation', '#nonterm:dictation_cloud')
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 

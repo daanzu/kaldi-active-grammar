@@ -21,9 +21,6 @@ Investigate the high memory usage reported by the Mac ARM stress tests.
 
 ## Develop-to-master merge follow-up
 
-- Fix the parser regression in `Compiler.parse_output_for_rule_token`, or
-  remove the stale path and update its callers and tests so parser output is
-  handled through the supported rule-matching API.
 - Add a memory regression test that repeatedly loads and closes real AGF and
   LAF grammars, checking that process memory reaches a stable plateau rather
   than only testing an empty `Compiler` context.
