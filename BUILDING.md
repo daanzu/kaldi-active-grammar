@@ -263,6 +263,23 @@ out both the locked fork commit and the Windows OpenFST port, generates the
 Kaldi Visual Studio solution, builds `kaldi-dragonfly.dll`, copies it into the
 package, and then builds the wheel without rebuilding native code.
 
+## CI native caches and artifacts
+
+The native library is required in each platform-specific wheel, but it does not
+need to be rebuilt for every CI run. Each platform job caches the already-built
+native files using a key that includes the platform/toolchain settings and the
+locked native revision. On a cache hit, the job restores those files, skips the
+native build, and rebuilds the wheel around them. On a cache miss, the native
+files are extracted from the repaired wheel and saved for later runs.
+
+The workflow also uploads `native-linux`, `native-windows`,
+`native-macos-arm`, and `native-macos-intel` as standalone GitHub Actions
+artifacts. These uploads are convenience copies for inspection or manual
+download; they are not inputs to later jobs in the workflow. The test jobs and
+release outputs use the platform wheels instead. The native artifacts contain
+only compiled libraries and their packaged shared-library dependencies, not the
+Python package or an acoustic model.
+
 ```mermaid
 flowchart LR
     Lock[kaldi-native-revision.txt]
