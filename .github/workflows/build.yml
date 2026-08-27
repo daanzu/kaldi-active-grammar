@@ -289,7 +289,7 @@ jobs:
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v5
         with:
-          key: native-${{ runner.os }}-arm-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v2
+          key: native-${{ runner.os }}-arm-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v3
           path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)
@@ -408,7 +408,7 @@ jobs:
         id: cache-native-binaries-restore
         uses: actions/cache/restore@v5
         with:
-          key: native-${{ runner.os }}-intel-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v2
+          key: native-${{ runner.os }}-intel-${{ env.KALDI_REVISION }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ env.MKL_URL }}-v3
           path: kaldi_active_grammar/exec/macos
 
       - name: Install MKL (if enabled)

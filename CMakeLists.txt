@@ -39,29 +39,29 @@ if(DEFINED ENV{INTEL_MKL_DIR})
   set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=MKL --mkl-root=$ENV{INTEL_MKL_DIR})
   set(MATHLIB_BUILD_COMMAND true)
 else()
-  if(NOT DEFINED OPENBLAS_REF)
-    set(OPENBLAS_REF "v0.3.34")
-  endif()
-  message("Compiling with OpenBLAS git ref: ${OPENBLAS_REF}")
-  set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
-  set(OPENBLAS_MAKE_OPTIONS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0)
-  set(OPENBLAS_BUILD_TARGET all)
   if("${CMAKE_HOST_SYSTEM_NAME}" STREQUAL "Darwin")
-    # Darwin's native Kaldi build uses Accelerate. Avoid the Homebrew
-    # Fortran runtime here so the Intel wheel can retain its 10.9 target.
-    list(APPEND OPENBLAS_MAKE_OPTIONS NOFORTRAN=1)
-    if("${CMAKE_HOST_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
-      # OpenBLAS 0.3.34's x86_64 smin utest can crash with Bus error: 10 on
-      # Intel macOS because its SSE kernel assumes aligned test data. Build
-      # the library without that upstream test; other platforms keep testing.
-      set(OPENBLAS_BUILD_TARGET shared)
+    # Kaldi's configure dispatches on platform before it reads --mathlib, and
+    # its Darwin branch always uses Accelerate, so no OpenBLAS build or
+    # --mathlib flag is needed here. Note that configure still logs a mathlib
+    # it will not use: with --mathlib absent it auto-defaults on uname -m, so
+    # Intel logs MKL and arm64 logs OPENBLAS. The Darwin branch discards both.
+    # --static-math is likewise inert on Darwin, and is kept only to match the
+    # other config flag sets.
+    set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no)
+    set(MATHLIB_BUILD_COMMAND true)
+  else()
+    if(NOT DEFINED OPENBLAS_REF)
+      set(OPENBLAS_REF "v0.3.34")
     endif()
+    message("Compiling with OpenBLAS git ref: ${OPENBLAS_REF}")
+    set(KALDI_CONFIG_FLAGS --shared --static-math --use-cuda=no --mathlib=OPENBLAS)
+    set(OPENBLAS_MAKE_OPTIONS DYNAMIC_ARCH=1 TARGET=GENERIC USE_LOCKING=1 USE_THREAD=0)
+    set(MATHLIB_BUILD_COMMAND cd tools
+      && git clone -b ${OPENBLAS_REF} --single-branch https://github.com/OpenMathLib/OpenBLAS
+      && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS ${OPENBLAS_MAKE_OPTIONS} all
+      && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS ${OPENBLAS_MAKE_OPTIONS} PREFIX=install install
+      && cd ..)
   endif()
-  set(MATHLIB_BUILD_COMMAND cd tools
-    && git clone -b ${OPENBLAS_REF} --single-branch https://github.com/OpenMathLib/OpenBLAS
-    && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS ${OPENBLAS_MAKE_OPTIONS} ${OPENBLAS_BUILD_TARGET}
-    && ${MAKE_EXE} ${MAKE_FLAGS} -C OpenBLAS ${OPENBLAS_MAKE_OPTIONS} PREFIX=install install
-    && cd ..)
 endif()
 
 if(DEFINED ENV{KALDI_REVISION})
