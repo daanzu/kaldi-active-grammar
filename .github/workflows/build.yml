@@ -610,7 +610,30 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Run Linux wheel tests
-        run: just test-package
+        id: run-tests
+        run: just test-package --junitxml=../test-results.xml
+
+      - name: Record Linux wheel test results
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.run-tests.outcome }}
+          TEST_LABEL: "Linux / ${{ matrix.os }} / Python ${{ matrix.python-version }}"
+        run: |
+          python building/test_summary.py record \
+            --xml test-results.xml \
+            --json test-result.json \
+            --label "$TEST_LABEL" \
+            --outcome "$TEST_OUTCOME"
+
+      - name: Upload Linux wheel test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-linux-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-result.json
+            test-results.xml
+          if-no-files-found: warn
 
   test-wheels-windows:
     runs-on: ${{ matrix.os }}
@@ -656,7 +679,30 @@ jobs:
 
       - name: Run Windows wheel tests
         # Must ignore warnings for piper-tts on Github Actions Windows runners
-        run: just test-package -v -W 'ignore:Unsupported Windows version (2022server). ONNX Runtime supports Windows 10 and above, only.:UserWarning' -W 'ignore:Unsupported Windows version (2025server). ONNX Runtime supports Windows 10 and above, only.:UserWarning'
+        id: run-tests
+        run: just test-package --junitxml=../test-results.xml -v -W 'ignore:Unsupported Windows version (2022server). ONNX Runtime supports Windows 10 and above, only.:UserWarning' -W 'ignore:Unsupported Windows version (2025server). ONNX Runtime supports Windows 10 and above, only.:UserWarning'
+
+      - name: Record Windows wheel test results
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.run-tests.outcome }}
+          TEST_LABEL: "Windows / ${{ matrix.os }} / Python ${{ matrix.python-version }}"
+        run: |
+          python building/test_summary.py record \
+            --xml test-results.xml \
+            --json test-result.json \
+            --label "$TEST_LABEL" \
+            --outcome "$TEST_OUTCOME"
+
+      - name: Upload Windows wheel test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-windows-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-result.json
+            test-results.xml
+          if-no-files-found: warn
 
   test-wheels-macos-arm:
     runs-on: ${{ matrix.os }}
@@ -701,7 +747,30 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Run macOS ARM wheel tests
-        run: just test-package
+        id: run-tests
+        run: just test-package --junitxml=../test-results.xml
+
+      - name: Record macOS ARM wheel test results
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.run-tests.outcome }}
+          TEST_LABEL: "macOS ARM / ${{ matrix.os }} / Python ${{ matrix.python-version }}"
+        run: |
+          python building/test_summary.py record \
+            --xml test-results.xml \
+            --json test-result.json \
+            --label "$TEST_LABEL" \
+            --outcome "$TEST_OUTCOME"
+
+      - name: Upload macOS ARM wheel test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-macos-arm-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-result.json
+            test-results.xml
+          if-no-files-found: warn
 
   test-wheels-macos-intel:
     runs-on: ${{ matrix.os }}
@@ -746,4 +815,50 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Run macOS Intel wheel tests
-        run: just test-package
+        id: run-tests
+        run: just test-package --junitxml=../test-results.xml
+
+      - name: Record macOS Intel wheel test results
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.run-tests.outcome }}
+          TEST_LABEL: "macOS Intel / ${{ matrix.os }} / Python ${{ matrix.python-version }}"
+        run: |
+          python building/test_summary.py record \
+            --xml test-results.xml \
+            --json test-result.json \
+            --label "$TEST_LABEL" \
+            --outcome "$TEST_OUTCOME"
+
+      - name: Upload macOS Intel wheel test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-macos-intel-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-result.json
+            test-results.xml
+          if-no-files-found: warn
+
+  summarize-wheel-tests:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs:
+      - test-wheels-linux
+      - test-wheels-windows
+      - test-wheels-macos-arm
+      - test-wheels-macos-intel
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download per-job test results
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: test-results-*
+          path: test-results
+
+      - name: Publish wheel test summary
+        if: always()
+        run: python3 building/test_summary.py aggregate --results-dir test-results
