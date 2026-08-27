@@ -2,6 +2,23 @@
 
 Test CLI path that still uses file-based AGF compilation: python -m kaldi_active_grammar compile_agf_dictation_graph.
 
+## Mac ARM stress-test memory usage
+
+Investigate the high memory usage reported by the Mac ARM stress tests.
+
+- Correct `rss-drain-return`: it currently measures the `drained` sample before
+  `compiler.close()`, while the later `closed` sample occurs after compiler
+  close and garbage collection. Compare against `closed`; retain `drained` only
+  as diagnostic data.
+- Do not enforce RSS slope on the 200-utterance smoke profile. Its few
+  checkpoints produce unstable regressions. Keep smoke focused on correctness
+  and teardown; enforce slope on standard and overnight runs.
+- Improve macOS diagnostics before relaxing thresholds. Apple exposes
+  `malloc_zone_pressure_relief()` for allocator reclamation and recommends
+  `leaks`, malloc stack logging, and Instruments for distinguishing retained
+  allocator pages from genuine leaks. See the [libmalloc API](https://github.com/apple-oss-distributions/libmalloc/blob/main/include/malloc/malloc.h)
+  and [Apple leak guidance](https://developer.apple.com/library/archive/documentation/Performance/Conceptual/ManagingMemory/Articles/FindingLeaks.html).
+
 ## Develop-to-master merge follow-up
 
 - Fix the parser regression in `Compiler.parse_output_for_rule_token`, or
