@@ -2,7 +2,7 @@ from typing import Callable
 
 import pytest
 
-from kaldi_active_grammar import Compiler, KaldiRule, NativeWFST
+from kaldi_active_grammar import Compiler, KaldiError, KaldiRule, NativeWFST
 from tests.helpers import missing_laf_model_files
 
 
@@ -222,8 +222,9 @@ def test_output_overflow_and_zero_length_probe(mimic_compiler):
 
         assert decoder.mimic(
             text, [rule.id], output_max_length=required_bytes, **kwargs) == output
-        assert decoder.mimic(
-            text, [rule.id], output_max_length=required_bytes - 1, **kwargs) is False
+        with pytest.raises(KaldiError, match='needed .* bytes of output'):
+            decoder.mimic(
+                text, [rule.id], output_max_length=required_bytes - 1, **kwargs)
         assert decoder.mimic(
             text, [rule.id], output_max_length=0, **kwargs) is True
         assert decoder.mimic(

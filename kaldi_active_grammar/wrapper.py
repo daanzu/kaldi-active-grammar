@@ -309,7 +309,7 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         DRAGONFLY_API bool nnet3_active_base__set_mimic_grammar_fst(void* model_vp, int32_t grammar_fst_index, void* grammar_fst_cp);
         DRAGONFLY_API bool nnet3_active_base__set_mimic_dictation_fst_file(void* model_vp, const char* grammar_fst_filename_cp);
         DRAGONFLY_API bool nnet3_active_base__mimic(void* model_vp, const char* input_cp, int32_t* grammars_activity_cp, uint32_t grammars_activity_cp_size,
-            int32_t grammar_fst_index, char* output_cp, int32_t output_max_length);
+            int32_t grammar_fst_index, char* output_cp, int32_t output_max_length, int32_t* output_required_length_p);
     """
 
     def set_mimic_grammar_fst(self, grammar_fst_index, grammar_fst):
@@ -336,10 +336,11 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         leaves the native activity set unchanged; an empty iterable selects
         no rules.
 
-        Returns ``False`` when the input does not match or the output cannot
-        fit in ``output_max_length`` bytes.  When ``output_max_length`` is
-        zero, the decoder performs the match without returning output and
-        returns ``True`` on success.
+        Returns ``False`` when the input does not match.  Raises
+        ``KaldiError`` when a matching output cannot fit in
+        ``output_max_length`` bytes.  When ``output_max_length`` is zero, the
+        decoder performs the match without returning output and returns
+        ``True`` on success.
 
         When ``grammar_fst_index`` selects a rule, successful output contains
         only the matched words and does not include the outer
@@ -349,11 +350,16 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         output_p = _ffi.new('char[]', output_max_length) if output_max_length else _ffi.NULL
         if grammar_fst_index is None: grammar_fst_index = -1  # No given grammar.
+        output_required_length_p = _ffi.new('int32_t*')
         result = self._lib.nnet3_active_base__mimic(self._get_model(), en(input),
             grammars_activity_p, grammars_activity_size,
-            grammar_fst_index, output_p, output_max_length)
+            grammar_fst_index, output_p, output_max_length, output_required_length_p)
         if result:
             return de(_ffi.string(output_p)) if output_max_length else True
+        if output_required_length_p[0] > output_max_length:
+            raise KaldiError(
+                "nnet3_active_base__mimic needed %d bytes of output, but output_max_length is %d"
+                % (output_required_length_p[0], output_max_length))
         return False
 
 
