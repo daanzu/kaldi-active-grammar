@@ -1,9 +1,7 @@
-from typing import Callable
-
 import pytest
 
-from kaldi_active_grammar import Compiler, KaldiError, KaldiRule, NativeWFST
-from tests.helpers import missing_laf_model_files
+from kaldi_active_grammar import Compiler, KaldiError, NativeWFST
+from tests.helpers import make_rule, missing_laf_model_files
 
 
 @pytest.fixture
@@ -18,19 +16,6 @@ def mimic_compiler(request, change_to_test_dir):
     compiler.init_decoder()
     yield compiler
     compiler.close()
-
-
-def make_rule(
-        compiler: Compiler,
-        name: str,
-        build_func: Callable[[NativeWFST], None],
-        **kwargs,
-) -> KaldiRule:
-    rule = KaldiRule(compiler, name, **kwargs)
-    build_func(rule.fst)
-    rule.compile()
-    rule.load()
-    return rule
 
 
 def build_phrase(*words):

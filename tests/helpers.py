@@ -1,10 +1,14 @@
 
 from pathlib import Path
+from typing import Callable
+
+from kaldi_active_grammar import Compiler, KaldiRule, NativeWFST
 
 
 __all__ = [
     'LAF_MODEL_FILES', 'missing_laf_model_files',
     'expected_info_keys_and_types', 'assert_info_shape', 'play_audio_on_windows',
+    'make_rule',
 ]
 
 # ``words.relabeled.txt`` is deliberately absent: ``Model`` derives it from
@@ -19,6 +23,19 @@ def missing_laf_model_files(model_dir=None):
     """Return the LAF model files missing from the test model directory."""
     model_dir = Path(model_dir) if model_dir else (Path(__file__).parent / 'kaldi_model')
     return [name for name in LAF_MODEL_FILES if not (model_dir / name).is_file()]
+
+
+def make_rule(
+        compiler: Compiler,
+        name: str,
+        build_func: Callable[[NativeWFST], None],
+        **kwargs,
+) -> KaldiRule:
+    rule = KaldiRule(compiler, name, **kwargs)
+    build_func(rule.fst)
+    rule.compile()
+    rule.load()
+    return rule
 
 
 expected_info_keys_and_types = {

@@ -23,13 +23,10 @@ class TestGrammar:
         self.compiler.close()
 
     def make_rule(self, name: str, build_func: Callable[[NativeWFST], None], **kwargs) -> KaldiRule:
-        rule = KaldiRule(self.compiler, name, **kwargs)
+        rule = make_rule(self.compiler, name, build_func, **kwargs)
         assert rule.name == name
         assert isinstance(rule.fst, NativeWFST)
-        build_func(rule.fst)
-        rule.compile()
         assert rule.compiled
-        rule.load()
         assert rule.loaded
         return rule
 
