@@ -133,7 +133,11 @@ class WFST(object):
         return False
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False):
-        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. Used for parsing by KaldiAG.compiler. """
+        """Return matching olabels, or False if there is no match.
+
+        Uses BFS and accepts zero or more words for wildcard nonterminals.
+        Currently unused in-package, but retained as a public utility.
+        """
         queue = collections.deque()  # entries: (state, path of olabels of arcs to state, index into target_words of remaining words)
         queue.append((self.start_state, (), 0))
         while queue:
@@ -386,7 +390,12 @@ class NativeWFST(FFIObject):
         return result
 
     def does_match(self, target_words, wildcard_nonterms=(), include_silent=False, output_max_length=1024):
-        """ Returns the olabels on a matching path if there is one, False if not. Uses BFS. Wildcard accepts zero or more words. """
+        """Return matching olabels, or False if there is no match.
+
+        Uses the native BFS implementation and accepts zero or more words for
+        wildcard nonterminals. Currently unused in-package, but retained as a
+        public utility.
+        """
         # FIXME: do in decoder!
         assert frozenset(wildcard_nonterms) == self.wildcard_nonterms
         output_p = _ffi.new('int32_t[]', output_max_length)
