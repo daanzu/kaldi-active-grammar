@@ -335,6 +335,11 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         ``grammars_activity`` is an iterable of integer rule IDs.  ``None``
         leaves the native activity set unchanged; an empty iterable selects
         no rules.
+
+        Returns ``False`` when the input does not match or the output cannot
+        fit in ``output_max_length`` bytes.  When ``output_max_length`` is
+        zero, the decoder performs the match without returning output and
+        returns ``True`` on success.
         """
         assert (grammar_fst_index is None) or (isinstance(grammar_fst_index, int) and grammar_fst_index >= 0)
         grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
