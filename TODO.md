@@ -21,6 +21,8 @@ Investigate the high memory usage reported by the Mac ARM stress tests.
 
 ## Develop-to-master merge follow-up
 
+- Fix LAF direct mimic, which currently does not match ordinary rules whose
+  input labels use the relabeled-word table.
 - Add a memory regression test that repeatedly loads and closes real AGF and
   LAF grammars, checking that process memory reaches a stable plateau rather
   than only testing an empty `Compiler` context.

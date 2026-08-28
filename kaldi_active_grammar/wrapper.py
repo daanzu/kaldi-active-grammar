@@ -340,6 +340,10 @@ class KaldiActiveNNet3Decoder(KaldiNNet3Decoder):
         fit in ``output_max_length`` bytes.  When ``output_max_length`` is
         zero, the decoder performs the match without returning output and
         returns ``True`` on success.
+
+        When ``grammar_fst_index`` selects a rule, successful output contains
+        only the matched words and does not include the outer
+        ``#nonterm:rule<ID>`` marker expected by ``Compiler.parse_output()``.
         """
         assert (grammar_fst_index is None) or (isinstance(grammar_fst_index, int) and grammar_fst_index >= 0)
         grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
