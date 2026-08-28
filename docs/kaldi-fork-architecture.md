@@ -368,7 +368,7 @@ The most important implementation references are:
 - Native FST facade: fork [`src/dragonfly/fst-export.cc`](https://github.com/daanzu/kaldi-fork-active-grammar/blob/kag-v3.2.0/src/dragonfly/fst-export.cc)
 - Dynamic active graph: fork [`src/decoder/active-grammar-fst.h`](https://github.com/daanzu/kaldi-fork-active-grammar/blob/kag-v3.2.0/src/decoder/active-grammar-fst.h) and [`active-grammar-fst.cc`](https://github.com/daanzu/kaldi-fork-active-grammar/blob/kag-v3.2.0/src/decoder/active-grammar-fst.cc)
 - Alternative LAF graph: fork [`src/dragonfly/laf-sub-nnet3.cc`](https://github.com/daanzu/kaldi-fork-active-grammar/blob/kag-v3.2.0/src/dragonfly/laf-sub-nnet3.cc)
-- Runtime examples and behavioral tests: [`examples/full_example.py`](../examples/full_example.py), [`tests/test_grammar.py`](../tests/test_grammar.py), and [`tests/test_plain_dictation.py`](../tests/test_plain_dictation.py)
+- Runtime examples and behavioral tests: [`examples/`](../examples/), [`tests/test_grammar.py`](../tests/test_grammar.py), and [`tests/test_plain_dictation.py`](../tests/test_plain_dictation.py)
 
 ## 14. Summary
 
