@@ -167,6 +167,7 @@ Utility functions for:
 - Coverage reporting can be enabled
 - Integration tests for grammar compilation and decoding
 - Run tests with `just test`
+- Use the existing project `.venv` for Python commands and tests when available (for example, `.venv/bin/pytest`)
 - To setup virtual environment for tests: `uv venv && uv pip install -r requirements-test.txt -r requirements-editable.txt`
 
 #### Agent Test Polling
