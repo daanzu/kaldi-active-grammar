@@ -69,7 +69,7 @@ def test_backend_output_contracts(mimic_compiler):
     assert_all_rule_match(compiler, 'hello world', [rule.id], rule, ['hello', 'world'])
     assert selected_output == 'hello world'
     assert not selected_output.startswith('#nonterm:rule')
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="expected a '#nonterm:rule' marker"):
         compiler.parse_output(selected_output)
 
 

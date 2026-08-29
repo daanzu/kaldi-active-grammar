@@ -633,8 +633,13 @@ class Compiler(object):
     alternative_dictation_regex = re.compile(r'(?<=#nonterm:dictation_cloud )(.*?)(?= #nonterm:end)')  # lookbehind & lookahead assertions
 
     def parse_output(self, output, dictation_info_func=None):
-        """
-        dictation_info_func: Optional but required for using alternative_dictation; expected to be (audio_data, wrapper::KaldiNNet3Decoder.get_word_align output).
+        """Parse decoder output containing an outer rule marker.
+
+        ``dictation_info_func`` is optional, but required when using
+        alternative dictation. It must return ``(audio_data, word_align)``.
+
+        Raises ``ValueError`` when non-empty output does not begin with a
+        ``#nonterm:rule<ID>`` marker.
         """
         assert self.parsing_framework == 'token'
         self._log.debug("parse_output(%r)" % output)
@@ -642,7 +647,9 @@ class Compiler(object):
             return None, [], []
 
         nonterm_token, _, parsed_output = output.partition(' ')
-        assert nonterm_token.startswith('#nonterm:rule')
+        if not nonterm_token.startswith('#nonterm:rule'):
+            raise ValueError(
+                "parse_output expected a '#nonterm:rule' marker, got %r" % nonterm_token)
         kaldi_rule_id = int(nonterm_token[len('#nonterm:rule'):])
         kaldi_rule = self.kaldi_rule_by_id_dict[kaldi_rule_id]
 
