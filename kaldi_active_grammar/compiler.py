@@ -616,15 +616,19 @@ class Compiler(object):
             if self.model._fst_cache.dirty:
                 self.model._fst_cache.save()
 
-    def mimic(self, text, grammars_activity):
+    def mimic(self, text, grammars_activity, output_max_length=4*1024):
         """Mimic text using active compiler rule IDs.
 
         ``grammars_activity`` is an iterable of ``KaldiRule.id`` values, not
         a positional Boolean mask.  The decoder wrapper also accepts ``None``
         to preserve its current activity set.
+
+        ``output_max_length`` is the output buffer size in bytes.  Raises
+        ``KaldiError`` if a matching output does not fit in that buffer.
         """
         self._require_open()
-        output = self.decoder.mimic(text, grammars_activity)
+        output = self.decoder.mimic(
+            text, grammars_activity, output_max_length=output_max_length)
         if output is False:
             return None
         return output

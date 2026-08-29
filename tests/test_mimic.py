@@ -207,6 +207,12 @@ def test_output_overflow_and_zero_length_probe(mimic_compiler):
 
         assert decoder.mimic(
             text, [rule.id], output_max_length=required_bytes, **kwargs) == output
+        if grammar_fst_index is None:
+            assert compiler.mimic(
+                text, [rule.id], output_max_length=required_bytes) == output
+            with pytest.raises(KaldiError, match='needed .* bytes of output'):
+                compiler.mimic(
+                    text, [rule.id], output_max_length=required_bytes - 1)
         with pytest.raises(KaldiError, match='needed .* bytes of output'):
             decoder.mimic(
                 text, [rule.id], output_max_length=required_bytes - 1, **kwargs)
