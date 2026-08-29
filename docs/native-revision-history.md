@@ -4,6 +4,8 @@
 
 The current lock file remains authoritative for new builds. This history is primarily for archaeology, bisecting, and rebuilding old states. The release table below contains the strongest historical anchors; the [complete commit map](native-revision-commit-map.csv) contains every commit reachable from local branches, remote-tracking branches, and tags.
 
+> **Point-in-time report:** This document records repository state when it was prepared and is not intended to be kept up to date as development continues or the native lock changes.
+
 ## Evidence levels
 
 - **Lock**: the Python commit records a full native commit in `kaldi-native-revision.txt`.
