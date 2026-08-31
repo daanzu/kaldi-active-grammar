@@ -144,6 +144,30 @@ consult [`BUILDING.md`](BUILDING.md) if you cannot use the wheels and need to
 build from source. Contributors can find integration and prolonged test setup
 in [`TESTING.md`](TESTING.md).
 
+### Quick Linux development bootstrap
+
+With Git, `just`, Python, and a C++ build toolchain installed, create a fresh
+sibling-checkout development environment with:
+
+```sh
+mkdir kag-duo && cd kag-duo
+git clone https://github.com/daanzu/kaldi-active-grammar.git
+cd kaldi-active-grammar
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements-build.txt
+just native-sync
+just native-verify
+just configure-linux-develop
+just build-linux-develop
+just setup-linux-develop
+KALDIAG_BUILD_SKIP_NATIVE=1 python -m pip install -e .
+```
+
+`native-sync` creates the sibling `../kaldi-fork-active-grammar` checkout at
+this repository's locked native commit. See [`BUILDING.md`](BUILDING.md) for
+other platforms and development workflows.
+
 ## Contributing
 
 Issues, suggestions, and feature requests are welcome & encouraged. Pull requests are considered, but project structure is in flux.
