@@ -445,7 +445,10 @@ class KaldiAgfNNet3Decoder(KaldiActiveNNet3Decoder):
         """Continue decoding with audio and an optional set of active rule IDs.
 
         Pass active integer rule IDs only on the first chunk of an utterance;
-        pass ``None`` for continuation chunks.
+        pass ``None`` for continuation chunks. Activity is fixed for the whole
+        utterance: repeating the same explicit set is a no-op, while supplying
+        a different set before finalization raises ``KaldiError``. Calls on one
+        decoder instance must not be made concurrently.
         """
         grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)
@@ -571,7 +574,10 @@ class KaldiLafNNet3Decoder(KaldiActiveNNet3Decoder):
         """Continue decoding with audio and an optional set of active rule IDs.
 
         Pass active integer rule IDs only on the first chunk of an utterance;
-        pass ``None`` for continuation chunks.
+        pass ``None`` for continuation chunks. Activity is fixed for the whole
+        utterance: repeating the same explicit set is a no-op, while supplying
+        a different set before finalization raises ``KaldiError``. Calls on one
+        decoder instance must not be made concurrently.
         """
         grammars_activity_p, grammars_activity_size = _prepare_grammars_activity(grammars_activity)
         if not isinstance(frames, np.ndarray): frames = np.frombuffer(frames, np.int16)

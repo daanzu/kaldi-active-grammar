@@ -9,7 +9,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from kaldi_active_grammar import Compiler, KaldiRule
+from kaldi_active_grammar import Compiler, KaldiError, KaldiRule
 from tests.helpers import make_rule
 
 
@@ -385,6 +385,27 @@ def test_missing_call_target_is_unavailable_until_agf_rebuild(
 
     child.close()
     assert decode_observation(agf_compiler, audio, [root.id]) == NO_MATCH
+
+
+def test_mid_utterance_activity_change_is_rejected(
+        agf_compiler, audio_generator):
+    """Activity is fixed while a decoder is live, including between chunks."""
+    parent, child = make_one_level_graph(agf_compiler)
+    audio = audio_generator('hello')
+    split = (len(audio) // 4) * 2  # Keep the int16 byte boundary aligned.
+    both = [parent.id, child.id]
+
+    agf_compiler.decoder.decode(audio[:split], False, both)
+
+    # Repeating the exact set is harmless, but changing activity while the
+    # decoder is live must fail instead of mutating or silently queuing the
+    # graph underneath this utterance.
+    agf_compiler.decoder.decode(audio[:0], False, both)
+    with pytest.raises(KaldiError):
+        agf_compiler.decoder.decode(audio[:0], False, [parent.id])
+
+    agf_compiler.decoder.decode(audio[split:], True, None)
+    assert read_observation(agf_compiler) == expected_match(parent, 'hello')
 
 
 def test_activity_changes_only_between_chunked_utterances(
