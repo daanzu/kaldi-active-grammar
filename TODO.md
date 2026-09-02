@@ -30,6 +30,17 @@ Investigate the high memory usage reported by the Mac ARM stress tests.
   release workflow; record the exact native fork revision used to build and
   test each Python revision.
 
+## AGF activity-update scaling
+
+Nested activity invalidation is now correct, but each changed activity set scans
+all cached expanded states across every FST instance, filtering for user-call
+boundaries. This costs O(all cached expanded states) per change.
+
+- Measure activity-update cost on large, deeply nested grammar caches.
+- If material, replace the scan with either a reverse index from destination
+  ifst to cached user-call boundaries, or activity-independent cached topology
+  gated when arcs are read. Preserve unconditional `#nonterm_end` returns.
+
 ## LAF grammar FST storage
 
 - Benchmark the private mutable-copy path against conversion to `StdConstFst` with
