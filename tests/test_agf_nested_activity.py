@@ -348,11 +348,11 @@ def test_recursive_instance_activity_is_not_stale(agf_compiler, audio_generator)
     ) == expected_match(root, 'again', 'hello')
 
 
-# Empty-ifst activity normalization cannot be covered through this package's
-# public integration API. NativeWFST always starts with a state, and a graph
-# with no successful path is rejected by AGF grammar compilation before an
-# ActiveGrammarFst can receive it. That invariant needs a lower-level native
-# test which constructs ActiveGrammarFst directly with a zero-state ConstFst.
+# Zero-state ifst rejection cannot be covered through this package's public
+# integration API. NativeWFST always starts with a state, and a graph with no
+# successful path is rejected by AGF grammar compilation before an
+# ActiveGrammarFst can receive it. The lower-level native ActiveGrammarFst test
+# constructs a zero-state ConstFst directly and verifies that it is rejected.
 
 
 def test_missing_call_target_is_unavailable_until_agf_rebuild(
