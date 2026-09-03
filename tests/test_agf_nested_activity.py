@@ -388,7 +388,7 @@ def test_missing_call_target_is_unavailable_until_agf_rebuild(
 
 
 def test_mid_utterance_activity_change_is_rejected(
-        agf_compiler, audio_generator):
+        agf_compiler, audio_generator, capfd):
     """Activity is fixed while a decoder is live, including between chunks."""
     parent, child = make_one_level_graph(agf_compiler)
     audio = audio_generator('hello')
@@ -403,6 +403,7 @@ def test_mid_utterance_activity_change_is_rejected(
     agf_compiler.decoder.decode(audio[:0], False, both)
     with pytest.raises(KaldiError):
         agf_compiler.decoder.decode(audio[:0], False, [parent.id])
+    assert 'cannot change grammar activity' in capfd.readouterr().err
 
     agf_compiler.decoder.decode(audio[split:], True, None)
     assert read_observation(agf_compiler) == expected_match(parent, 'hello')

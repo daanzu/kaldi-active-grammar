@@ -20,7 +20,7 @@ def laf_compiler(change_to_test_dir):
 
 
 def test_laf_mid_utterance_activity_change_is_rejected(
-        laf_compiler, audio_generator):
+        laf_compiler, audio_generator, capfd):
     """LAF activity stays fixed while decoding a chunked utterance."""
     def build_rule(fst):
         initial = fst.add_state(initial=True)
@@ -37,6 +37,7 @@ def test_laf_mid_utterance_activity_change_is_rejected(
     laf_compiler.decoder.decode(audio[:0], False, [rule.id])
     with pytest.raises(KaldiError):
         laf_compiler.decoder.decode(audio[:0], False, [])
+    assert 'cannot change grammar activity' in capfd.readouterr().err
 
     # Rejection must not poison the utterance already in progress.
     laf_compiler.decoder.decode(audio[split:], True, None)
